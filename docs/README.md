@@ -1,6 +1,14 @@
 # DS2API 文档导航 | Documentation Index
 
-语言 / Language: [中文](README.md) | [English](README.md#english)
+语言 / Language: [Tiếng Việt](USER_GUIDE.vi.md) | [中文](README.md) | [English](README.md#english)
+
+## Tiếng Việt
+
+Tài liệu hướng dẫn chi tiết về phần mềm:
+
+1. [Hướng dẫn sử dụng phần mềm chi tiết](./USER_GUIDE.vi.md)
+2. [Tổng quan dự án (README Tiếng Việt)](../README.vi.md)
+3. [Hướng dẫn triển khai (DEPLOY)](./DEPLOY.md)
 
 ## 中文
 

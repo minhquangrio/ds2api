@@ -2,7 +2,11 @@
     "language": {
         "label": "语言",
         "english": "English",
-        "chinese": "中文"
+        "chinese": "中文",
+        "vietnamese": "越南语",
+        "switchToEnglish": "切换到 English",
+        "switchToChinese": "切换到中文",
+        "switchToVietnamese": "切换到越南语"
     },
     "theme": {
         "light": "亮色模式",

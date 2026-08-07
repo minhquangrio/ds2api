@@ -22,6 +22,8 @@
 
 将 DeepSeek Web 对话能力转换为 OpenAI、Claude 与 Gemini 兼容 API。核心后端以 **Go** 实现，Vercel 流式桥接额外使用少量 Node Runtime，前端为 React WebUI 管理台（源码在 `webui/`，部署时自动构建到 `static/admin`）。
 
+文档语言：[中文](README.MD) | [Tiếng Việt](README.vi.md)
+
 文档入口：[文档导航](docs/README.md) / [架构说明](docs/ARCHITECTURE.md) / [接口文档](API.md)
 
 【感谢Linux.do社区及GitHub社区各位开发者对项目的支持与贡献】
@@ -419,6 +421,7 @@ go run ./cmd/ds2api
 
 | 文档 | 说明 |
 | --- | --- |
+| [README.MD](README.MD) / [README.vi.md](README.vi.md) | 项目 README 主文档 (中文 / Tiếng Việt) |
 | [API.md](API.md) / [API.en.md](API.en.md) | API 接口文档（含请求/响应示例） |
 | [DEPLOY.md](docs/DEPLOY.md) / [DEPLOY.en.md](docs/DEPLOY.en.md) | 部署指南（本地/Docker/Vercel/systemd） |
 | [CONTRIBUTING.md](docs/CONTRIBUTING.md) / [CONTRIBUTING.en.md](docs/CONTRIBUTING.en.md) | 贡献指南 |

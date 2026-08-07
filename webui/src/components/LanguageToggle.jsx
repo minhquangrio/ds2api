@@ -2,11 +2,32 @@ import { Languages } from 'lucide-react'
 
 import { useI18n } from '../i18n'
 
+const LANGS = ['zh', 'en', 'vi']
+const LANG_BADGES = {
+    zh: '中',
+    en: 'EN',
+    vi: 'VI',
+}
+
 export default function LanguageToggle({ className = '', compact = false }) {
     const { lang, setLang, t } = useI18n()
-    const nextLang = lang === 'zh' ? 'en' : 'zh'
-    const label = nextLang === 'zh' ? t('language.chinese') : t('language.english')
-    const title = nextLang === 'zh' ? t('language.switchToChinese') : t('language.switchToEnglish')
+    const currentIndex = LANGS.indexOf(lang)
+    const nextLang = LANGS[currentIndex === -1 ? 0 : (currentIndex + 1) % LANGS.length]
+
+    const getLabel = (l) => {
+        if (l === 'zh') return t('language.chinese')
+        if (l === 'vi') return t('language.vietnamese')
+        return t('language.english')
+    }
+
+    const getTitle = (l) => {
+        if (l === 'zh') return t('language.switchToChinese')
+        if (l === 'vi') return t('language.switchToVietnamese')
+        return t('language.switchToEnglish')
+    }
+
+    const label = getLabel(nextLang)
+    const title = getTitle(nextLang)
 
     return (
         <button
@@ -17,7 +38,7 @@ export default function LanguageToggle({ className = '', compact = false }) {
             aria-label={title}
         >
             <Languages className="h-3.5 w-3.5" />
-            <span>{nextLang === 'zh' ? '中' : 'EN'}</span>
+            <span>{LANG_BADGES[nextLang] || nextLang.toUpperCase()}</span>
             {!compact && <span className="hidden sm:inline text-muted-foreground/70">· {label}</span>}
         </button>
     )
