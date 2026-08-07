@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"sync"
 	"time"
 
@@ -159,7 +160,12 @@ func (c *Client) dialTLS(ctx context.Context, authority, serverName string) (*ut
 	if err != nil {
 		return nil, "", err
 	}
-	uconn := utls.UClient(rawConn, &utls.Config{ServerName: serverName, MinVersion: tls.VersionTLS12}, clientHelloID)
+	insecure := os.Getenv("DS2API_INSECURE_SKIP_VERIFY") == "true" || os.Getenv("DS2API_SKIP_TLS_VERIFY") == "true"
+	uconn := utls.UClient(rawConn, &utls.Config{
+		ServerName:         serverName,
+		MinVersion:         tls.VersionTLS12,
+		InsecureSkipVerify: insecure,
+	}, clientHelloID)
 	if err := uconn.HandshakeContext(ctx); err != nil {
 		_ = rawConn.Close()
 		return nil, "", err

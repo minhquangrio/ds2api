@@ -2,7 +2,9 @@ package client
 
 import (
 	"context"
+	"crypto/tls"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -34,14 +36,20 @@ type Client struct {
 }
 
 func NewClient(store *config.Store, resolver *auth.Resolver) *Client {
+	var fallbackTr http.RoundTripper
+	if os.Getenv("DS2API_INSECURE_SKIP_VERIFY") == "true" || os.Getenv("DS2API_SKIP_TLS_VERIFY") == "true" {
+		fallbackTr = &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+	}
 	client := &Client{
 		Store:        store,
 		Auth:         resolver,
 		capture:      devcapture.Global(),
 		regular:      trans.New(60 * time.Second),
 		stream:       trans.New(0),
-		fallback:     &http.Client{Timeout: 60 * time.Second},
-		fallbackS:    &http.Client{Timeout: 0},
+		fallback:     &http.Client{Timeout: 60 * time.Second, Transport: fallbackTr},
+		fallbackS:    &http.Client{Timeout: 0, Transport: fallbackTr},
 		maxRetries:   3,
 		proxyClients: map[string]requestClients{},
 		powCache:     newPowChallengeCache(),
