@@ -88,6 +88,7 @@
         "adminConsole": "Bảng quản trị",
         "apiStatus": "Trạng thái API",
         "badge": "Cổng chuyển đổi DeepSeek → OpenAI & Claude",
+        "subtitle": "Kết nối mô hình DeepSeek mượt mà vào hệ sinh thái OpenAI & Claude, hỗ trợ cân bằng tải, quản lý phiên và gọi công cụ.",
         "footer": "© 2026 Dự án DS2API · Thiết kế cho sự linh hoạt & hiệu năng",
         "features": {
             "compatibility": {

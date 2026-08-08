@@ -31,7 +31,7 @@ export default function LandingPage({ onEnter }) {
                     DS2<span className="text-primary">API</span>
                 </h1>
                 <p className="mt-4 max-w-xl text-base sm:text-lg text-muted-foreground leading-relaxed">
-                    {t('landing.features.compatibility.desc')}
+                    {t('landing.subtitle')}
                 </p>
 
                 <div className="mt-9 flex flex-wrap items-center justify-center gap-3">

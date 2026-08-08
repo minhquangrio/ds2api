@@ -88,6 +88,7 @@
         "adminConsole": "Admin Console",
         "apiStatus": "API Status",
         "badge": "DeepSeek → OpenAI & Claude compatible gateway",
+        "subtitle": "Seamlessly connect DeepSeek models to OpenAI & Claude ecosystems with load balancing, session management, and tool calling.",
         "footer": "© 2026 DS2API Project · Designed for flexibility & performance",
         "features": {
             "compatibility": {

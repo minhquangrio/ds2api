@@ -17,7 +17,7 @@ import (
 // React 落地页（webui/src/components/LandingPage.jsx）使用同一落地页的 webui 版本。
 // 维护时请同步更新两边，避免两边文案漂移。
 const welcomeHTML = `<!DOCTYPE html>
-<html lang="zh-CN" data-theme="dark">
+<html lang="vi" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -29,7 +29,7 @@ const welcomeHTML = `<!DOCTYPE html>
     var t = localStorage.getItem('ds2api_theme');
     if (t === 'light' || t === 'dark') root.dataset.theme = t;
     var l = localStorage.getItem('ds2api_lang');
-    if (l === 'zh' || l === 'en') root.lang = l === 'zh' ? 'zh-CN' : 'en';
+    if (l === 'zh' || l === 'en' || l === 'vi') root.lang = l === 'zh' ? 'zh-CN' : l === 'vi' ? 'vi' : 'en';
   } catch(e){}
 })();
 </script>
@@ -150,12 +150,12 @@ footer{animation:fadeInDownFaded .3s ease-out both;animation-delay:.575s}
 </head>
 <body class="app-backdrop">
 <div class="topbar">
-  <button class="btn btn-sm" id="theme-toggle" title="切换主题 / Toggle theme" aria-label="切换主题 / Toggle theme">
+  <button class="btn btn-sm" id="theme-toggle" title="Chuyển chủ đề / Toggle theme" aria-label="Chuyển chủ đề / Toggle theme">
     <svg id="icon-sun" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
     <svg id="icon-moon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
-    <span id="theme-label">亮色模式</span>
+    <span id="theme-label">Chế độ sáng</span>
   </button>
-  <button class="btn btn-sm" id="lang-toggle" title="Switch language / 切换语言" aria-label="Switch language / 切换语言">
+  <button class="btn btn-sm" id="lang-toggle" title="Switch language / Đổi ngôn ngữ" aria-label="Switch language / Đổi ngôn ngữ">
     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>
     <span id="lang-label">EN</span>
   </button>
@@ -217,6 +217,8 @@ footer{animation:fadeInDownFaded .3s ease-out both;animation-delay:.575s}
   var root = document.documentElement;
   var themeKey = 'ds2api_theme';
   var langKey = 'ds2api_lang';
+  var langs = ['zh', 'en', 'vi'];
+  var langNames = { zh: '中文', en: 'EN', vi: 'VI' };
   var i18n = {
     zh: {
       badge:'DeepSeek → OpenAI & Claude 兼容网关',
@@ -226,8 +228,7 @@ footer{animation:fadeInDownFaded .3s ease-out both;animation-delay:.575s}
       f2t:'负载均衡', f2d:'多账号池自动分配请求，提升并发与可用性。',
       f3t:'工具调用', f3d:'原生支持 Function Calling 与文件引用，释放模型全部能力。',
       f4t:'会话管理', f4d:'可视化聊天历史、会话统计与一键清理。',
-      footer:'© 2026 DS2API Project · 为灵活性与性能而设计',
-      themeLabel:'亮色模式', langLabel:'EN'
+      footer:'© 2026 DS2API Project · 为灵活性与性能而设计'
     },
     en: {
       badge:'DeepSeek → OpenAI & Claude compatible gateway',
@@ -237,8 +238,17 @@ footer{animation:fadeInDownFaded .3s ease-out both;animation-delay:.575s}
       f2t:'Load Balancing', f2d:'Distributes requests across account pools for better concurrency and availability.',
       f3t:'Tool Calling', f3d:'Native support for Function Calling and file references to unlock full model capabilities.',
       f4t:'Session Management', f4d:'Visualize chat history, session stats, and one-click cleanup.',
-      footer:'© 2026 DS2API Project · Designed for flexibility & performance',
-      themeLabel:'Light mode', langLabel:'中文'
+      footer:'© 2026 DS2API Project · Designed for flexibility & performance'
+    },
+    vi: {
+      badge:'Cổng chuyển đổi DeepSeek → OpenAI & Claude',
+      subtitle:'Kết nối mô hình DeepSeek mượt mà vào hệ sinh thái OpenAI & Claude, hỗ trợ cân bằng tải, quản lý phiên và gọi công cụ.',
+      admin:'Bảng quản trị', apiStatus:'Trạng thái API',
+      f1t:'Tương thích đa giao thức', f1d:'Hỗ trợ định dạng OpenAI & Claude API cùng lúc, không cần sửa mã nguồn client.',
+      f2t:'Cân bằng tải', f2d:'Tự động phân bổ yêu cầu qua nhóm tài khoản, tăng khả năng xử lý đồng thời và độ sẵn sàng.',
+      f3t:'Gọi công cụ', f3d:'Hỗ trợ gốc Function Calling và tham chiếu tệp, giải phóng toàn bộ sức mạnh mô hình.',
+      f4t:'Quản lý phiên', f4d:'Trực quan hóa lịch sử trò chuyện, thống kê phiên làm việc và dọn dẹp một cú nhấp.',
+      footer:'© 2026 Dự án DS2API · Thiết kế cho sự linh hoạt & hiệu năng'
     }
   };
 
@@ -254,39 +264,52 @@ footer{animation:fadeInDownFaded .3s ease-out both;animation-delay:.575s}
     var sun = document.getElementById('icon-sun');
     var moon = document.getElementById('icon-moon');
     var label = document.getElementById('theme-label');
+    var l = getLang();
     if(t === 'dark'){
       sun.style.display = 'block'; moon.style.display = 'none';
-      label.textContent = getLang() === 'zh' ? '亮色模式' : 'Light mode';
+      label.textContent = l === 'zh' ? '亮色模式' : l === 'vi' ? 'Chế độ sáng' : 'Light mode';
     } else {
       sun.style.display = 'none'; moon.style.display = 'block';
-      label.textContent = getLang() === 'zh' ? '暗色模式' : 'Dark mode';
+      label.textContent = l === 'zh' ? '暗色模式' : l === 'vi' ? 'Chế độ tối' : 'Dark mode';
     }
   }
 
   function getLang(){
-    try { return localStorage.getItem(langKey) || 'zh'; } catch(e){ return 'zh'; }
+    try {
+      var saved = localStorage.getItem(langKey);
+      if (langs.indexOf(saved) !== -1) return saved;
+      var nav = (navigator.language || navigator.userLanguage || '').toLowerCase();
+      if (nav.startsWith('vi')) return 'vi';
+      if (nav.startsWith('zh')) return 'zh';
+      return 'en';
+    } catch(e){ return 'vi'; }
   }
   function setLang(l){
     try { localStorage.setItem(langKey, l); } catch(e){}
     applyLang(l);
   }
   function applyLang(l){
-    var dict = i18n[l] || i18n.zh;
+    var dict = i18n[l] || i18n.vi;
     document.querySelectorAll('[data-i18n]').forEach(function(el){
       var key = el.getAttribute('data-i18n');
       if(dict[key]) el.textContent = dict[key];
     });
     var langBtn = document.getElementById('lang-label');
-    if(langBtn) langBtn.textContent = l === 'zh' ? 'EN' : '中文';
+    var idx = langs.indexOf(l);
+    var next = langs[(idx + 1) % langs.length];
+    if(langBtn) langBtn.textContent = langNames[next] || 'EN';
     updateThemeIcon(getTheme());
-    root.lang = l === 'zh' ? 'zh-CN' : 'en';
+    root.lang = l === 'zh' ? 'zh-CN' : l === 'vi' ? 'vi' : 'en';
   }
 
   document.getElementById('theme-toggle').addEventListener('click', function(){
     setTheme(getTheme() === 'dark' ? 'light' : 'dark');
   });
   document.getElementById('lang-toggle').addEventListener('click', function(){
-    setLang(getLang() === 'zh' ? 'en' : 'zh');
+    var current = getLang();
+    var idx = langs.indexOf(current);
+    var next = langs[(idx + 1) % langs.length];
+    setLang(next);
   });
 
   setTheme(getTheme());

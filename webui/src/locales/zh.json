@@ -88,6 +88,7 @@
         "adminConsole": "管理面板",
         "apiStatus": "API 状态",
         "badge": "DeepSeek → OpenAI & Claude 兼容网关",
+        "subtitle": "将 DeepSeek 模型无缝接入 OpenAI 与 Claude 生态，支持负载均衡、会话管理与工具调用。",
         "footer": "© 2026 DS2API Project · 为灵活性与性能而设计",
         "features": {
             "compatibility": {
