@@ -65,4 +65,3 @@ func NewFallbackClient(timeout time.Duration, dialContext DialContextFunc) *http
 	}
 	return &http.Client{Timeout: timeout, Transport: base}
 }
-
