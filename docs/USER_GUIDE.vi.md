@@ -121,7 +121,7 @@ Mở trình duyệt và truy cập `http://localhost:5001/admin`.
 - Bạn có thể nhấp vào biểu tượng sao chép để lấy giá trị khoá, hoặc sửa Tên/Ghi chú của từng khoá.
 
 ### 4.5 Quản lý Proxy IP
-- Nếu các tài khoản DeepSeek của bạn cần chạy qua các địa chỉ IP đầu ra khác nhau để tránh bị trùng IP, bạn có thể thêm các nút **SOCKS5** hoặc **SOCKS5H** trong tab **Proxy IP**.
+- Nếu các tài khoản DeepSeek của bạn cần chạy qua các địa chỉ IP đầu ra khác nhau để tránh bị trùng IP, bạn có thể thêm các nút **HTTP**, **HTTPS**, **SOCKS5** hoặc **SOCKS5H** trong tab **Proxy IP**.
 - Nhấp **Kiểm tra proxy** để đo độ trễ kết nối từ máy chủ tới nghẽn đầu ra DeepSeek.
 
 ### 4.6 Trình Kiểm Tra API (API Test)

@@ -1,5 +1,5 @@
 import { Loader2, RefreshCcw, Trash2 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 
 import { useI18n } from '../../i18n'
@@ -9,6 +9,47 @@ import {
     LIMIT_OPTIONS,
     VIEW_MODE_KEY,
 } from './chatHistoryUtils'
+
+export function estimateItemTokens(item) {
+    if (!item) return { prompt: 0, completion: 0, total: 0 }
+    let prompt = Number(item.prompt_tokens) || 0
+    let completion = Number(item.completion_tokens) || 0
+    let total = Number(item.total_tokens) || (prompt + completion)
+
+    if (total === 0) {
+        const inputLen = (item.user_input || '').length
+        const prevLen = (item.preview || item.content || '').length
+        if (inputLen > 0) prompt = Math.max(1, Math.ceil(inputLen / 3.5))
+        if (prevLen > 0) completion = Math.max(1, Math.ceil(prevLen / 3.5))
+        total = prompt + completion
+    }
+    return { prompt, completion, total }
+}
+
+function TokenStatsSummaryBar({ stats, t, hasItems }) {
+    if (!hasItems) return null
+
+    return (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 rounded-2xl border border-border bg-card/70 shadow-sm">
+            <div className="rounded-xl border border-primary/30 bg-primary/10 px-3.5 py-2.5">
+                <div className="text-[11px] font-medium text-primary">{t('chatHistory.statsTotalTokens')}</div>
+                <div className="text-lg font-bold text-primary font-mono mt-0.5">{stats.total.toLocaleString()}</div>
+            </div>
+            <div className="rounded-xl border border-border bg-background px-3.5 py-2.5">
+                <div className="text-[11px] font-medium text-muted-foreground">{t('chatHistory.statsPromptTokens')}</div>
+                <div className="text-sm font-semibold text-foreground font-mono mt-0.5">{stats.prompt.toLocaleString()}</div>
+            </div>
+            <div className="rounded-xl border border-border bg-background px-3.5 py-2.5">
+                <div className="text-[11px] font-medium text-muted-foreground">{t('chatHistory.statsCompletionTokens')}</div>
+                <div className="text-sm font-semibold text-foreground font-mono mt-0.5">{stats.completion.toLocaleString()}</div>
+            </div>
+            <div className="rounded-xl border border-border bg-background px-3.5 py-2.5">
+                <div className="text-[11px] font-medium text-muted-foreground">{t('chatHistory.statsAvgTokensPerReq')}</div>
+                <div className="text-sm font-semibold text-foreground font-mono mt-0.5">{stats.avg.toLocaleString()}</div>
+            </div>
+        </div>
+    )
+}
 
 const LIST_REFRESH_MS = 1500
 const STREAMING_DETAIL_REFRESH_MS = 750
@@ -49,6 +90,20 @@ export default function ChatHistoryContainer({ authFetch, onMessage }) {
 
     const selectedSummary = items.find(item => item.id === selectedId) || items[0] || null
     const selectedItem = selectedDetail && selectedDetail.id === selectedId ? selectedDetail : null
+
+    const tokenStats = useMemo(() => {
+        let total = 0
+        let prompt = 0
+        let completion = 0
+        items.forEach(item => {
+            const { prompt: p, completion: c, total: tot } = estimateItemTokens(item)
+            total += tot
+            prompt += p
+            completion += c
+        })
+        const avg = items.length > 0 ? Math.round(total / items.length) : 0
+        return { total, prompt, completion, avg }
+    }, [items])
 
     const syncItems = (nextItems) => {
         setItems(nextItems)
@@ -374,6 +429,8 @@ export default function ChatHistoryContainer({ authFetch, onMessage }) {
                     </button>
                 </div>
             </div>
+
+            <TokenStatsSummaryBar stats={tokenStats} t={t} hasItems={items.length > 0} />
 
             {detail && (
                 <div className="rounded-xl border border-destructive/20 bg-destructive/10 text-destructive px-4 py-3 text-sm">

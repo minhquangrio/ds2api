@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 )
@@ -47,7 +48,11 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 }
 
 func NewFallbackClient(timeout time.Duration, dialContext DialContextFunc) *http.Client {
-	useEnvProxy := dialContext == nil
+	return NewFallbackClientWithProxy(timeout, "", dialContext)
+}
+
+func NewFallbackClientWithProxy(timeout time.Duration, proxyURL string, dialContext DialContextFunc) *http.Client {
+	useEnvProxy := dialContext == nil && proxyURL == ""
 	if dialContext == nil {
 		dialContext = (&net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}).DialContext
 	}
@@ -62,6 +67,10 @@ func NewFallbackClient(timeout time.Duration, dialContext DialContextFunc) *http
 	}
 	if useEnvProxy {
 		base.Proxy = http.ProxyFromEnvironment
+	} else if proxyURL != "" {
+		if parsed, err := url.Parse(proxyURL); err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") {
+			base.Proxy = http.ProxyURL(parsed)
+		}
 	}
 	return &http.Client{Timeout: timeout, Transport: base}
 }

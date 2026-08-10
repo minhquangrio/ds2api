@@ -61,6 +61,10 @@ func proxyCacheKey(proxyCfg config.Proxy) string {
 
 func proxyDialContext(proxyCfg config.Proxy) (trans.DialContextFunc, error) {
 	proxyCfg = config.NormalizeProxy(proxyCfg)
+	scheme := strings.ToLower(strings.TrimSpace(proxyCfg.Type))
+	if scheme == "http" || scheme == "https" {
+		return nil, nil
+	}
 	var authCfg *proxy.Auth
 	if proxyCfg.Username != "" || proxyCfg.Password != "" {
 		authCfg = &proxy.Auth{User: proxyCfg.Username, Password: proxyCfg.Password}
@@ -179,8 +183,8 @@ func (c *Client) requestClientsForAccount(acc config.Account) requestClients {
 	bundle := c.decorate(requestClients{
 		regular:   trans.NewWithProxy(60*time.Second, proxyURL),
 		stream:    trans.NewWithProxy(0, proxyURL),
-		fallback:  trans.NewFallbackClient(60*time.Second, dialContext),
-		fallbackS: trans.NewFallbackClient(0, dialContext),
+		fallback:  trans.NewFallbackClientWithProxy(60*time.Second, proxyURL, dialContext),
+		fallbackS: trans.NewFallbackClientWithProxy(0, proxyURL, dialContext),
 	})
 
 	c.proxyClientsMu.Lock()
@@ -237,7 +241,8 @@ func TestProxyConnectivity(ctx context.Context, proxyCfg config.Proxy) map[strin
 		return result
 	}
 
-	client := trans.NewFallbackClient(15*time.Second, dialContext)
+	proxyURL := httpCloakProxyURL(proxyCfg)
+	client := trans.NewFallbackClientWithProxy(15*time.Second, proxyURL, dialContext)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, proxyConnectivityTestURL, nil)
 	if err != nil {
 		result["message"] = err.Error()

@@ -188,7 +188,27 @@ function HistoryTextView({ item, t, onMessage }) {
     )
 }
 
+function getUsageFromItem(item) {
+    if (!item) return { prompt: 0, completion: 0, reasoning: 0, total: 0 }
+    let prompt = Number(item.prompt_tokens) || 0
+    let completion = Number(item.completion_tokens) || 0
+    let reasoning = Number(item.reasoning_tokens) || 0
+    let total = Number(item.total_tokens) || 0
+
+    const u = item.usage
+    if (u && typeof u === 'object') {
+        if (!prompt) prompt = Number(u.prompt_tokens || u.input_tokens || 0) || 0
+        if (!completion) completion = Number(u.completion_tokens || u.output_tokens || 0) || 0
+        if (!reasoning) reasoning = Number(u.reasoning_tokens || u.completion_tokens_details?.reasoning_tokens || 0) || 0
+        if (!total) total = Number(u.total_tokens || 0) || (prompt + completion)
+    }
+    if (!total && (prompt || completion)) total = prompt + completion
+    return { prompt, completion, reasoning, total }
+}
+
 function MetaGrid({ selectedItem, t }) {
+    const { prompt, completion, reasoning, total } = getUsageFromItem(selectedItem)
+
     return (
         <div className="max-w-4xl mx-auto rounded-xl border border-border bg-background/70 p-4 space-y-3">
             <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">{t('chatHistory.metaTitle')}</div>
@@ -223,6 +243,33 @@ function MetaGrid({ selectedItem, t }) {
                 <div className="rounded-lg border border-border bg-card px-3 py-2">
                     <div className="text-[11px] text-muted-foreground">{t('chatHistory.metaCaller')}</div>
                     <div className="text-sm font-medium text-foreground break-all">{selectedItem.caller_id || t('chatHistory.metaUnknown')}</div>
+                </div>
+
+                <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+                    <div className="text-[11px] text-muted-foreground flex items-center justify-between">
+                        <span>{t('chatHistory.metaPromptTokens')}</span>
+                    </div>
+                    <div className="text-sm font-semibold text-foreground font-mono">{prompt > 0 ? prompt.toLocaleString() : '-'}</div>
+                </div>
+                <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+                    <div className="text-[11px] text-muted-foreground flex items-center justify-between">
+                        <span>{t('chatHistory.metaCompletionTokens')}</span>
+                    </div>
+                    <div className="text-sm font-semibold text-foreground font-mono">
+                        {completion > 0 ? completion.toLocaleString() : '-'}
+                        {reasoning > 0 && (
+                            <span className="text-xs font-normal text-muted-foreground ml-1.5">
+                                ({reasoning.toLocaleString()} reasoning)
+                            </span>
+                        )}
+                    </div>
+                </div>
+                <div className="rounded-lg border border-primary/30 bg-primary/10 px-3 py-2">
+                    <div className="text-[11px] font-medium text-primary flex items-center gap-1">
+                        <Sparkles className="w-3 h-3" />
+                        <span>{t('chatHistory.metaTotalTokens')}</span>
+                    </div>
+                    <div className="text-base font-bold text-primary font-mono">{total > 0 ? total.toLocaleString() : '-'}</div>
                 </div>
             </div>
         </div>

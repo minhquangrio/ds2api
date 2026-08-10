@@ -65,23 +65,27 @@ type Message struct {
 }
 
 type SummaryEntry struct {
-	ID             string `json:"id"`
-	Revision       int64  `json:"revision"`
-	CreatedAt      int64  `json:"created_at"`
-	UpdatedAt      int64  `json:"updated_at"`
-	CompletedAt    int64  `json:"completed_at,omitempty"`
-	Status         string `json:"status"`
-	CallerID       string `json:"caller_id,omitempty"`
-	AccountID      string `json:"account_id,omitempty"`
-	Surface        string `json:"surface,omitempty"`
-	Model          string `json:"model,omitempty"`
-	Stream         bool   `json:"stream"`
-	UserInput      string `json:"user_input,omitempty"`
-	Preview        string `json:"preview,omitempty"`
-	StatusCode     int    `json:"status_code,omitempty"`
-	ElapsedMs      int64  `json:"elapsed_ms,omitempty"`
-	FinishReason   string `json:"finish_reason,omitempty"`
-	DetailRevision int64  `json:"detail_revision"`
+	ID               string `json:"id"`
+	Revision         int64  `json:"revision"`
+	CreatedAt        int64  `json:"created_at"`
+	UpdatedAt        int64  `json:"updated_at"`
+	CompletedAt      int64  `json:"completed_at,omitempty"`
+	Status           string `json:"status"`
+	CallerID         string `json:"caller_id,omitempty"`
+	AccountID        string `json:"account_id,omitempty"`
+	Surface          string `json:"surface,omitempty"`
+	Model            string `json:"model,omitempty"`
+	Stream           bool   `json:"stream"`
+	UserInput        string `json:"user_input,omitempty"`
+	Preview          string `json:"preview,omitempty"`
+	StatusCode       int    `json:"status_code,omitempty"`
+	ElapsedMs        int64  `json:"elapsed_ms,omitempty"`
+	FinishReason     string `json:"finish_reason,omitempty"`
+	DetailRevision   int64  `json:"detail_revision"`
+	PromptTokens     int    `json:"prompt_tokens,omitempty"`
+	CompletionTokens int    `json:"completion_tokens,omitempty"`
+	ReasoningTokens  int    `json:"reasoning_tokens,omitempty"`
+	TotalTokens      int    `json:"total_tokens,omitempty"`
 }
 
 type File struct {
@@ -591,24 +595,93 @@ func (s *Store) nextRevisionLocked() int64 {
 }
 
 func summaryFromEntry(item Entry) SummaryEntry {
+	promptTokens, completionTokens, reasoningTokens, totalTokens := ExtractTokenCounts(item.Usage)
+	if totalTokens == 0 {
+		promptStr := item.FinalPrompt
+		if strings.TrimSpace(promptStr) == "" {
+			promptStr = item.UserInput
+		}
+		if strings.TrimSpace(promptStr) != "" {
+			promptTokens = util.CountPromptTokens(promptStr, item.Model)
+		}
+		if strings.TrimSpace(item.Content) != "" {
+			completionTokens += util.CountOutputTokens(item.Content, item.Model)
+		}
+		if strings.TrimSpace(item.ReasoningContent) != "" {
+			rTokens := util.CountOutputTokens(item.ReasoningContent, item.Model)
+			reasoningTokens = rTokens
+			completionTokens += rTokens
+		}
+		totalTokens = promptTokens + completionTokens
+	}
+
 	return SummaryEntry{
-		ID:             item.ID,
-		Revision:       item.Revision,
-		CreatedAt:      item.CreatedAt,
-		UpdatedAt:      item.UpdatedAt,
-		CompletedAt:    item.CompletedAt,
-		Status:         item.Status,
-		CallerID:       item.CallerID,
-		AccountID:      item.AccountID,
-		Surface:        item.Surface,
-		Model:          item.Model,
-		Stream:         item.Stream,
-		UserInput:      item.UserInput,
-		Preview:        buildPreview(item),
-		StatusCode:     item.StatusCode,
-		ElapsedMs:      item.ElapsedMs,
-		FinishReason:   item.FinishReason,
-		DetailRevision: item.Revision,
+		ID:               item.ID,
+		Revision:         item.Revision,
+		CreatedAt:        item.CreatedAt,
+		UpdatedAt:        item.UpdatedAt,
+		CompletedAt:      item.CompletedAt,
+		Status:           item.Status,
+		CallerID:         item.CallerID,
+		AccountID:        item.AccountID,
+		Surface:          item.Surface,
+		Model:            item.Model,
+		Stream:           item.Stream,
+		UserInput:        item.UserInput,
+		Preview:          buildPreview(item),
+		StatusCode:       item.StatusCode,
+		ElapsedMs:        item.ElapsedMs,
+		FinishReason:     item.FinishReason,
+		DetailRevision:   item.Revision,
+		PromptTokens:     promptTokens,
+		CompletionTokens: completionTokens,
+		ReasoningTokens:  reasoningTokens,
+		TotalTokens:      totalTokens,
+	}
+}
+
+func ExtractTokenCounts(usage map[string]any) (prompt, completion, reasoning, total int) {
+	if usage == nil {
+		return 0, 0, 0, 0
+	}
+	prompt = toInt(usage["prompt_tokens"])
+	if prompt == 0 {
+		prompt = toInt(usage["input_tokens"])
+	}
+	completion = toInt(usage["completion_tokens"])
+	if completion == 0 {
+		completion = toInt(usage["output_tokens"])
+	}
+	reasoning = toInt(usage["reasoning_tokens"])
+	if reasoning == 0 {
+		if details, ok := usage["completion_tokens_details"].(map[string]any); ok {
+			reasoning = toInt(details["reasoning_tokens"])
+		}
+	}
+	total = toInt(usage["total_tokens"])
+	if total == 0 {
+		total = prompt + completion
+	}
+	return prompt, completion, reasoning, total
+}
+
+func toInt(v any) int {
+	switch val := v.(type) {
+	case int:
+		return val
+	case int64:
+		return int(val)
+	case float64:
+		return int(val)
+	case string:
+		var i int
+		_, _ = fmt.Sscanf(val, "%d", &i)
+		return i
+	case json.Number:
+		i, _ := val.Int64()
+		return int(i)
+	default:
+		return 0
 	}
 }
 

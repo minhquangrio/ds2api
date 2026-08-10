@@ -2,6 +2,7 @@ import { ArrowUp, Loader2, MessageSquareText, Trash2, X } from 'lucide-react'
 import clsx from 'clsx'
 
 import DetailConversation from './ChatHistoryDetail'
+import { estimateItemTokens } from './ChatHistoryContainer'
 import { ListModeIcon, MergeModeIcon } from './HistoryModeIcons'
 import { formatDateTime, previewText, statusTone } from './chatHistoryUtils'
 
@@ -53,50 +54,58 @@ export function ChatHistoryListPane({ items, selectedItem, deletingId, t, lang, 
                     </div>
                 )}
 
-                {items.map(item => (
-                    <button
-                        key={item.id}
-                        type="button"
-                        onClick={(event) => onSelectItem(item.id, event)}
-                        className={clsx(
-                            'w-full text-left rounded-xl border px-4 py-3 transition-colors',
-                            selectedItem?.id === item.id ? 'border-primary/40 bg-primary/5' : 'border-border hover:bg-secondary/40'
-                        )}
-                    >
-                        <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                                <div className="text-sm font-semibold text-foreground truncate">
-                                    {item.user_input || t('chatHistory.untitled')}
+                {items.map(item => {
+                    const { total: itemTotal } = estimateItemTokens(item)
+                    return (
+                        <button
+                            key={item.id}
+                            type="button"
+                            onClick={(event) => onSelectItem(item.id, event)}
+                            className={clsx(
+                                'w-full text-left rounded-xl border px-4 py-3 transition-colors',
+                                selectedItem?.id === item.id ? 'border-primary/40 bg-primary/5' : 'border-border hover:bg-secondary/40'
+                            )}
+                        >
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <div className="text-sm font-semibold text-foreground truncate">
+                                        {item.user_input || t('chatHistory.untitled')}
+                                    </div>
+                                    <div className="text-[11px] text-muted-foreground mt-1 truncate">
+                                        {[item.surface, item.model].filter(Boolean).join(' · ') || '-'}
+                                    </div>
                                 </div>
-                                <div className="text-[11px] text-muted-foreground mt-1 truncate">
-                                    {[item.surface, item.model].filter(Boolean).join(' · ') || '-'}
+                                <div className="flex items-center gap-2 shrink-0">
+                                    <span className={clsx('px-2 py-0.5 rounded-full border text-[10px] font-semibold uppercase tracking-wide', statusTone(item.status))}>
+                                        {t(`chatHistory.status.${item.status || 'streaming'}`)}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={(event) => {
+                                            event.stopPropagation()
+                                            onDeleteItem(item.id)
+                                        }}
+                                        disabled={deletingId === item.id}
+                                        className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                    >
+                                        {deletingId === item.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                                    </button>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                                <span className={clsx('px-2 py-0.5 rounded-full border text-[10px] font-semibold uppercase tracking-wide', statusTone(item.status))}>
-                                    {t(`chatHistory.status.${item.status || 'streaming'}`)}
-                                </span>
-                                <button
-                                    type="button"
-                                    onClick={(event) => {
-                                        event.stopPropagation()
-                                        onDeleteItem(item.id)
-                                    }}
-                                    disabled={deletingId === item.id}
-                                    className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                >
-                                    {deletingId === item.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                                </button>
+                            <div className="text-xs text-muted-foreground mt-3 line-clamp-2 whitespace-pre-wrap break-words">
+                                {previewText(item) || t('chatHistory.noPreview')}
                             </div>
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-3 line-clamp-2 whitespace-pre-wrap break-words">
-                            {previewText(item) || t('chatHistory.noPreview')}
-                        </div>
-                        <div className="text-[11px] text-muted-foreground/80 mt-3">
-                            {formatDateTime(item.completed_at || item.updated_at || item.created_at, lang)}
-                        </div>
-                    </button>
-                ))}
+                            <div className="flex items-center justify-between text-[11px] text-muted-foreground/80 mt-3">
+                                <span>{formatDateTime(item.completed_at || item.updated_at || item.created_at, lang)}</span>
+                                {itemTotal > 0 && (
+                                    <span className="font-mono text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                                        {itemTotal.toLocaleString()} tokens
+                                    </span>
+                                )}
+                            </div>
+                        </button>
+                    )
+                })}
             </div>
         </div>
     )

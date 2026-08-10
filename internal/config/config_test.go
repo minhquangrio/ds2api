@@ -75,6 +75,38 @@ func TestLoadStorePreservesProxiesAndAccountProxyAssignment(t *testing.T) {
 	}
 }
 
+func TestLoadStorePreservesHTTPProxies(t *testing.T) {
+	t.Setenv("DS2API_CONFIG_JSON", `{
+		"proxies":[
+			{
+				"id":"proxy-http-1",
+				"name":"HTTP Exit",
+				"type":"http",
+				"host":"23.95.159.223",
+				"port":52290,
+				"username":"KyxfEp",
+				"password":"SihEWZ"
+			}
+		],
+		"accounts":[
+			{
+				"email":"u2@example.com",
+				"password":"p",
+				"proxy_id":"proxy-http-1"
+			}
+		]
+	}`)
+
+	store := LoadStore()
+	snap := store.Snapshot()
+	if len(snap.Proxies) != 1 {
+		t.Fatalf("expected 1 proxy, got %d", len(snap.Proxies))
+	}
+	if snap.Proxies[0].Type != "http" {
+		t.Fatalf("unexpected proxy type: %#v", snap.Proxies[0])
+	}
+}
+
 func TestLoadStoreDropsLegacyTokenOnlyAccounts(t *testing.T) {
 	t.Setenv("DS2API_CONFIG_JSON", `{
 		"accounts":[

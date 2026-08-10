@@ -223,6 +223,8 @@ function ProxyFormModal({
                                 value={form.type}
                                 onChange={e => setForm({ ...form, type: e.target.value })}
                             >
+                                <option value="http">http</option>
+                                <option value="https">https</option>
                                 <option value="socks5">socks5</option>
                                 <option value="socks5h">socks5h</option>
                             </select>

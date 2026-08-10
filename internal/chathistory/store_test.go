@@ -633,3 +633,54 @@ func TestUpdateAllowsOverwritingContentWithNewValue(t *testing.T) {
 		t.Fatalf("expected content to be overwritten, got %q", updated.Content)
 	}
 }
+
+func TestExtractTokenCountsAndSummaryTokens(t *testing.T) {
+	usageMap := map[string]any{
+		"prompt_tokens":     120,
+		"completion_tokens": 340,
+		"total_tokens":      460,
+		"completion_tokens_details": map[string]any{
+			"reasoning_tokens": 50,
+		},
+	}
+
+	p, c, r, tot := ExtractTokenCounts(usageMap)
+	if p != 120 || c != 340 || r != 50 || tot != 460 {
+		t.Fatalf("unexpected token counts extracted: prompt=%d, comp=%d, reason=%d, total=%d", p, c, r, tot)
+	}
+
+	path := filepath.Join(t.TempDir(), "chat_history.json")
+	store := New(path)
+
+	started, err := store.Start(StartParams{
+		CallerID:  "caller:test",
+		Model:     "deepseek-chat",
+		UserInput: "Calculate tokens test",
+	})
+	if err != nil {
+		t.Fatalf("start entry failed: %v", err)
+	}
+
+	_, err = store.Update(started.ID, UpdateParams{
+		Status:  "success",
+		Content: "Response text",
+		Usage:   usageMap,
+	})
+	if err != nil {
+		t.Fatalf("update entry failed: %v", err)
+	}
+
+	snap, err := store.Snapshot()
+	if err != nil {
+		t.Fatalf("snapshot failed: %v", err)
+	}
+
+	if len(snap.Items) != 1 {
+		t.Fatalf("expected 1 item in snapshot, got %d", len(snap.Items))
+	}
+
+	item := snap.Items[0]
+	if item.PromptTokens != 120 || item.CompletionTokens != 340 || item.ReasoningTokens != 50 || item.TotalTokens != 460 {
+		t.Fatalf("unexpected token metrics in summary entry: %#v", item)
+	}
+}
