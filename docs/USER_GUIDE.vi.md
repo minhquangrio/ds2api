@@ -126,7 +126,8 @@ Mở trình duyệt và truy cập `http://localhost:5001/admin`.
 
 ### 4.5 Quản lý Cụm Tài khoản Upstream (DeepSeek & Gemini)
 - **Thêm tài khoản mới**: Nhấp nút **Thêm tài khoản**, nhập Email/SĐT, Mật khẩu hoặc Cookies/Token, Tên gợi nhớ và Ghi chú.
-- **Làm mới & Kiểm tra**: Nhấp nút **Kiểm tra tất cả** để kiểm tra trạng thái đăng nhập của toàn bộ tài khoản trong pool.
+- **Làm mới & Kiểm tra**: Nhấp nút **Kiểm tra tất cả** để kiểm tra trạng thái đăng nhập của toàn bộ tài khoản trong pool. Đối với tài khoản Gemini Web, thao tác kiểm tra sẽ chủ động liên hệ Google RotateCookies để xác thực và làm mới chuỗi cookie `__Secure-1PSIDTS` trực tuyến (có cooldown bảo vệ tối thiểu 10s giữa các lần bấm để tránh bị Google giới hạn rate limit 429).
+- **Tự động làm mới Cookie Gemini**: Máy chủ chạy nền (`DS2API_GEMINI_COOKIE_REFRESH_INTERVAL`, mặc định 10 phút) sẽ tự động xoay và cập nhật cookie mới vào `config.json` cho các tài khoản Gemini đang hoạt động, giúp phiên làm việc luôn được duy trì liên tục mà không cần cập nhật thủ công.
 - **Bật / Tắt tài khoản**: Bạn có thể bật/tắt thủ công từng tài khoản hoặc dùng nút hàng loạt để tạm ngưng tài khoản khi cần.
 - **Elastic Pool (Pool linh hoạt)**: Khi bật tính năng này, hệ thống sẽ tự động kích hoạt số lượng tài khoản chỉ định và tự động thay thế bằng tài khoản mới trong pool khi có tài khoản bị giới hạn hoặc lỗi.
 - **Giám sát Hạn mức Gemini (Gemini Compute Quota Pool)**:

@@ -13,15 +13,24 @@ import (
 	"ds2api/internal/config"
 )
 
+type InitSessionOptions struct {
+	SkipDiscovery bool
+}
+
 // InitSession fetches https://gemini.google.com/app and extracts 5 session parameters:
 // SNlM0e (at), cfb2h (bl), FdrFJe (f.sid), TuX5cc (hl), and qKIAYe.
-func (c *Client) InitSession(ctx context.Context) (*SessionParams, error) {
+func (c *Client) InitSession(ctx context.Context, opts ...InitSessionOptions) (*SessionParams, error) {
+	var opt InitSessionOptions
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
+
 	headers := c.BuildDefaultHeaders()
 	headers["Accept"] = []string{"text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"}
 
 	req := &httpcloak.Request{
 		Method:  http.MethodGet,
-		URL:     AppURL,
+		URL:     c.getAppURL(),
 		Headers: headers,
 	}
 
@@ -74,8 +83,10 @@ func (c *Client) InitSession(ctx context.Context) (*SessionParams, error) {
 	// Model ids, tier capacity and capacity field are per-account and drift over
 	// time, so they are discovered rather than hardcoded. A failure here is not
 	// fatal: ResolveModelSpec falls back to the free-tier defaults.
-	if _, err := c.DiscoverModels(ctx); err != nil {
-		config.Logger.Warn("[geminiweb] model discovery failed, using fallback specs", "error", err)
+	if !opt.SkipDiscovery {
+		if _, err := c.DiscoverModels(ctx); err != nil {
+			config.Logger.Warn("[geminiweb] model discovery failed, using fallback specs", "error", err)
+		}
 	}
 
 	return &session, nil
@@ -95,7 +106,7 @@ func (c *Client) RotateCookies(ctx context.Context) (string, error) {
 
 	req := &httpcloak.Request{
 		Method:  http.MethodPost,
-		URL:     RotateCookiesURL,
+		URL:     c.getRotateURL(),
 		Headers: headers,
 		Body:    strings.NewReader(RotateCookiesBody),
 	}
@@ -107,7 +118,7 @@ func (c *Client) RotateCookies(ctx context.Context) (string, error) {
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		return "", errors.New("rotate cookies rejected: cookies are no longer valid")
+		return "", fmt.Errorf("%w: cookies are no longer valid", ErrUnauthenticated)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return "", fmt.Errorf("rotate cookies status %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
@@ -118,6 +129,7 @@ func (c *Client) RotateCookies(ctx context.Context) (string, error) {
 
 func (c *Client) checkSetCookies(headers map[string][]string) string {
 	var newTS string
+	toUpdate := make(map[string]string)
 	for k, vals := range headers {
 		if strings.EqualFold(k, "set-cookie") {
 			for _, v := range vals {
@@ -131,7 +143,7 @@ func (c *Client) checkSetCookies(headers map[string][]string) string {
 					cName := strings.TrimSpace(cookiePair[:idx])
 					cVal := strings.TrimSpace(cookiePair[idx+1:])
 					if cName != "" && cVal != "" {
-						c.UpdateCookie(cName, cVal)
+						toUpdate[cName] = cVal
 						if cName == "__Secure-1PSIDTS" {
 							newTS = cVal
 						}
@@ -140,5 +152,35 @@ func (c *Client) checkSetCookies(headers map[string][]string) string {
 			}
 		}
 	}
+	if len(toUpdate) > 0 {
+		c.updateCookiesBatch(toUpdate)
+	}
 	return newTS
+}
+
+func (c *Client) updateCookiesBatch(updates map[string]string) {
+	c.mu.Lock()
+	changed := false
+	for k, v := range updates {
+		if cur, ok := c.cookiesMap[k]; !ok || cur != v {
+			c.cookiesMap[k] = v
+			changed = true
+		}
+	}
+	if !changed {
+		c.mu.Unlock()
+		return
+	}
+	var parts []string
+	for k, v := range c.cookiesMap {
+		parts = append(parts, fmt.Sprintf("%s=%s", k, v))
+	}
+	c.cookieHeader = strings.Join(parts, "; ")
+	cb := c.onCookieUpdate
+	header := c.cookieHeader
+	c.mu.Unlock()
+
+	if cb != nil {
+		cb(header)
+	}
 }

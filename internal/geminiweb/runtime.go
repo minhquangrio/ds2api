@@ -22,8 +22,12 @@ type StoreCookieUpdater interface {
 }
 
 type Runtime struct {
-	mu      sync.RWMutex
-	clients map[string]*Client
+	mu           sync.RWMutex
+	clients      map[string]*Client
+	workerMu     sync.Mutex
+	workerCancel context.CancelFunc
+	workerWg     sync.WaitGroup
+	workerRun    bool
 }
 
 var defaultRuntime = &Runtime{
@@ -126,7 +130,7 @@ func ExecuteTurn(ctx context.Context, client *Client, stdReq promptcompat.Standa
 		opts.Model = stdReq.RequestedModel
 	}
 
-	res, err := client.Generate(ctx, prompt, opts)
+	res, err := client.GenerateWithRetry(ctx, prompt, opts)
 	if err != nil {
 		return assistantturn.Turn{}, err
 	}
@@ -151,4 +155,15 @@ func ExecuteTurn(ctx context.Context, client *Client, stdReq promptcompat.Standa
 			TotalTokens:     totalTokens,
 		},
 	}, nil
+}
+
+func (r *Runtime) Close() error {
+	r.StopBackgroundRefresher()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for id, client := range r.clients {
+		_ = client.Close()
+		delete(r.clients, id)
+	}
+	return nil
 }

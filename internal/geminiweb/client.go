@@ -22,9 +22,15 @@ type SessionParams struct {
 
 type Client struct {
 	mu             sync.RWMutex
+	rotateMu       sync.Mutex
+	lastRotated    time.Time
 	cookieHeader   string
 	cookiesMap     map[string]string
 	proxy          string
+	rotateURL      string
+	appURL         string
+	streamGenURL   string
+	batchExecURL   string
 	session        SessionParams
 	modelSpecs     map[string]ModelSpec // alias -> spec, filled by DiscoverModels
 	cloakClient    *httpcloak.Client
@@ -35,8 +41,14 @@ type Client struct {
 }
 
 type ClientOptions struct {
-	Proxy   string
-	Timeout time.Duration
+	Proxy              string
+	Timeout            time.Duration
+	InsecureSkipVerify bool
+	ForceHTTP1         bool
+	RotateURL          string
+	AppURL             string
+	StreamGenerateURL  string
+	BatchExecuteURL    string
 }
 
 func NewClient(rawCookies string, opts ...ClientOptions) (*Client, error) {
@@ -52,8 +64,17 @@ func NewClient(rawCookies string, opts ...ClientOptions) (*Client, error) {
 
 	cloakOpts := []httpcloak.Option{
 		httpcloak.WithTimeout(60 * time.Second),
-		httpcloak.WithForceHTTP2(),
-		httpcloak.WithTLSOnly(),
+	}
+	if opt.ForceHTTP1 {
+		cloakOpts = append(cloakOpts, httpcloak.WithForceHTTP1())
+	} else {
+		cloakOpts = append(cloakOpts, httpcloak.WithForceHTTP2())
+	}
+	if opt.InsecureSkipVerify {
+		cloakOpts = append(cloakOpts, httpcloak.WithInsecureSkipVerify())
+	}
+	if opt.RotateURL == "" && opt.AppURL == "" && opt.StreamGenerateURL == "" {
+		cloakOpts = append(cloakOpts, httpcloak.WithTLSOnly())
 	}
 	if opt.Timeout > 0 {
 		cloakOpts = append(cloakOpts, httpcloak.WithTimeout(opt.Timeout))
@@ -68,6 +89,10 @@ func NewClient(rawCookies string, opts ...ClientOptions) (*Client, error) {
 		cookieHeader: cookieHeader,
 		cookiesMap:   cookieMap,
 		proxy:        opt.Proxy,
+		rotateURL:    opt.RotateURL,
+		appURL:       opt.AppURL,
+		streamGenURL: opt.StreamGenerateURL,
+		batchExecURL: opt.BatchExecuteURL,
 		cloakClient:  client,
 		modelSpecs:   make(map[string]ModelSpec),
 	}

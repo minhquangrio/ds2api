@@ -13,3 +13,5 @@ internal/geminiweb/stream_parser.go
 internal/geminiweb/runtime.go
 internal/geminiweb/runtime_stream.go
 internal/geminiweb/upload.go
+internal/geminiweb/refresher.go
+internal/geminiweb/worker.go

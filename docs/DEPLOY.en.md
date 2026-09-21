@@ -226,6 +226,7 @@ If you do not want to use the `zeabur.yaml` one-click template, deploy directly 
 | `LOG_LEVEL` | `INFO` | Optional log level. |
 | `DS2API_CONFIG_JSON` | Raw JSON or Base64 JSON | Optional config bootstrap from env. |
 | `DS2API_ENV_WRITEBACK` | `1` | Optional; enable only when using `DS2API_CONFIG_JSON` and you want the initial config written to `/data/config.json`. |
+| `DS2API_GEMINI_COOKIE_REFRESH_INTERVAL` | `600` | Optional; background rotation interval for Gemini Web cookies in seconds (default 600, min 60). |
 
 7. Expose HTTP port `5001`. The health check path can be `/healthz`.
 8. After deployment, open `/admin`, login with `DS2API_ADMIN_KEY`, then import or edit config in Admin UI. A fresh volume does not need `/data/config.json` up front; the service boots first and creates the file on the first save.

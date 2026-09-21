@@ -162,7 +162,7 @@ func (c *Client) StreamGenerate(ctx context.Context, prompt string, opts Generat
 		params.Set("f.sid", session.SessionID)
 	}
 
-	genURL := StreamGenerateURL + "?" + params.Encode()
+	genURL := c.getStreamGenerateURL() + "?" + params.Encode()
 
 	modelHeader := BuildModelHeader(spec, opts.Thinking, clientSessionID)
 
@@ -194,7 +194,11 @@ func (c *Client) StreamGenerate(ctx context.Context, prompt string, opts Generat
 		buf := make([]byte, 1024)
 		n, _ := resp.Body.Read(buf)
 		_ = resp.Body.Close()
-		return nil, fmt.Errorf("gemini stream generate status %d %s: %s", resp.StatusCode, http.StatusText(resp.StatusCode), string(buf[:n]))
+		errMsg := fmt.Sprintf("gemini stream generate status %d %s: %s", resp.StatusCode, http.StatusText(resp.StatusCode), string(buf[:n]))
+		if resp.StatusCode == http.StatusUnauthorized {
+			return nil, fmt.Errorf("%w: %s", ErrUnauthenticated, errMsg)
+		}
+		return nil, errors.New(errMsg)
 	}
 
 	c.checkSetCookies(resp.Headers)

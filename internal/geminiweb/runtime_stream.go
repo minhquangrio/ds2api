@@ -269,7 +269,7 @@ func prepareStream(ctx context.Context, client *Client, stdReq promptcompat.Stan
 	if opts.Model == "" {
 		opts.Model = stdReq.RequestedModel
 	}
-	return client.StreamGenerate(ctx, prompt, opts)
+	return client.StreamGenerateWithRetry(ctx, prompt, opts)
 }
 
 func setSSEHeaders(w http.ResponseWriter) {
