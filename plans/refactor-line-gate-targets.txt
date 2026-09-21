@@ -8,6 +8,7 @@ internal/geminiweb/generate.go
 internal/geminiweb/model_discovery.go
 internal/geminiweb/model_spec.go
 internal/geminiweb/quota.go
+internal/geminiweb/quota_usage.go
 internal/geminiweb/stream_parser.go
 internal/geminiweb/runtime.go
 internal/geminiweb/runtime_stream.go

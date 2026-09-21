@@ -110,6 +110,25 @@
         }
     },
     "accountManager": {
+        "quota": {
+            "button": "配额",
+            "modalTitle": "Gemini 账号配额与用量",
+            "tier": "计划级别",
+            "h5Title": "5 小时用量限制",
+            "weeklyTitle": "周度用量限制",
+            "creditsRemaining": "剩余 {remaining} 次 ({used}% 已用)",
+            "creditsRemainingSimple": "剩余 {remaining} 次",
+            "unlimited": "无限制",
+            "resetAt": "{time} 重置",
+            "aiCredits": "额外 AI 积分: {count}",
+            "modelsBreakdown": "分模型配额",
+            "extraFeatures": "附加特性",
+            "extraBlocked": "暂时受限",
+            "extraOk": "正常可用",
+            "refresh": "刷新",
+            "refreshing": "正在刷新配额...",
+            "loadFailed": "获取配额失败: {error}"
+        },
         "addKeySuccess": "API 密钥添加成功",
         "updateKeySuccess": "API 密钥更新成功",
         "addAccountSuccess": "账号添加成功",

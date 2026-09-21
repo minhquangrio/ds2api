@@ -22,8 +22,14 @@ const (
 	// RotateCookiesBody is the fixed opaque payload the rotation endpoint takes.
 	RotateCookiesBody = `[000,"-0000000000000000000"]`
 
-	RPCGetUserStatus = "otAQ7b"
-	RPCGetQuota      = "qpEbW"
+	RPCGetUserStatus   = "otAQ7b"
+	RPCGetQuota        = "qpEbW"
+	RPCGetUsageInfo    = "jSf9Qc"
+	RPCCheckExtraQuota = "aPya6c"
+
+	MetricType5h        = 1
+	MetricTypeWeekly    = 2
+	MetricTypeAICredits = 3
 
 	HeaderExtModel   = "x-goog-ext-525001261-jspb"
 	HeaderExtParam1  = "x-goog-ext-73010989-jspb"

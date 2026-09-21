@@ -110,6 +110,25 @@
         }
     },
     "accountManager": {
+        "quota": {
+            "button": "Hạn mức",
+            "modalTitle": "Hạn Mức & Lượt Dùng Gemini",
+            "tier": "Gói dịch vụ",
+            "h5Title": "Hạn mức 5 giờ",
+            "weeklyTitle": "Hạn mức tuần",
+            "creditsRemaining": "{remaining} lượt còn lại ({used}% đã dùng)",
+            "creditsRemainingSimple": "{remaining} lượt còn lại",
+            "unlimited": "Không giới hạn",
+            "resetAt": "Reset lúc {time}",
+            "aiCredits": "AI Credits bổ sung: {count}",
+            "modelsBreakdown": "Hạn mức theo mô hình",
+            "extraFeatures": "Tính năng bổ sung",
+            "extraBlocked": "Bị khóa tạm thời",
+            "extraOk": "Hoạt động bình thường",
+            "refresh": "Làm mới",
+            "refreshing": "Đang tải hạn mức...",
+            "loadFailed": "Không thể lấy thông tin hạn mức: {error}"
+        },
         "addKeySuccess": "Thêm khoá API thành công.",
         "updateKeySuccess": "Cập nhật khoá API thành công.",
         "addAccountSuccess": "Thêm tài khoản thành công.",

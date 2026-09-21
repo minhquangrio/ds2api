@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronLeft, ChevronRight, Check, Copy, Pencil, Play, Plus, Trash2, FolderX } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Check, Copy, Pencil, Play, Plus, Trash2, FolderX, Gauge } from 'lucide-react'
 import clsx from 'clsx'
 
 export default function AccountsTable({
@@ -26,6 +26,7 @@ export default function AccountsTable({
     onShowAddAccount,
     onEditAccount,
     onTestAccount,
+    onViewQuota,
     onDeleteAccount,
     onDeleteAllSessions,
     onUpdateAccountProxy,
@@ -294,6 +295,16 @@ export default function AccountsTable({
                                     >
                                         {testing[id] ? t('actions.testing') : t('actions.test')}
                                     </button>
+                                    {acc.provider === 'gemini' && (
+                                        <button
+                                            onClick={() => onViewQuota && onViewQuota(acc)}
+                                            className="flex items-center gap-1 px-2 lg:px-2.5 py-1 lg:py-1.5 text-[10px] lg:text-xs font-medium border border-border rounded-md hover:bg-secondary hover:text-primary transition-colors text-muted-foreground"
+                                            title={t('accountManager.quota.button')}
+                                        >
+                                            <Gauge className="w-3.5 h-3.5 text-primary" />
+                                            <span className="hidden sm:inline">{t('accountManager.quota.button')}</span>
+                                        </button>
+                                    )}
                                     <button
                                         onClick={() => onDeleteAccount(id)}
                                         className="p-1 lg:p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"

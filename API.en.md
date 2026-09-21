@@ -151,6 +151,7 @@ Gemini-compatible clients can also send `x-goog-api-key`, `?key=`, or `?api_key=
 | POST | `/admin/accounts` | Admin | Add account |
 | PUT | `/admin/accounts/{identifier}` | Admin | Update account name/remark |
 | DELETE | `/admin/accounts/{identifier}` | Admin | Delete account |
+| GET | `/admin/accounts/{identifier}/quota` | Admin | Query Gemini account quota and 5h usage |
 | PUT | `/admin/accounts/{identifier}/proxy` | Admin | Bind/unbind proxy for an account |
 | GET | `/admin/queue/status` | Admin | Account queue status |
 | POST | `/admin/accounts/test` | Admin | Test one account |
@@ -921,6 +922,79 @@ Updates the `name` / `remark` of the specified account. The path `identifier` ca
 ```
 
 **Response**: `{"success": true, "total_accounts": 6}`
+
+### `GET /admin/accounts/{identifier}/quota`
+
+Queries compute usage (5-hour and weekly windows) and per-model quotas for a Gemini account.
+
+**Permissions**: Admin
+
+**Query Parameters**:
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `refresh` | boolean | Whether to force-refresh (bypassing the 45s server cache). Pass `true` to query upstream immediately. |
+
+**Example Response**:
+
+```json
+{
+  "identifier": "gemini-account-1",
+  "provider": "gemini",
+  "tier": {
+    "id": 2,
+    "label": "PRO"
+  },
+  "usage": {
+    "tier": { "id": 2, "label": "PRO" },
+    "use_overage_ai_credits": false,
+    "current_5h": {
+      "type": 1,
+      "window": "5h",
+      "remaining_credits": 45,
+      "usage_percentage": 10,
+      "reset_at": "2026-09-21T18:00:00Z",
+      "reset_timestamp": 1741234567
+    },
+    "weekly": {
+      "type": 2,
+      "window": "weekly",
+      "remaining_credits": 200,
+      "usage_percentage": 25,
+      "reset_at": "2026-09-28T00:00:00Z",
+      "reset_timestamp": 1741839000
+    },
+    "ai_credits_remaining": 15
+  },
+  "quotas": {
+    "4": {
+      "action_id": 4,
+      "label": "Gemini Pro",
+      "remaining": 45,
+      "total": 50,
+      "reset_time": 1741234567,
+      "usage_percentage": 10.0,
+      "is_unlimited": false
+    },
+    "11": {
+      "action_id": 11,
+      "label": "Gemini Flash",
+      "remaining": 100,
+      "total": 100,
+      "reset_time": 1741234567,
+      "usage_percentage": 0.0,
+      "is_unlimited": false
+    }
+  },
+  "extra_features": {
+    "is_blocked": false,
+    "usage_percentage": 0.0,
+    "reset_time": 0,
+    "reset_at": ""
+  },
+  "fetched_at": "2026-09-21T20:30:00Z"
+}
+```
 
 ### `DELETE /admin/accounts/{identifier}`
 

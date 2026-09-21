@@ -14,6 +14,7 @@ func RegisterRoutes(r chi.Router, h *Handler) {
 	r.Post("/accounts", h.addAccount)
 	r.Put("/accounts/{identifier}", h.updateAccount)
 	r.Delete("/accounts/{identifier}", h.deleteAccount)
+	r.Get("/accounts/{identifier}/quota", h.getAccountQuota)
 	r.Put("/accounts/{identifier}/enabled", h.toggleAccountEnabled)
 	r.Post("/accounts/enabled/batch", h.batchToggleAccountEnabled)
 	r.Put("/accounts/elastic-pool", h.updateElasticPool)
@@ -32,10 +33,11 @@ func (h *Handler) TestAccount(ctx context.Context, acc config.Account, model, me
 	return h.testAccount(ctx, acc, model, message)
 }
 
-func (h *Handler) ListAccounts(w http.ResponseWriter, r *http.Request)  { h.listAccounts(w, r) }
-func (h *Handler) AddAccount(w http.ResponseWriter, r *http.Request)    { h.addAccount(w, r) }
-func (h *Handler) UpdateAccount(w http.ResponseWriter, r *http.Request) { h.updateAccount(w, r) }
-func (h *Handler) DeleteAccount(w http.ResponseWriter, r *http.Request) { h.deleteAccount(w, r) }
+func (h *Handler) ListAccounts(w http.ResponseWriter, r *http.Request)    { h.listAccounts(w, r) }
+func (h *Handler) AddAccount(w http.ResponseWriter, r *http.Request)      { h.addAccount(w, r) }
+func (h *Handler) UpdateAccount(w http.ResponseWriter, r *http.Request)   { h.updateAccount(w, r) }
+func (h *Handler) DeleteAccount(w http.ResponseWriter, r *http.Request)   { h.deleteAccount(w, r) }
+func (h *Handler) GetAccountQuota(w http.ResponseWriter, r *http.Request) { h.getAccountQuota(w, r) }
 func (h *Handler) ToggleAccountEnabled(w http.ResponseWriter, r *http.Request) {
 	h.toggleAccountEnabled(w, r)
 }

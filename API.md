@@ -151,6 +151,7 @@ Gemini 兼容客户端还可以使用 `x-goog-api-key`、`?key=` 或 `?api_key=`
 | POST | `/admin/accounts` | Admin | 添加账号 |
 | PUT | `/admin/accounts/{identifier}` | Admin | 更新账号 name/remark |
 | DELETE | `/admin/accounts/{identifier}` | Admin | 删除账号 |
+| GET | `/admin/accounts/{identifier}/quota` | Admin | 查询 Gemini 账号配额与 5 小时用量 |
 | PUT | `/admin/accounts/{identifier}/proxy` | Admin | 为账号绑定/解绑代理 |
 | GET | `/admin/queue/status` | Admin | 账号队列状态 |
 | POST | `/admin/accounts/test` | Admin | 测试单个账号 |
@@ -928,6 +929,79 @@ data: {"type":"message_stop"}
 ```
 
 **响应**：`{"success": true, "total_accounts": 6}`
+
+### `GET /admin/accounts/{identifier}/quota`
+
+查询指定 Gemini 账号的计算用量（5小时/周度窗口）及分模型配额。
+
+**权限**：Admin
+
+**查询参数**：
+
+| 参数 | 类型 | 说明 |
+| --- | --- | --- |
+| `refresh` | boolean | 是否强制刷新（跳过 45 秒服务端缓存）。传 `true` 触发即时向上游查询。 |
+
+**响应示例**：
+
+```json
+{
+  "identifier": "gemini-account-1",
+  "provider": "gemini",
+  "tier": {
+    "id": 2,
+    "label": "PRO"
+  },
+  "usage": {
+    "tier": { "id": 2, "label": "PRO" },
+    "use_overage_ai_credits": false,
+    "current_5h": {
+      "type": 1,
+      "window": "5h",
+      "remaining_credits": 45,
+      "usage_percentage": 10,
+      "reset_at": "2026-09-21T18:00:00Z",
+      "reset_timestamp": 1741234567
+    },
+    "weekly": {
+      "type": 2,
+      "window": "weekly",
+      "remaining_credits": 200,
+      "usage_percentage": 25,
+      "reset_at": "2026-09-28T00:00:00Z",
+      "reset_timestamp": 1741839000
+    },
+    "ai_credits_remaining": 15
+  },
+  "quotas": {
+    "4": {
+      "action_id": 4,
+      "label": "Gemini Pro",
+      "remaining": 45,
+      "total": 50,
+      "reset_time": 1741234567,
+      "usage_percentage": 10.0,
+      "is_unlimited": false
+    },
+    "11": {
+      "action_id": 11,
+      "label": "Gemini Flash",
+      "remaining": 100,
+      "total": 100,
+      "reset_time": 1741234567,
+      "usage_percentage": 0.0,
+      "is_unlimited": false
+    }
+  },
+  "extra_features": {
+    "is_blocked": false,
+    "usage_percentage": 0.0,
+    "reset_time": 0,
+    "reset_at": ""
+  },
+  "fetched_at": "2026-09-21T20:30:00Z"
+}
+```
 
 ### `DELETE /admin/accounts/{identifier}`
 

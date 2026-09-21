@@ -29,6 +29,8 @@ type Client struct {
 	modelSpecs     map[string]ModelSpec // alias -> spec, filled by DiscoverModels
 	cloakClient    *httpcloak.Client
 	onCookieUpdate func(newCookies string)
+	quotaCache     *GeminiAccountQuotaSummary
+	quotaCached    time.Time
 	closed         bool
 }
 

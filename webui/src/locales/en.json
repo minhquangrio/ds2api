@@ -110,6 +110,25 @@
         }
     },
     "accountManager": {
+        "quota": {
+            "button": "Quota",
+            "modalTitle": "Gemini Quota & Usage Limits",
+            "tier": "Plan Tier",
+            "h5Title": "5-Hour Usage Limit",
+            "weeklyTitle": "Weekly Usage Limit",
+            "creditsRemaining": "{remaining} credits remaining ({used}% used)",
+            "creditsRemainingSimple": "{remaining} credits remaining",
+            "unlimited": "Unlimited",
+            "resetAt": "Resets at {time}",
+            "aiCredits": "Extra AI Credits: {count}",
+            "modelsBreakdown": "Per-Model Quotas",
+            "extraFeatures": "Extra Features",
+            "extraBlocked": "Temporarily Blocked",
+            "extraOk": "Normal",
+            "refresh": "Refresh",
+            "refreshing": "Loading quota...",
+            "loadFailed": "Failed to load quota: {error}"
+        },
         "addKeySuccess": "API key added successfully.",
         "updateKeySuccess": "API key updated successfully.",
         "addAccountSuccess": "Account added successfully.",

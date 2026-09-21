@@ -24,6 +24,7 @@ type QuotaInfo struct {
 	Total           int     `json:"total"`
 	ResetTime       int64   `json:"reset_time"`
 	UsagePercentage float64 `json:"usage_percentage"`
+	IsUnlimited     bool    `json:"is_unlimited"`
 }
 
 // CheckQuota queries Gemini for Flash and Pro/Advanced quotas via RPC qpEbW.
@@ -50,12 +51,20 @@ func (c *Client) CheckQuota(ctx context.Context) (map[int]QuotaInfo, error) {
 }
 
 func (c *Client) fetchQuotaPayload(ctx context.Context, session SessionParams, payload string) (map[int]QuotaInfo, error) {
+	raw, err := c.batchExecuteRPC(ctx, session, RPCGetQuota, payload, "/app")
+	if err != nil {
+		return nil, err
+	}
+	return ParseQuotaResponse(raw), nil
+}
+
+func (c *Client) batchExecuteRPC(ctx context.Context, session SessionParams, rpcID, payload, sourcePath string) (string, error) {
 	params := url.Values{
-		"rpcids":      {RPCGetQuota},
+		"rpcids":      {rpcID},
 		"hl":          {session.Language},
 		"_reqid":      {"100002"},
 		"rt":          {"c"},
-		"source-path": {"/app"},
+		"source-path": {sourcePath},
 		"bl":          {session.BuildLabel},
 	}
 	if session.SessionID != "" {
@@ -67,7 +76,7 @@ func (c *Client) fetchQuotaPayload(ctx context.Context, session SessionParams, p
 	headers["Content-Type"] = []string{"application/x-www-form-urlencoded;charset=utf-8"}
 
 	escapedPayload, _ := json.Marshal(payload)
-	batchPayload := fmt.Sprintf(`[[["%s",%s,null,"generic"]]]`, RPCGetQuota, string(escapedPayload))
+	batchPayload := fmt.Sprintf(`[[["%s",%s,null,"generic"]]]`, rpcID, string(escapedPayload))
 
 	postForm := url.Values{
 		"at":    {session.AccessToken},
@@ -83,21 +92,21 @@ func (c *Client) fetchQuotaPayload(ctx context.Context, session SessionParams, p
 
 	resp, err := c.Do(ctx, req)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("quota RPC status %d", resp.StatusCode)
+		return "", fmt.Errorf("RPC %s status %d", rpcID, resp.StatusCode)
 	}
 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	c.checkSetCookies(resp.Headers)
-	return ParseQuotaResponse(string(bodyBytes)), nil
+	return string(bodyBytes), nil
 }
 
 // ParseQuotaResponse parses the batchexecute response string for qpEbW.
@@ -140,6 +149,8 @@ func ParseQuotaResponse(raw string) map[int]QuotaInfo {
 			}
 
 			usagePct, _ := item[2].(float64)
+			usagePct = usagePct * 100
+
 			resetTs := int64(0)
 			if resetList, ok := item[3].([]any); ok && len(resetList) > 0 {
 				if r, ok := resetList[0].(float64); ok {
@@ -154,6 +165,7 @@ func ParseQuotaResponse(raw string) map[int]QuotaInfo {
 			if rem, ok := item[5].(float64); ok {
 				remaining = int(rem)
 			}
+			isUnlimited := total == 0 && remaining == 0
 
 			label := "Gemini"
 			switch actionID {
@@ -172,6 +184,7 @@ func ParseQuotaResponse(raw string) map[int]QuotaInfo {
 				Total:           total,
 				ResetTime:       resetTs,
 				UsagePercentage: usagePct,
+				IsUnlimited:     isUnlimited,
 			}
 		}
 	}

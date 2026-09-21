@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useI18n } from '../../i18n'
 import { useAccountsData } from './useAccountsData'
 import { useAccountActions } from './useAccountActions'
@@ -8,10 +9,12 @@ import AddKeyModal from './AddKeyModal'
 import AddAccountModal from './AddAccountModal'
 import EditAccountModal from './EditAccountModal'
 import ElasticPoolModal from './ElasticPoolModal'
+import GeminiQuotaModal from './GeminiQuotaModal'
 
 export default function AccountManagerContainer({ config, onRefresh, onMessage, authFetch }) {
     const { t } = useI18n()
     const apiFetch = authFetch || fetch
+    const [quotaAccount, setQuotaAccount] = useState(null)
 
     const {
         queueStatus,
@@ -149,6 +152,7 @@ export default function AccountManagerContainer({ config, onRefresh, onMessage, 
                 onShowAddAccount={openAddAccount}
                 onEditAccount={openEditAccount}
                 onTestAccount={testAccount}
+                onViewQuota={acc => setQuotaAccount(acc)}
                 onDeleteAccount={deleteAccount}
                 onDeleteAllSessions={deleteAllSessions}
                 onUpdateAccountProxy={updateAccountProxy}
@@ -202,6 +206,14 @@ export default function AccountManagerContainer({ config, onRefresh, onMessage, 
                 loading={savingElasticPool}
                 onClose={closeElasticPool}
                 onSave={saveElasticPool}
+            />
+
+            <GeminiQuotaModal
+                show={Boolean(quotaAccount)}
+                account={quotaAccount}
+                apiFetch={apiFetch}
+                t={t}
+                onClose={() => setQuotaAccount(null)}
             />
         </div>
     )
