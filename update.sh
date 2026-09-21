@@ -86,7 +86,10 @@ echo -e "  Đang đồng bộ với nhánh: ${CYAN}$BRANCH${NC} từ ${BLUE}$REP
 
 # Kéo code mới từ origin
 git fetch origin "$BRANCH" --depth=1 || git fetch origin "$BRANCH"
-git checkout -B "$BRANCH" "origin/$BRANCH"
+if ! git checkout -f -B "$BRANCH" "origin/$BRANCH"; then
+    git checkout -f "$BRANCH" 2>/dev/null || true
+    git reset --hard "origin/$BRANCH"
+fi
 
 # Khôi phục file cấu hình đã sao lưu để không bị đè bởi code mới
 if [ -f "$BACKUP_DIR/config_${TIMESTAMP}.json" ]; then
