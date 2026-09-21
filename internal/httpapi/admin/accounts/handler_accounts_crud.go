@@ -77,6 +77,9 @@ func (h *Handler) listAccounts(w http.ResponseWriter, r *http.Request) {
 			"has_password":    acc.Password != "",
 			"has_token":       token != "",
 			"token_preview":   maskSecretPreview(token),
+			"provider":        acc.AccountProvider(),
+			"has_cookies":     strings.TrimSpace(acc.Cookies) != "",
+			"cookies_preview": maskSecretPreview(acc.Cookies),
 			"test_status":     testStatus,
 			"enabled":         acc.IsEnabled(),
 			"disabled_reason": acc.DisabledReason,
@@ -93,7 +96,11 @@ func (h *Handler) addAccount(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewDecoder(r.Body).Decode(&req)
 	acc := toAccount(req)
 	if acc.Identifier() == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"detail": "需要 email 或 mobile"})
+		writeJSON(w, http.StatusBadRequest, map[string]any{"detail": "需要 identifier (email, mobile 或 name)"})
+		return
+	}
+	if acc.IsGemini() && strings.TrimSpace(acc.Cookies) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"detail": "Gemini 账号必须配置 cookies"})
 		return
 	}
 	err := h.Store.Update(func(c *config.Config) error {
@@ -109,6 +116,9 @@ func (h *Handler) addAccount(w http.ResponseWriter, r *http.Request) {
 			}
 			if mobileKey != "" && config.CanonicalMobileKey(a.Mobile) == mobileKey {
 				return fmt.Errorf("手机号已存在")
+			}
+			if acc.IsGemini() && acc.Name != "" && a.Name == acc.Name && acc.Email == "" && acc.Mobile == "" {
+				return fmt.Errorf("账号名称已存在")
 			}
 		}
 		c.Accounts = append(c.Accounts, acc)
@@ -136,6 +146,8 @@ func (h *Handler) updateAccount(w http.ResponseWriter, r *http.Request) {
 	name, nameOK := fieldStringOptional(req, "name")
 	remark, remarkOK := fieldStringOptional(req, "remark")
 	poolType, poolTypeOK := fieldStringOptional(req, "pool_type")
+	cookies, cookiesOK := fieldStringOptional(req, "cookies")
+	proxyID, proxyIDOK := fieldStringOptional(req, "proxy_id")
 
 	err := h.Store.Update(func(c *config.Config) error {
 		for i, acc := range c.Accounts {
@@ -150,6 +162,12 @@ func (h *Handler) updateAccount(w http.ResponseWriter, r *http.Request) {
 			}
 			if poolTypeOK {
 				c.Accounts[i].PoolType = config.NormalizePoolType(poolType)
+			}
+			if cookiesOK {
+				c.Accounts[i].Cookies = cookies
+			}
+			if proxyIDOK {
+				c.Accounts[i].ProxyID = proxyID
 			}
 			return nil
 		}

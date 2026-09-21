@@ -13,6 +13,7 @@ import (
 
 	authn "ds2api/internal/auth"
 	"ds2api/internal/config"
+	"ds2api/internal/geminiweb"
 	"ds2api/internal/prompt"
 	"ds2api/internal/promptcompat"
 	"ds2api/internal/sse"
@@ -116,6 +117,37 @@ func (h *Handler) testAccount(ctx context.Context, acc config.Account, model, me
 		}
 		_ = h.Store.UpdateAccountTestStatus(identifier, status)
 	}()
+
+	if acc.IsGemini() {
+		client, err := geminiweb.DefaultRuntime().GetClient(ctx, acc, h.Store)
+		if err != nil {
+			result["message"] = "Gemini 客户端初始化失败: " + err.Error()
+			return result
+		}
+		if strings.TrimSpace(message) == "" {
+			sess := client.Session()
+			if sess.AccessToken == "" {
+				result["message"] = "Gemini 会话初始化失败 (无 AccessToken)"
+				return result
+			}
+			result["success"] = true
+			result["message"] = "Gemini 会话初始化成功"
+			result["response_time"] = int(time.Since(start).Milliseconds())
+			return result
+		}
+		res, err := client.Generate(ctx, message, geminiweb.GenerateOptions{
+			Model: model,
+		})
+		if err != nil {
+			result["message"] = "Gemini 请求失败: " + err.Error()
+			return result
+		}
+		result["success"] = true
+		result["message"] = res.Text
+		result["response_time"] = int(time.Since(start).Milliseconds())
+		return result
+	}
+
 	token, err := h.DS.Login(ctx, acc)
 	if err != nil {
 		result["message"] = "登录失败: " + err.Error()
@@ -167,11 +199,11 @@ func (h *Handler) testAccount(ctx context.Context, acc config.Account, model, me
 		return result
 	}
 	thinking, search, ok := config.GetModelConfig(model)
-	resolvedModel, resolved := config.ResolveModel(modelAliasSnapshotReader{
+	target, resolved := config.ResolveModelTarget(modelAliasSnapshotReader{
 		aliases: h.Store.Snapshot().ModelAliases,
 	}, model)
 	if resolved {
-		model = resolvedModel
+		model = target.Canonical
 		thinking, search, ok = config.GetModelConfig(model)
 	}
 	if !ok {

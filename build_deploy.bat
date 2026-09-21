@@ -1,39 +1,41 @@
 @echo off
 chcp 65001 >nul
+
 echo ===================================================
-echo [1/3] Đang build WebUI (React/Vite)...
+echo [1/3] Dang build WebUI...
 echo ===================================================
-cd webui
+cd /d "%~dp0webui"
 call npm run build
 if %errorlevel% neq 0 (
-    echo [LỖI] Build WebUI thất bại!
+    echo [LOI] Build WebUI that bai!
     pause
     exit /b %errorlevel%
 )
-cd ..
+
+cd /d "%~dp0"
 
 echo.
 echo ===================================================
-echo [2/3] Đang build Go Binary cho Linux (amd64)...
+echo [2/3] Dang build Go Binary cho Linux amd64...
 echo ===================================================
 set GOOS=linux
 set GOARCH=amd64
 go build -o ds2api ./cmd/ds2api
 if %errorlevel% neq 0 (
-    echo [LỖI] Build Go Binary thất bại!
+    echo [LOI] Build Go Binary that bai!
     pause
     exit /b %errorlevel%
 )
 
 echo.
 echo ===================================================
-echo [3/3] Đang đóng gói vào file ds2api_deploy.zip...
+echo [3/3] Dang dong goi va nen file ds2api_deploy.zip...
 echo ===================================================
 powershell -Command "Compress-Archive -Path ds2api, static, config.json, config.example.json -DestinationPath ds2api_deploy.zip -Force"
 
 echo.
 echo ===================================================
-echo 🎉 ĐÃ HOÀN THÀNH BÓNG GÓI!
-echo File nén tạo ra: ds2api_deploy.zip
+echo HOAN THANH DONG GOI!
+echo File nen tao ra: ds2api_deploy.zip
 echo ===================================================
 pause

@@ -191,7 +191,9 @@ Có thể đè mối ánh xạ thông qua `model_aliases` trong cấu hình; n�
 
 ### Giao diện Gemini
 
-Bộ thích ứng Gemini sẽ ánh xạ tên mô hình thông qua `model_aliases` hoặc alias chính xác tích hợp sẵn tới mô hình gốc DeepSeek (bao gồm các tên phổ biến `gemini-2.5-*`, `gemini-3*`, `gemini-pro-vision`), hỗ trợ cả 2 cách gọi `generateContent` và `streamGenerateContent`, hỗ trợ đầy đủ Tool Calling (đầu ra `functionDeclarations` → `functionCall`). Nếu tên mô hình Gemini có hậu tố `-nothinking`, ví dụ `gemini-2.5-pro-nothinking`, nó sẽ ánh xạ tới mô hình tương ứng bị bắt buộc tắt suy luận.
+Bộ thích ứng Gemini định tuyến request tới **upstream Google Gemini Web** (cần cấu hình tài khoản Cookie với `provider: "gemini"` trong `accounts`). Tên mô hình chuẩn là `gemini-pro`, `gemini-flash`, `gemini-flash-lite` — ba tên này được suy ra từ *category* của mô hình do chính tài khoản upstream báo về, ổn định và khớp với `gemini-webapi`; các tên kèm phiên bản (như `gemini-3-flash`, `gemini-2.5-pro`) và tên theo hạng (như `gemini-pro-advanced`) đều là alias tương thích, tất cả phân giải về một trong ba mô hình chuẩn. Model id và hạng tài khoản (Basic / Plus / Advanced) được phát hiện động từ upstream lúc khởi tạo phiên — phía client không cần và không thể chỉ định. Hỗ trợ cả 2 cách gọi `generateContent` và `streamGenerateContent`, hỗ trợ đầy đủ Tool Calling (đầu ra `functionDeclarations` → `functionCall`). Nếu tên mô hình có hậu tố `-nothinking`, ví dụ `gemini-pro-nothinking`, suy luận sẽ bị buộc tắt.
+
+Khi chưa cấu hình tài khoản Gemini nào, request `gemini-*` mặc định trả về `400`; nếu bật `model_fallback_to_deepseek: true` trong `config.json`, request sẽ quay về hành vi ánh xạ sang DeepSeek như trước.
 
 ## Bắt đầu nhanh
 

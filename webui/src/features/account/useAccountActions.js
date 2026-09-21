@@ -8,8 +8,8 @@ export function useAccountActions({ apiFetch, t, onMessage, onRefresh, config, f
     const [editingAccount, setEditingAccount] = useState(null)
     const [newKey, setNewKey] = useState({ key: '', name: '', remark: '', tools_enabled: false })
     const [copiedKey, setCopiedKey] = useState(null)
-    const [newAccount, setNewAccount] = useState({ name: '', remark: '', email: '', mobile: '', password: '', pool_type: 'default' })
-    const [editAccount, setEditAccount] = useState({ name: '', remark: '', pool_type: 'default' })
+    const [newAccount, setNewAccount] = useState({ provider: 'deepseek', name: '', remark: '', email: '', mobile: '', password: '', cookies: '', pool_type: 'default' })
+    const [editAccount, setEditAccount] = useState({ name: '', remark: '', cookies: '', pool_type: 'default' })
     const [loading, setLoading] = useState(false)
     const [testing, setTesting] = useState({})
     const [testingAll, setTestingAll] = useState(false)
@@ -50,14 +50,14 @@ export function useAccountActions({ apiFetch, t, onMessage, onRefresh, config, f
     const openAddAccount = () => {
         setShowEditAccount(false)
         setEditingAccount(null)
-        setEditAccount({ name: '', remark: '', pool_type: 'default' })
-        setNewAccount({ name: '', remark: '', email: '', mobile: '', password: '', pool_type: 'default' })
+        setEditAccount({ name: '', remark: '', cookies: '', pool_type: 'default' })
+        setNewAccount({ provider: 'deepseek', name: '', remark: '', email: '', mobile: '', password: '', cookies: '', pool_type: 'default' })
         setShowAddAccount(true)
     }
 
     const closeAddAccount = () => {
         setShowAddAccount(false)
-        setNewAccount({ name: '', remark: '', email: '', mobile: '', password: '', pool_type: 'default' })
+        setNewAccount({ provider: 'deepseek', name: '', remark: '', email: '', mobile: '', password: '', cookies: '', pool_type: 'default' })
     }
 
     const openEditAccount = (account) => {
@@ -68,12 +68,15 @@ export function useAccountActions({ apiFetch, t, onMessage, onRefresh, config, f
         }
         setShowAddAccount(false)
         setEditingAccount({
+            ...account,
             identifier,
+            provider: account?.provider || (account?.cookies ? 'gemini' : 'deepseek'),
         })
         setEditAccount({
             name: account?.name || '',
             remark: account?.remark || '',
             pool_type: account?.pool_type || 'default',
+            cookies: account?.cookies || '',
         })
         setShowEditAccount(true)
     }
@@ -81,7 +84,7 @@ export function useAccountActions({ apiFetch, t, onMessage, onRefresh, config, f
     const closeEditAccount = () => {
         setShowEditAccount(false)
         setEditingAccount(null)
-        setEditAccount({ name: '', remark: '', pool_type: 'default' })
+        setEditAccount({ name: '', remark: '', cookies: '', pool_type: 'default' })
     }
 
     const addKey = async () => {
@@ -137,9 +140,19 @@ export function useAccountActions({ apiFetch, t, onMessage, onRefresh, config, f
     }
 
     const addAccount = async () => {
-        if (!newAccount.password || (!newAccount.email && !newAccount.mobile)) {
-            onMessage('error', t('accountManager.requiredFields'))
-            return
+        const isGemini = newAccount.provider === 'gemini'
+        if (isGemini) {
+            const hasCookies = Boolean(String(newAccount.cookies || '').trim())
+            const hasId = Boolean(String(newAccount.name || '').trim() || String(newAccount.email || '').trim())
+            if (!hasCookies || !hasId) {
+                onMessage('error', t('accountManager.geminiRequiredFields'))
+                return
+            }
+        } else {
+            if (!newAccount.password || (!newAccount.email && !newAccount.mobile)) {
+                onMessage('error', t('accountManager.requiredFields'))
+                return
+            }
         }
         setLoading(true)
         try {

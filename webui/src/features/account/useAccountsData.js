@@ -13,7 +13,7 @@ export function useAccountsData({ apiFetch }) {
 
     const resolveAccountIdentifier = (acc) => {
         if (!acc || typeof acc !== 'object') return ''
-        return String(acc.identifier || acc.email || acc.mobile || '').trim()
+        return String(acc.identifier || acc.email || acc.mobile || acc.name || '').trim()
     }
 
     const [searchQuery, setSearchQuery] = useState('')

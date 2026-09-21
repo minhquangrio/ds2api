@@ -213,10 +213,18 @@ No auth required. Returns the currently supported DeepSeek native model list.
     {"id": "deepseek-v4-flash-search", "object": "model", "created": 1677610602, "owned_by": "deepseek", "permission": []},
     {"id": "deepseek-v4-flash-search-nothinking", "object": "model", "created": 1677610602, "owned_by": "deepseek", "permission": []},
     {"id": "deepseek-v4-vision", "object": "model", "created": 1677610602, "owned_by": "deepseek", "permission": []},
-    {"id": "deepseek-v4-vision-nothinking", "object": "model", "created": 1677610602, "owned_by": "deepseek", "permission": []}
+    {"id": "deepseek-v4-vision-nothinking", "object": "model", "created": 1677610602, "owned_by": "deepseek", "permission": []},
+    {"id": "gemini-pro", "object": "model", "created": 1677610602, "owned_by": "google", "permission": []},
+    {"id": "gemini-pro-nothinking", "object": "model", "created": 1677610602, "owned_by": "google", "permission": []},
+    {"id": "gemini-flash", "object": "model", "created": 1677610602, "owned_by": "google", "permission": []},
+    {"id": "gemini-flash-nothinking", "object": "model", "created": 1677610602, "owned_by": "google", "permission": []},
+    {"id": "gemini-flash-lite", "object": "model", "created": 1677610602, "owned_by": "google", "permission": []},
+    {"id": "gemini-flash-lite-nothinking", "object": "model", "created": 1677610602, "owned_by": "google", "permission": []}
   ]
 }
 ```
+
+> Note: `/v1/models` returns canonical model IDs (native DeepSeek models plus the standard Gemini models). Common aliases are accepted on input only and are not expanded here. A `-nothinking` suffix forces thinking / reasoning off regardless of what the request asks for.
 
 > Note: `/v1/models` returns normalized DeepSeek native model IDs. Common aliases are accepted only as request input and are not expanded as separate items in this endpoint.
 
@@ -234,7 +242,8 @@ Built-in aliases come from `internal/config/models.go`; `config.model_aliases` c
 - OpenAI / Codex: `gpt-4o`, `gpt-4.1`, `gpt-5`, `gpt-5.5`, `gpt-5-codex`, `gpt-5.3-codex`, `codex-mini-latest`
 - OpenAI reasoning: `o1`, `o3`, `o3-deep-research`, `o4-mini`
 - Claude: `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-haiku-4-5`, `claude-3-5-sonnet-latest`
-- Gemini: `gemini-2.5-pro`, `gemini-2.5-flash`, `gemini-3.1-pro`, `gemini-3-pro`, `gemini-3-flash`, `gemini-3.1-flash-lite`, `gemini-pro-vision`
+- Gemini standard models: `gemini-pro`, `gemini-flash`, `gemini-flash-lite`
+- Gemini compatibility aliases (each resolves to one of the three above): versioned names `gemini-3.1-pro`, `gemini-3-pro`, `gemini-3-flash`, `gemini-3.1-flash`, `gemini-3.1-flash-lite`, `gemini-2.5-pro`, `gemini-2.5-flash`, `gemini-2.5-flash-lite`, `gemini-2.0-flash`, `gemini-2.0-flash-lite`, `gemini-1.5-pro`, `gemini-1.5-flash`; and tier names `gemini-pro-plus`, `gemini-pro-advanced`, `gemini-flash-plus`, `gemini-flash-advanced`, `gemini-flash-lite-plus`, `gemini-flash-lite-advanced`, `gemini-pro-vision`, `gemini-pro-latest`, `gemini-flash-latest`
 - Other exact built-in aliases: `llama-3.1-70b-instruct`, `qwen-max`
 
 Aliases with a `-nothinking` suffix also map to the corresponding forced no-thinking DeepSeek model.

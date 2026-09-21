@@ -29,6 +29,9 @@ func (c Config) MarshalJSON() ([]byte, error) {
 	if len(c.ModelAliases) > 0 {
 		m["model_aliases"] = c.ModelAliases
 	}
+	if c.ModelFallbackToDeepSeek {
+		m["model_fallback_to_deepseek"] = c.ModelFallbackToDeepSeek
+	}
 	if strings.TrimSpace(c.Admin.PasswordHash) != "" || c.Admin.JWTExpireHours > 0 || c.Admin.JWTValidAfterUnix > 0 {
 		m["admin"] = c.Admin
 	}
@@ -101,6 +104,10 @@ func (c *Config) UnmarshalJSON(b []byte) error {
 			// Removed legacy mapping fields are ignored instead of persisted.
 		case "model_aliases":
 			if err := json.Unmarshal(v, &c.ModelAliases); err != nil {
+				return fmt.Errorf("invalid field %q: %w", k, err)
+			}
+		case "model_fallback_to_deepseek":
+			if err := json.Unmarshal(v, &c.ModelFallbackToDeepSeek); err != nil {
 				return fmt.Errorf("invalid field %q: %w", k, err)
 			}
 		case "admin":
@@ -181,16 +188,17 @@ func (c *Config) UnmarshalJSON(b []byte) error {
 
 func (c Config) Clone() Config {
 	clone := Config{
-		Keys:         slices.Clone(c.Keys),
-		APIKeys:      slices.Clone(c.APIKeys),
-		Accounts:     slices.Clone(c.Accounts),
-		Proxies:      slices.Clone(c.Proxies),
-		ModelAliases: cloneStringMap(c.ModelAliases),
-		Admin:        c.Admin,
-		Runtime:      c.Runtime,
-		Responses:    c.Responses,
-		Embeddings:   c.Embeddings,
-		AutoDelete:   c.AutoDelete,
+		Keys:                    slices.Clone(c.Keys),
+		APIKeys:                 slices.Clone(c.APIKeys),
+		Accounts:                slices.Clone(c.Accounts),
+		Proxies:                 slices.Clone(c.Proxies),
+		ModelAliases:            cloneStringMap(c.ModelAliases),
+		ModelFallbackToDeepSeek: c.ModelFallbackToDeepSeek,
+		Admin:                   c.Admin,
+		Runtime:                 c.Runtime,
+		Responses:               c.Responses,
+		Embeddings:              c.Embeddings,
+		AutoDelete:              c.AutoDelete,
 		CurrentInputFile: CurrentInputFileConfig{
 			Enabled:  cloneBoolPtr(c.CurrentInputFile.Enabled),
 			MinChars: c.CurrentInputFile.MinChars,

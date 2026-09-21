@@ -16,10 +16,11 @@ func normalizeGeminiRequest(store ConfigReader, routeModel string, req map[strin
 		return promptcompat.StandardRequest{}, fmt.Errorf("model is required in request path")
 	}
 
-	resolvedModel, ok := config.ResolveModel(store, requestedModel)
+	target, ok := config.ResolveModelTarget(store, requestedModel)
 	if !ok {
 		return promptcompat.StandardRequest{}, fmt.Errorf("model %q is not available", requestedModel)
 	}
+	resolvedModel := target.Canonical
 	defaultThinkingEnabled, searchEnabled, _ := config.GetModelConfig(resolvedModel)
 	thinkingEnabled := util.ResolveThinkingEnabled(req, defaultThinkingEnabled)
 	if config.IsNoThinkingModel(resolvedModel) {

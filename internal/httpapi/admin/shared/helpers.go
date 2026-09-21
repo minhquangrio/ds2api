@@ -164,6 +164,8 @@ func toStringSlice(v any) ([]string, bool) {
 func toAccount(m map[string]any) config.Account {
 	email := fieldString(m, "email")
 	mobile := config.NormalizeMobileForStorage(fieldString(m, "mobile"))
+	provider := strings.ToLower(strings.TrimSpace(fieldString(m, "provider")))
+	cookies := fieldString(m, "cookies")
 	return config.Account{
 		Name:     fieldString(m, "name"),
 		Remark:   fieldString(m, "remark"),
@@ -174,6 +176,8 @@ func toAccount(m map[string]any) config.Account {
 		ProxyID:  fieldString(m, "proxy_id"),
 		PoolType: config.NormalizePoolType(fieldString(m, "pool_type")),
 		Locale:   fieldString(m, "locale"),
+		Provider: provider,
+		Cookies:  cookies,
 	}
 }
 

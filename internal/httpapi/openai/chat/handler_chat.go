@@ -14,6 +14,7 @@ import (
 	"ds2api/internal/config"
 	dsprotocol "ds2api/internal/deepseek/protocol"
 	openaifmt "ds2api/internal/format/openai"
+	"ds2api/internal/geminiweb"
 	"ds2api/internal/promptcompat"
 	"ds2api/internal/sse"
 	streamengine "ds2api/internal/stream"
@@ -37,24 +38,6 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a, err := h.Auth.Determine(r)
-	if err != nil {
-		status := http.StatusUnauthorized
-		detail := err.Error()
-		if err == auth.ErrNoAccount {
-			status = http.StatusTooManyRequests
-		}
-		writeOpenAIError(w, status, detail)
-		return
-	}
-	var sessionID string
-	defer func() {
-		h.autoDeleteRemoteSession(r.Context(), a, sessionID)
-		h.Auth.Release(a)
-	}()
-
-	r = r.WithContext(auth.WithAuth(r.Context(), a))
-
 	r.Body = http.MaxBytesReader(w, r.Body, openAIGeneralMaxSize)
 	var req map[string]any
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -65,6 +48,26 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 		writeOpenAIError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
+
+	requestedModel, _ := req["model"].(string)
+	target, targetResolved := config.ResolveModelTarget(h.Store, requestedModel)
+	if targetResolved && target.Provider != "" {
+		r.Header.Set("X-Ds2-Target-Provider", target.Provider)
+	}
+
+	a, err := h.Auth.Determine(r)
+	if err != nil {
+		status, detail := auth.MapAuthStatus(err)
+		writeOpenAIError(w, status, detail)
+		return
+	}
+	var sessionID string
+	defer func() {
+		h.autoDeleteRemoteSession(r.Context(), a, sessionID)
+		h.Auth.Release(a)
+	}()
+
+	r = r.WithContext(auth.WithAuth(r.Context(), a))
 	originalModel, rerouted := promptcompat.MaybeAutoRouteVision(req, h.Store)
 	if err := h.preprocessInlineFileInputs(r.Context(), a, req); err != nil {
 		writeOpenAIInlineFileError(w, err)
@@ -96,6 +99,50 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	historySession := startChatHistory(h.ChatHistory, r, a, stdReq)
+
+	if a.Provider == "gemini" {
+		client, err := geminiweb.DefaultRuntime().GetClient(r.Context(), a.Account, h.Store)
+		if err != nil {
+			if historySession != nil {
+				historySession.error(http.StatusBadGateway, err.Error(), "upstream_error", "", "")
+			}
+			writeOpenAIError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		if !stdReq.Stream {
+			turn, err := geminiweb.ExecuteTurn(r.Context(), client, stdReq)
+			if err != nil {
+				if historySession != nil {
+					historySession.error(http.StatusBadGateway, err.Error(), "upstream_error", "", "")
+				}
+				writeOpenAIError(w, http.StatusBadGateway, err.Error())
+				return
+			}
+			respBody := openaifmt.BuildChatCompletionWithToolCalls("gemini-"+time.Now().Format("20060102150405"), stdReq.ResponseModel, turn.Prompt, turn.Thinking, turn.Text, turn.ToolCalls, stdReq.ToolsRaw)
+			respBody["usage"] = assistantturn.OpenAIChatUsage(turn)
+			if historySession != nil {
+				historySession.success(http.StatusOK, turn.Thinking, turn.Text, "stop", assistantturn.OpenAIChatUsage(turn))
+			}
+			writeJSON(w, http.StatusOK, respBody)
+			return
+		}
+
+		// History is recorded only after the stream finishes, so a failed or
+		// truncated stream is not logged as a successful reply. SSE bytes are
+		// already on the wire by then, so the error is recorded, not written.
+		thinking, text, streamErr := geminiweb.StreamOpenAIChat(r.Context(), client, stdReq, w)
+		if streamErr != nil {
+			config.Logger.Warn("[gemini] stream error", "error", streamErr)
+			if historySession != nil {
+				historySession.error(http.StatusBadGateway, streamErr.Error(), "upstream_error", thinking, text)
+			}
+			return
+		}
+		if historySession != nil {
+			historySession.success(http.StatusOK, thinking, text, "stop", nil)
+		}
+		return
+	}
 
 	if !stdReq.Stream {
 		result, outErr := completionruntime.ExecuteNonStreamWithRetry(r.Context(), h.DS, a, stdReq, completionruntime.Options{

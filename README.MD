@@ -167,7 +167,7 @@ OpenAI `/v1/*` 仍是推荐的规范路径；同时支持 `/models`、`/chat/com
 | vision | `deepseek-v4-vision` | 默认开启，可由请求参数控制 | ❌ |
 | vision | `deepseek-v4-vision-nothinking` | 永久关闭，不受请求参数影响 | ❌ |
 
-除原生模型外，也支持常见 alias 输入（如 `gpt-4.1`、`gpt-5`、`gpt-5-codex`、`o3`、`claude-*`、`gemini-*` 等），但 `/v1/models` 返回的是规范化后的 DeepSeek 原生模型 ID。若 alias 名本身追加 `-nothinking` 后缀，也会映射到对应的强制关思考模型。完整 alias 行为以 [API.md](API.md#模型-alias-解析策略) 和 `config.example.json` 为准。
+除原生模型外，也支持常见 alias 输入（如 `gpt-4.1`、`gpt-5`、`gpt-5-codex`、`o3`、`claude-*`、`gemini-*` 等），但 `/v1/models` 返回的是规范化后的模型 ID（DeepSeek 原生模型 + Gemini 标准模型）。若 alias 名本身追加 `-nothinking` 后缀，也会映射到对应的强制关思考模型。完整 alias 行为以 [API.md](API.md#模型-alias-解析策略) 和 `config.example.json` 为准。
 当前上游视觉模型只暴露 `vision` 通道，不提供独立的联网搜索视觉变体。
 
 ### Claude 接口（`GET /anthropic/v1/models`）
@@ -193,7 +193,9 @@ OpenAI `/v1/*` 仍是推荐的规范路径；同时支持 `/models`、`/chat/com
 
 ### Gemini 接口
 
-Gemini 适配器将模型名通过 `model_aliases` 或内置精确 alias 映射到 DeepSeek 原生模型（覆盖 `gemini-2.5-*`、`gemini-3*`、`gemini-pro-vision` 等常见名称），支持 `generateContent` 和 `streamGenerateContent` 两种调用方式，并完整支持 Tool Calling（`functionDeclarations` → `functionCall` 输出）。若 Gemini 模型名带 `-nothinking` 后缀，例如 `gemini-2.5-pro-nothinking`，会映射到对应的强制关闭思考模型。
+Gemini 适配器把 Gemini 请求路由到 **Google Gemini Web 上游**（需在 `accounts` 中配置 `provider: "gemini"` 的 Cookie 账号）。标准模型名为 `gemini-pro`、`gemini-flash`、`gemini-flash-lite`——这三个名字由上游账号自身报告的模型类别推导而来，稳定且与 `gemini-webapi` 一致；带版本号的名称（如 `gemini-3-flash`、`gemini-2.5-pro`）以及档位名称（如 `gemini-pro-advanced`）作为兼容 alias 全部解析到这三个标准模型之一。模型 id 与账号档位（Basic / Plus / Advanced）在会话初始化时从上游动态发现，无需也无法由调用方指定。支持 `generateContent` 和 `streamGenerateContent` 两种调用方式，并完整支持 Tool Calling（`functionDeclarations` → `functionCall` 输出）。若模型名带 `-nothinking` 后缀，例如 `gemini-pro-nothinking`，会强制关闭思考输出。
+
+未配置任何 Gemini 账号时，`gemini-*` 请求默认返回 `400`；若在 `config.json` 中设置 `model_fallback_to_deepseek: true`，则回退为旧的 DeepSeek 映射行为。
 
 ## 快速开始
 

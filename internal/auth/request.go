@@ -21,12 +21,31 @@ const authCtxKey ctxKey = "auth_context"
 const toolsDisabledCtxKey ctxKey = "tools_disabled"
 
 var (
-	ErrUnauthorized = errors.New("unauthorized: missing auth token")
-	ErrNoAccount    = errors.New("no accounts configured or all accounts are busy")
+	ErrUnauthorized      = errors.New("unauthorized: missing auth token")
+	ErrNoAccount         = errors.New("no accounts configured or all accounts are busy")
+	ErrNoProviderAccount = errors.New("no accounts configured for requested provider")
+	ErrAllAccountsBusy   = errors.New("all accounts are busy")
 )
+
+func MapAuthStatus(err error) (int, string) {
+	if err == nil {
+		return http.StatusOK, ""
+	}
+	switch {
+	case errors.Is(err, ErrUnauthorized):
+		return http.StatusUnauthorized, "Unauthorized"
+	case errors.Is(err, ErrNoProviderAccount):
+		return http.StatusBadRequest, "No accounts configured for requested provider"
+	case errors.Is(err, ErrNoAccount), errors.Is(err, ErrAllAccountsBusy):
+		return http.StatusTooManyRequests, "No accounts configured or all accounts are busy"
+	default:
+		return http.StatusInternalServerError, err.Error()
+	}
+}
 
 type RequestAuth struct {
 	UseConfigToken bool
+	Provider       string
 	DeepSeekToken  string
 	CallerID       string
 	AccountID      string
@@ -59,16 +78,43 @@ func NewResolver(store *config.Store, pool *account.Pool, login LoginFunc) *Reso
 	}
 }
 
+func countConfiguredAccountsForProvider(accounts []config.Account, provider string) int {
+	p := strings.ToLower(strings.TrimSpace(provider))
+	if p == "" {
+		p = "deepseek"
+	}
+	count := 0
+	for _, acc := range accounts {
+		if acc.AccountProvider() == p {
+			count++
+		}
+	}
+	return count
+}
+
 func (r *Resolver) Determine(req *http.Request) (*RequestAuth, error) {
+	return r.DetermineForProvider(req, "")
+}
+
+func (r *Resolver) DetermineForProvider(req *http.Request, provider string) (*RequestAuth, error) {
 	callerKey := extractCallerToken(req)
 	if callerKey == "" {
 		return nil, ErrUnauthorized
 	}
 	callerID := callerTokenID(callerKey)
 	ctx := req.Context()
+	effectiveProvider := strings.ToLower(strings.TrimSpace(provider))
+	if headerProvider := strings.ToLower(strings.TrimSpace(req.Header.Get("X-Ds2-Target-Provider"))); headerProvider != "" {
+		effectiveProvider = headerProvider
+	}
+	if effectiveProvider == "" {
+		effectiveProvider = "deepseek"
+	}
+
 	if !r.Store.HasAPIKey(callerKey) {
 		return &RequestAuth{
 			UseConfigToken: false,
+			Provider:       effectiveProvider,
 			DeepSeekToken:  callerKey,
 			CallerID:       callerID,
 			resolver:       r,
@@ -77,23 +123,46 @@ func (r *Resolver) Determine(req *http.Request) (*RequestAuth, error) {
 	}
 	target := strings.TrimSpace(req.Header.Get("X-Ds2-Target-Account"))
 	toolsEnabled := r.Store.APIKeyToolsEnabled(callerKey)
-	a, err := r.acquireManagedRequestAuth(ctx, callerID, target, toolsEnabled)
+	a, err := r.acquireManagedRequestAuthByProvider(ctx, callerID, target, effectiveProvider, toolsEnabled)
 	if err != nil {
 		return nil, err
 	}
 	return a, nil
 }
 
-func (r *Resolver) acquireManagedRequestAuth(ctx context.Context, callerID, target string, toolsEnabled bool) (*RequestAuth, error) {
+func (r *Resolver) acquireManagedRequestAuthByProvider(ctx context.Context, callerID, target, provider string, toolsEnabled bool) (*RequestAuth, error) {
+	effectiveProvider := strings.ToLower(strings.TrimSpace(provider))
+	if effectiveProvider == "" {
+		effectiveProvider = "deepseek"
+	}
+
+	if effectiveProvider == "gemini" {
+		if countConfiguredAccountsForProvider(r.Store.Accounts(), "gemini") == 0 {
+			if r.Store.ModelFallbackToDeepSeek() {
+				effectiveProvider = "deepseek"
+			} else {
+				return nil, ErrNoProviderAccount
+			}
+		}
+	}
+
 	tried := map[string]bool{}
 	var lastEnsureErr error
 	filter := account.AccountFilter(func(acc config.Account) bool {
-		return acc.MatchesPoolType(toolsEnabled)
+		return acc.MatchesPoolType(toolsEnabled) && acc.AccountProvider() == effectiveProvider
 	})
+	totalAccounts := countConfiguredAccountsForProvider(r.Store.Accounts(), effectiveProvider)
+
 	for {
-		if target == "" && len(tried) >= len(r.Store.Accounts()) {
+		if target == "" && len(tried) >= totalAccounts {
 			if lastEnsureErr != nil {
 				return nil, lastEnsureErr
+			}
+			if effectiveProvider == "gemini" {
+				if totalAccounts == 0 {
+					return nil, ErrNoProviderAccount
+				}
+				return nil, ErrAllAccountsBusy
 			}
 			return nil, ErrNoAccount
 		}
@@ -102,11 +171,18 @@ func (r *Resolver) acquireManagedRequestAuth(ctx context.Context, callerID, targ
 			if lastEnsureErr != nil {
 				return nil, lastEnsureErr
 			}
+			if effectiveProvider == "gemini" {
+				if totalAccounts == 0 {
+					return nil, ErrNoProviderAccount
+				}
+				return nil, ErrAllAccountsBusy
+			}
 			return nil, ErrNoAccount
 		}
 
 		a := &RequestAuth{
 			UseConfigToken: true,
+			Provider:       effectiveProvider,
 			CallerID:       callerID,
 			AccountID:      acc.Identifier(),
 			TargetAccount:  target,
@@ -311,8 +387,12 @@ func (r *Resolver) SwitchAccount(ctx context.Context, a *RequestAuth) bool {
 		a.TriedAccounts[a.AccountID] = true
 		r.Pool.Release(a.AccountID)
 	}
+	effectiveProvider := a.Provider
+	if effectiveProvider == "" {
+		effectiveProvider = a.Account.AccountProvider()
+	}
 	filter := account.AccountFilter(func(acc config.Account) bool {
-		return acc.MatchesPoolType(a.ToolsEnabled)
+		return acc.MatchesPoolType(a.ToolsEnabled) && acc.AccountProvider() == effectiveProvider
 	})
 	for {
 		acc, ok := r.Pool.Acquire("", a.TriedAccounts, filter)
@@ -377,6 +457,12 @@ func callerTokenID(token string) string {
 }
 
 func (r *Resolver) ensureManagedToken(ctx context.Context, a *RequestAuth) error {
+	if a.Account.IsGemini() || a.Provider == "gemini" {
+		if strings.TrimSpace(a.Account.Cookies) == "" {
+			return errors.New("gemini account missing cookies")
+		}
+		return nil
+	}
 	if strings.TrimSpace(a.Account.Token) == "" {
 		return r.loginAndPersist(ctx, a)
 	}

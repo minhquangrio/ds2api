@@ -395,3 +395,73 @@ func TestDetermineManagedAccountReturnsLastEnsureErrorWhenAllFail(t *testing.T) 
 		t.Fatalf("expected auth-style ensure error, got ErrNoAccount")
 	}
 }
+
+func TestMapAuthStatus(t *testing.T) {
+	status, msg := MapAuthStatus(ErrUnauthorized)
+	if status != http.StatusUnauthorized || msg != "Unauthorized" {
+		t.Fatalf("expected 401 Unauthorized, got %d %q", status, msg)
+	}
+
+	status, msg = MapAuthStatus(ErrNoProviderAccount)
+	if status != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request, got %d %q", status, msg)
+	}
+
+	status, msg = MapAuthStatus(ErrNoAccount)
+	if status != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d %q", status, msg)
+	}
+
+	status, msg = MapAuthStatus(ErrAllAccountsBusy)
+	if status != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d %q", status, msg)
+	}
+}
+
+func TestDetermineForProviderGeminiNoAccountNoFallback(t *testing.T) {
+	t.Setenv("DS2API_CONFIG_PATH", t.TempDir()+"/config.json")
+	t.Setenv("DS2API_CONFIG_JSON", `{
+		"api_keys": [{"key": "managed-key"}],
+		"accounts": [{"email": "ds@example.com", "token": "ds-token", "provider": "deepseek"}],
+		"model_fallback_to_deepseek": false
+	}`)
+	store := config.LoadStore()
+	pool := account.NewPool(store)
+	resolver := NewResolver(store, pool, nil)
+
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	req.Header.Set("x-api-key", "managed-key")
+
+	_, err := resolver.DetermineForProvider(req, "gemini")
+	if !errors.Is(err, ErrNoProviderAccount) {
+		t.Fatalf("expected ErrNoProviderAccount, got %v", err)
+	}
+}
+
+func TestDetermineForProviderGeminiFallbackToDeepSeek(t *testing.T) {
+	t.Setenv("DS2API_CONFIG_PATH", t.TempDir()+"/config.json")
+	t.Setenv("DS2API_CONFIG_JSON", `{
+		"api_keys": [{"key": "managed-key"}],
+		"accounts": [{"email": "ds@example.com", "token": "ds-token", "provider": "deepseek"}],
+		"model_fallback_to_deepseek": true
+	}`)
+	store := config.LoadStore()
+	pool := account.NewPool(store)
+	resolver := NewResolver(store, pool, func(_ context.Context, _ config.Account) (string, error) {
+		return "mock-token", nil
+	})
+
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	req.Header.Set("x-api-key", "managed-key")
+
+	authCtx, err := resolver.DetermineForProvider(req, "gemini")
+	if err != nil {
+		t.Fatalf("expected fallback to deepseek to succeed, got %v", err)
+	}
+	if authCtx.Provider != "deepseek" {
+		t.Fatalf("expected provider deepseek after fallback, got %s", authCtx.Provider)
+	}
+	if authCtx.AccountID != "ds@example.com" {
+		t.Fatalf("expected account ds@example.com, got %s", authCtx.AccountID)
+	}
+}

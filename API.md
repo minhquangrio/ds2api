@@ -215,12 +215,18 @@ OpenAI `/v1/*` 仍是规范路径。对于只配置 DS2API 根地址的客户端
     {"id": "deepseek-v4-flash-search", "object": "model", "created": 1677610602, "owned_by": "deepseek", "permission": []},
     {"id": "deepseek-v4-flash-search-nothinking", "object": "model", "created": 1677610602, "owned_by": "deepseek", "permission": []},
     {"id": "deepseek-v4-vision", "object": "model", "created": 1677610602, "owned_by": "deepseek", "permission": []},
-    {"id": "deepseek-v4-vision-nothinking", "object": "model", "created": 1677610602, "owned_by": "deepseek", "permission": []}
+    {"id": "deepseek-v4-vision-nothinking", "object": "model", "created": 1677610602, "owned_by": "deepseek", "permission": []},
+    {"id": "gemini-pro", "object": "model", "created": 1677610602, "owned_by": "google", "permission": []},
+    {"id": "gemini-pro-nothinking", "object": "model", "created": 1677610602, "owned_by": "google", "permission": []},
+    {"id": "gemini-flash", "object": "model", "created": 1677610602, "owned_by": "google", "permission": []},
+    {"id": "gemini-flash-nothinking", "object": "model", "created": 1677610602, "owned_by": "google", "permission": []},
+    {"id": "gemini-flash-lite", "object": "model", "created": 1677610602, "owned_by": "google", "permission": []},
+    {"id": "gemini-flash-lite-nothinking", "object": "model", "created": 1677610602, "owned_by": "google", "permission": []}
   ]
 }
 ```
 
-> 说明：`/v1/models` 返回的是规范化后的 DeepSeek 原生模型 ID；常见 alias 仅用于请求入参解析，不会在该接口中单独展开返回。带 `-nothinking` 后缀的模型表示无论请求里是否显式开启 thinking / reasoning，都会强制关闭思考输出。
+> 说明：`/v1/models` 返回的是规范化后的模型 ID（DeepSeek 原生模型 + Gemini 标准模型）；常见 alias 仅用于请求入参解析，不会在该接口中单独展开返回。带 `-nothinking` 后缀的模型表示无论请求里是否显式开启 thinking / reasoning，都会强制关闭思考输出。
 
 ### 模型 alias 解析策略
 
@@ -236,7 +242,8 @@ OpenAI `/v1/*` 仍是规范路径。对于只配置 DS2API 根地址的客户端
 - OpenAI / Codex：`gpt-4o`、`gpt-4.1`、`gpt-5`、`gpt-5.5`、`gpt-5-codex`、`gpt-5.3-codex`、`codex-mini-latest`
 - OpenAI reasoning：`o1`、`o3`、`o3-deep-research`、`o4-mini`
 - Claude：`claude-opus-4-6`、`claude-sonnet-4-6`、`claude-haiku-4-5`、`claude-3-5-sonnet-latest`
-- Gemini：`gemini-2.5-pro`、`gemini-2.5-flash`、`gemini-3.1-pro`、`gemini-3-pro`、`gemini-3-flash`、`gemini-3.1-flash-lite`、`gemini-pro-vision`
+- Gemini 标准模型：`gemini-pro`、`gemini-flash`、`gemini-flash-lite`
+- Gemini 兼容别名（均解析到上面三个标准模型之一）：历史版本命名 `gemini-3.1-pro`、`gemini-3-pro`、`gemini-3-flash`、`gemini-3.1-flash`、`gemini-3.1-flash-lite`、`gemini-2.5-pro`、`gemini-2.5-flash`、`gemini-2.5-flash-lite`、`gemini-2.0-flash`、`gemini-2.0-flash-lite`、`gemini-1.5-pro`、`gemini-1.5-flash`；以及档位命名 `gemini-pro-plus`、`gemini-pro-advanced`、`gemini-flash-plus`、`gemini-flash-advanced`、`gemini-flash-lite-plus`、`gemini-flash-lite-advanced`、`gemini-pro-vision`、`gemini-pro-latest`、`gemini-flash-latest`
 - 其他内置精确 alias：`llama-3.1-70b-instruct`、`qwen-max`
 
 上述 alias 若在请求名后追加 `-nothinking` 后缀，也会映射到对应的强制关闭 thinking 版本。

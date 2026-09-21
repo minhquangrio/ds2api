@@ -176,6 +176,15 @@ export default function AccountsTable({
                                             <div className="text-xs text-muted-foreground truncate mt-0.5">{acc.remark}</div>
                                         )}
                                         <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                                            {acc.provider === 'gemini' ? (
+                                                <span className="font-semibold bg-blue-500/10 text-blue-500 border border-blue-500/20 px-1.5 py-0.5 rounded text-[10px]">
+                                                    Gemini
+                                                </span>
+                                            ) : (
+                                                <span className="font-semibold bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 rounded text-[10px]">
+                                                    DeepSeek
+                                                </span>
+                                            )}
                                             <span>{isBanned ? (acc.disabled_reason || t('accountManager.accountBanned')) : isDisabled ? t('accountManager.accountDisabled') : isMuted ? t('accountManager.accountMuted') : acc.test_status === 'failed' ? t('accountManager.testStatusFailed') : isActive ? t('accountManager.sessionActive') : runtimeUnknown ? t('accountManager.runtimeStatusUnknown') : t('accountManager.reauthRequired')}</span>
                                             {isDisabled && !isBanned && (
                                                 <span className="font-mono bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded text-[10px]" title={t('accountManager.accountDisabledHint')}>
@@ -195,6 +204,11 @@ export default function AccountsTable({
                                             {acc.token_preview && (
                                                 <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-[10px]">
                                                     {acc.token_preview}
+                                                </span>
+                                            )}
+                                            {acc.cookies_preview && (
+                                                <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-[10px]" title="Gemini Cookies">
+                                                    {acc.cookies_preview}
                                                 </span>
                                             )}
                                             {sessionCounts && sessionCounts[id] !== undefined && (

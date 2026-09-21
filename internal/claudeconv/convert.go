@@ -13,7 +13,8 @@ func ConvertClaudeToDeepSeek(claudeReq map[string]any, aliasProvider config.Mode
 		model = defaultClaudeModel
 	}
 
-	dsModel, ok := config.ResolveModel(aliasProvider, model)
+	target, ok := config.ResolveModelTarget(aliasProvider, model)
+	dsModel := target.Canonical
 	if !ok || strings.TrimSpace(dsModel) == "" {
 		dsModel = "deepseek-v4-flash"
 	}

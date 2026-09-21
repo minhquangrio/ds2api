@@ -48,10 +48,21 @@ export default function EditAccountModal({
                             type="text"
                             className="input-field"
                             placeholder={t('accountManager.remarkPlaceholder')}
-                            value={editAccount.remark}
+                            value={editAccount.remark || ''}
                             onChange={e => setEditAccount({ ...editAccount, remark: e.target.value })}
                         />
                     </div>
+                    {editingAccount.provider === 'gemini' && (
+                        <div>
+                            <label className="block text-sm font-medium mb-1.5">Gemini Cookies</label>
+                            <textarea
+                                className="input-field bg-background font-mono text-xs h-24"
+                                placeholder="__Secure-1PSID=...; __Secure-1PSIDTS=... hoặc JSON"
+                                value={editAccount.cookies || ''}
+                                onChange={e => setEditAccount({ ...editAccount, cookies: e.target.value })}
+                            />
+                        </div>
+                    )}
                     <div>
                         <label className="block text-sm font-medium mb-1.5">{t('accountManager.poolTypeLabel')}</label>
                         <select

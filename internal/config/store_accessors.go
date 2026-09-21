@@ -243,3 +243,9 @@ func (s *Store) AutoRouteVisionEnabled() bool {
 	}
 	return *s.cfg.AutoRouteVision.Enabled
 }
+
+func (s *Store) ModelFallbackToDeepSeek() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cfg.ModelFallbackToDeepSeek
+}

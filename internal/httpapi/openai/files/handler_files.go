@@ -146,8 +146,8 @@ func resolveUploadModelType(store shared.ConfigReader, r *http.Request) string {
 	}
 	requestedModel := strings.TrimSpace(r.FormValue("model"))
 	if requestedModel != "" {
-		if resolvedModel, ok := config.ResolveModel(store, requestedModel); ok {
-			if modelType, ok := config.GetModelType(resolvedModel); ok {
+		if target, ok := config.ResolveModelTarget(store, requestedModel); ok {
+			if modelType, ok := config.GetModelType(target.Canonical); ok {
 				return modelType
 			}
 		}

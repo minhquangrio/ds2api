@@ -246,10 +246,11 @@ func MaybeAutoRouteVision(req map[string]any, store ConfigReader) (originalModel
 	if model == "" {
 		return "", false
 	}
-	resolved, ok := config.ResolveModel(store, model)
+	target, ok := config.ResolveModelTarget(store, model)
 	if !ok {
 		return model, false
 	}
+	resolved := target.Canonical
 	modelType, ok := config.GetModelType(resolved)
 	if !ok || modelType == "vision" {
 		return model, false

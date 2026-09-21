@@ -1,0 +1,14 @@
+# Refactor Line Gate Targets
+# All files listed here must be under 300 lines (or 120 lines for entry files)
+internal/geminiweb/auth.go
+internal/geminiweb/client.go
+internal/geminiweb/constants.go
+internal/geminiweb/frames.go
+internal/geminiweb/generate.go
+internal/geminiweb/model_discovery.go
+internal/geminiweb/model_spec.go
+internal/geminiweb/quota.go
+internal/geminiweb/stream_parser.go
+internal/geminiweb/runtime.go
+internal/geminiweb/runtime_stream.go
+internal/geminiweb/upload.go

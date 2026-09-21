@@ -43,14 +43,15 @@ DS2API 当前的核心思路，不是把客户端传来的 `messages`、`tools`�
 客户端请求
   -> HTTP API surface（OpenAI / Claude / Gemini）
   -> promptcompat 统一消息标准化
-  -> tool prompt 注入
-  -> DeepSeek 风格 prompt 拼装
-  -> 文件收集 / inline 上传（OpenAI 文件链路）
-  -> current input file（completion runtime 全局入口）
-  -> expert prompt segment（expert 模型超长提示词分段）
-  -> completion payload
-  -> 下游网页对话接口
-  -> assistantturn 输出语义归一（Go 非流式 + 流式收尾）
+  -> Provider 调度（X-Ds2-Target-Provider / ModelTarget）
+     ├─ DeepSeek:
+     │   -> tool prompt 注入 / DeepSeek prompt 拼装
+     │   -> current input file / expert prompt segment
+     │   -> completionruntime 下游网页对话接口
+     └─ Google Gemini:
+         -> internal/geminiweb 客户端 (httpcloak TLS/H2)
+         -> Gemini Web Session / Generate / StreamGenerate
+  -> assistantturn 输出语义归一（Turn 结构）
   -> 各协议 renderer（OpenAI / Responses / Claude / Gemini）
 ```
 

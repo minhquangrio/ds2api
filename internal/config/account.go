@@ -23,7 +23,29 @@ func (a Account) Identifier() string {
 	if mobile := NormalizeMobileForStorage(a.Mobile); mobile != "" {
 		return mobile
 	}
+	if strings.TrimSpace(a.Name) != "" {
+		return strings.TrimSpace(a.Name)
+	}
 	return ""
+}
+
+// AccountProvider returns "gemini" or "deepseek" (defaults to "deepseek").
+func (a Account) AccountProvider() string {
+	p := strings.ToLower(strings.TrimSpace(a.Provider))
+	if p == "" {
+		return "deepseek"
+	}
+	return p
+}
+
+// IsGemini reports whether the account is a Gemini Web account.
+func (a Account) IsGemini() bool {
+	return a.AccountProvider() == "gemini"
+}
+
+// IsDeepSeek reports whether the account is a DeepSeek account.
+func (a Account) IsDeepSeek() bool {
+	return a.AccountProvider() == "deepseek"
 }
 
 // IsEnabled reports whether the account is eligible for scheduling.

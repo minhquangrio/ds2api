@@ -227,6 +227,18 @@ func (s *Store) UpdateAccountToken(identifier, token string) error {
 	return s.saveLocked()
 }
 
+func (s *Store) UpdateAccountCookies(identifier, cookies string) error {
+	identifier = strings.TrimSpace(identifier)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	idx, ok := s.findAccountIndexLocked(identifier)
+	if !ok {
+		return errors.New("account not found")
+	}
+	s.cfg.Accounts[idx].Cookies = cookies
+	return s.saveLocked()
+}
+
 func (s *Store) Replace(cfg Config) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

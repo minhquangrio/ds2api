@@ -104,7 +104,7 @@ export default function ApiTesterContainer({ config, onMessage, authFetch }) {
     const accounts = config.accounts || []
     const resolveAccountIdentifier = (acc) => {
         if (!acc || typeof acc !== 'object') return ''
-        return String(acc.identifier || acc.email || acc.mobile || '').trim()
+        return String(acc.identifier || acc.email || acc.mobile || acc.name || '').trim()
     }
     const configuredKeys = config.keys || []
     const trimmedApiKey = apiKey.trim()

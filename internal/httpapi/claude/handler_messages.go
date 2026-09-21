@@ -17,6 +17,7 @@ import (
 	"ds2api/internal/completionruntime"
 	"ds2api/internal/config"
 	claudefmt "ds2api/internal/format/claude"
+	"ds2api/internal/geminiweb"
 	"ds2api/internal/httpapi/openai/history"
 	"ds2api/internal/httpapi/openai/shared"
 	"ds2api/internal/httpapi/requestbody"
@@ -84,9 +85,15 @@ func (h *Handler) handleClaudeDirect(w http.ResponseWriter, r *http.Request) boo
 		return true
 	}
 	exposeThinking := norm.Standard.Thinking
+	requestedModel, _ := req["model"].(string)
+	target, _ := config.ResolveModelTarget(h.Store, requestedModel)
+	if target.Provider != "" {
+		r.Header.Set("X-Ds2-Target-Provider", target.Provider)
+	}
 	a, err := h.Auth.Determine(r)
 	if err != nil {
-		writeClaudeError(w, http.StatusUnauthorized, err.Error())
+		status, msg := auth.MapAuthStatus(err)
+		writeClaudeError(w, status, msg)
 		return true
 	}
 	defer h.Auth.Release(a)
@@ -103,6 +110,47 @@ func (h *Handler) handleClaudeDirect(w http.ResponseWriter, r *http.Request) boo
 		Surface:  "claude.messages",
 		Standard: stdReq,
 	})
+	if a.Provider == "gemini" {
+		client, err := geminiweb.DefaultRuntime().GetClient(r.Context(), a.Account, h.Store)
+		if err != nil {
+			writeClaudeError(w, http.StatusBadGateway, err.Error())
+			return true
+		}
+		if stdReq.Stream {
+			// Recorded after the stream finishes: SSE bytes are already sent, so a
+			// mid-stream failure is logged to history rather than written to the body.
+			thinking, text, streamErr := geminiweb.StreamClaudeMessages(r.Context(), client, stdReq, w)
+			if streamErr != nil {
+				config.Logger.Warn("[gemini] stream error", "error", streamErr)
+				if historySession != nil {
+					historySession.Error(http.StatusBadGateway, streamErr.Error(), "upstream_error", thinking, text)
+				}
+				return true
+			}
+			if historySession != nil {
+				historySession.Success(http.StatusOK, thinking, text, "end_turn", nil)
+			}
+			return true
+		}
+		turn, err := geminiweb.ExecuteTurn(r.Context(), client, stdReq)
+		if err != nil {
+			if historySession != nil {
+				historySession.Error(http.StatusBadGateway, err.Error(), "upstream_error", "", "")
+			}
+			writeClaudeError(w, http.StatusBadGateway, err.Error())
+			return true
+		}
+		if historySession != nil {
+			historySession.SuccessTurn(http.StatusOK, turn, responsehistory.GenericUsage(turn))
+		}
+		writeJSON(w, http.StatusOK, claudefmt.BuildMessageResponseFromTurn(
+			fmt.Sprintf("msg_%d", time.Now().UnixNano()),
+			stdReq.ResponseModel,
+			turn,
+			exposeThinking,
+		))
+		return true
+	}
 	if stdReq.Stream {
 		h.handleClaudeDirectStream(w, r, a, stdReq, historySession)
 		return true

@@ -16,6 +16,7 @@ import (
 	"ds2api/internal/auth"
 	"ds2api/internal/completionruntime"
 	"ds2api/internal/config"
+	"ds2api/internal/geminiweb"
 	"ds2api/internal/httpapi/openai/history"
 	"ds2api/internal/httpapi/openai/shared"
 	"ds2api/internal/httpapi/requestbody"
@@ -81,9 +82,14 @@ func (h *Handler) handleGeminiDirect(w http.ResponseWriter, r *http.Request, str
 		writeGeminiError(w, http.StatusBadRequest, err.Error())
 		return true
 	}
+	target, _ := config.ResolveModelTarget(h.Store, routeModel)
+	if target.Provider != "" {
+		r.Header.Set("X-Ds2-Target-Provider", target.Provider)
+	}
 	a, err := h.Auth.Determine(r)
 	if err != nil {
-		writeGeminiError(w, http.StatusUnauthorized, err.Error())
+		status, msg := auth.MapAuthStatus(err)
+		writeGeminiError(w, status, msg)
 		return true
 	}
 	defer h.Auth.Release(a)
@@ -100,6 +106,45 @@ func (h *Handler) handleGeminiDirect(w http.ResponseWriter, r *http.Request, str
 		Surface:  "gemini.generate_content",
 		Standard: stdReq,
 	})
+	if a.Provider == "gemini" {
+		client, err := geminiweb.DefaultRuntime().GetClient(r.Context(), a.Account, h.Store)
+		if err != nil {
+			if historySession != nil {
+				historySession.Error(http.StatusBadGateway, err.Error(), "upstream_error", "", "")
+			}
+			writeGeminiError(w, http.StatusBadGateway, err.Error())
+			return true
+		}
+		if stream {
+			// Recorded after the stream finishes: SSE bytes are already sent, so a
+			// mid-stream failure is logged to history rather than written to the body.
+			thinking, text, streamErr := geminiweb.StreamGeminiContent(r.Context(), client, stdReq, w)
+			if streamErr != nil {
+				config.Logger.Warn("[gemini] stream error", "error", streamErr)
+				if historySession != nil {
+					historySession.Error(http.StatusBadGateway, streamErr.Error(), "upstream_error", thinking, text)
+				}
+				return true
+			}
+			if historySession != nil {
+				historySession.Success(http.StatusOK, thinking, text, "STOP", nil)
+			}
+			return true
+		}
+		turn, err := geminiweb.ExecuteTurn(r.Context(), client, stdReq)
+		if err != nil {
+			if historySession != nil {
+				historySession.Error(http.StatusBadGateway, err.Error(), "upstream_error", "", "")
+			}
+			writeGeminiError(w, http.StatusBadGateway, err.Error())
+			return true
+		}
+		if historySession != nil {
+			historySession.SuccessTurn(http.StatusOK, turn, responsehistory.GenericUsage(turn))
+		}
+		writeJSON(w, http.StatusOK, buildGeminiGenerateContentResponseFromTurn(turn))
+		return true
+	}
 	if stream {
 		h.handleGeminiDirectStream(w, r, a, stdReq, historySession)
 		return true

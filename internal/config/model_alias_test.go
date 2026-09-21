@@ -61,9 +61,9 @@ func TestResolveExpandedHistoricalAliases(t *testing.T) {
 		{name: "claude latest historical", model: "claude-3-5-sonnet-latest", want: "deepseek-v4-flash"},
 		{name: "claude historical opus", model: "claude-3-opus-20240229", want: "deepseek-v4-pro"},
 		{name: "claude historical haiku", model: "claude-3-haiku-20240307", want: "deepseek-v4-flash"},
-		{name: "gemini latest alias", model: "gemini-flash-latest", want: "deepseek-v4-flash"},
-		{name: "gemini historical pro", model: "gemini-1.5-pro", want: "deepseek-v4-pro"},
-		{name: "gemini vision legacy", model: "gemini-pro-vision", want: "deepseek-v4-vision"},
+		{name: "gemini latest alias", model: "gemini-flash-latest", want: "gemini-flash"},
+		{name: "gemini historical pro", model: "gemini-1.5-pro", want: "gemini-pro"},
+		{name: "gemini vision legacy", model: "gemini-pro-vision", want: "gemini-pro"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -154,5 +154,63 @@ func TestClaudeModelsResponsePaginationFields(t *testing.T) {
 	}
 	if _, ok := resp["has_more"]; !ok {
 		t.Fatalf("expected has_more in response: %#v", resp)
+	}
+}
+
+func TestResolveModelTarget(t *testing.T) {
+	cases := []struct {
+		requested     string
+		wantProvider  string
+		wantCanonical string
+		wantVariant   string
+		wantFound     bool
+	}{
+		// DeepSeek direct
+		{"deepseek-v4-flash", "deepseek", "deepseek-v4-flash", "", true},
+		{"deepseek-v4-flash-nothinking", "deepseek", "deepseek-v4-flash-nothinking", "nothinking", true},
+		{"deepseek-v4-flash-search", "deepseek", "deepseek-v4-flash-search", "search", true},
+		{"deepseek-v4-pro", "deepseek", "deepseek-v4-pro", "", true},
+		// DeepSeek via aliases
+		{"gpt-4o", "deepseek", "deepseek-v4-flash", "", true},
+		{"gpt-4o-nothinking", "deepseek", "deepseek-v4-flash-nothinking", "nothinking", true},
+		{"claude-opus-4-6", "deepseek", "deepseek-v4-pro", "", true},
+		// Gemini direct
+		{"gemini-flash", "gemini", "gemini-flash", "", true},
+		{"gemini-pro", "gemini", "gemini-pro", "", true},
+		{"gemini-flash-nothinking", "gemini", "gemini-flash-nothinking", "nothinking", true},
+		// Gemini via aliases - versioned, tiered and legacy spellings all land on
+		// one of the three canonical models, since the tier is the account's.
+		{"gemini-flash-latest", "gemini", "gemini-flash", "", true},
+		{"gemini-3-flash", "gemini", "gemini-flash", "", true},
+		{"gemini-3.1-flash", "gemini", "gemini-flash", "", true},
+		{"gemini-1.5-pro", "gemini", "gemini-pro", "", true},
+		{"gemini-3.1-pro", "gemini", "gemini-pro", "", true},
+		{"gemini-pro-advanced", "gemini", "gemini-pro", "", true},
+		{"gemini-flash-plus", "gemini", "gemini-flash", "", true},
+		{"gemini-2.0-flash-lite", "gemini", "gemini-flash-lite", "", true},
+		{"gemini-3.1-flash-lite", "gemini", "gemini-flash-lite", "", true},
+		// Unknown
+		{"unknown-model-xyz", "", "", "", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.requested, func(t *testing.T) {
+			target, ok := ResolveModelTarget(nil, tc.requested)
+			if ok != tc.wantFound {
+				t.Fatalf("for %q, expected ok=%v, got %v", tc.requested, tc.wantFound, ok)
+			}
+			if !tc.wantFound {
+				return
+			}
+			if target.Provider != tc.wantProvider {
+				t.Errorf("for %q, expected Provider=%q, got %q", tc.requested, tc.wantProvider, target.Provider)
+			}
+			if target.Canonical != tc.wantCanonical {
+				t.Errorf("for %q, expected Canonical=%q, got %q", tc.requested, tc.wantCanonical, target.Canonical)
+			}
+			if target.Variant != tc.wantVariant {
+				t.Errorf("for %q, expected Variant=%q, got %q", tc.requested, tc.wantVariant, target.Variant)
+			}
+		})
 	}
 }

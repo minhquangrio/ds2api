@@ -62,8 +62,8 @@ func (h *Handler) PreprocessInlineFileInputs(ctx context.Context, a *auth.Reques
 	}
 	modelType := "default"
 	if requestedModel, ok := req["model"].(string); ok {
-		if resolvedModel, ok := config.ResolveModel(h.Store, requestedModel); ok {
-			if resolvedType, ok := config.GetModelType(resolvedModel); ok {
+		if target, ok := config.ResolveModelTarget(h.Store, requestedModel); ok {
+			if resolvedType, ok := config.GetModelType(target.Canonical); ok {
 				modelType = resolvedType
 			}
 		}

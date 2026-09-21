@@ -8,26 +8,27 @@ import (
 )
 
 type Config struct {
-	Keys                 []string                   `json:"keys,omitempty"`
-	APIKeys              []APIKey                   `json:"api_keys,omitempty"`
-	Accounts             []Account                  `json:"accounts,omitempty"`
-	Proxies              []Proxy                    `json:"proxies,omitempty"`
-	ModelAliases         map[string]string          `json:"model_aliases,omitempty"`
-	Admin                AdminConfig                `json:"admin,omitempty"`
-	Runtime              RuntimeConfig              `json:"runtime,omitempty"`
-	Responses            ResponsesConfig            `json:"responses,omitempty"`
-	Embeddings           EmbeddingsConfig           `json:"embeddings,omitempty"`
-	AutoDelete           AutoDeleteConfig           `json:"auto_delete"`
-	CurrentInputFile     CurrentInputFileConfig     `json:"current_input_file,omitempty"`
-	ThinkingInjection    ThinkingInjectionConfig    `json:"thinking_injection,omitempty"`
-	ExpertTextFileInline ExpertTextFileInlineConfig `json:"expert_text_file_inline,omitempty"`
-	ExpertPromptSegment  ExpertPromptSegmentConfig  `json:"expert_prompt_segment,omitempty"`
-	AutoRouteVision      AutoRouteVisionConfig      `json:"auto_route_vision,omitempty"`
-	ElasticPool          ElasticPoolConfig          `json:"elastic_pool,omitempty"`
-	Vercel               VercelConfig               `json:"vercel,omitempty"`
-	VercelSyncHash       string                     `json:"_vercel_sync_hash,omitempty"`
-	VercelSyncTime       int64                      `json:"_vercel_sync_time,omitempty"`
-	AdditionalFields     map[string]any             `json:"-"`
+	Keys                    []string                   `json:"keys,omitempty"`
+	APIKeys                 []APIKey                   `json:"api_keys,omitempty"`
+	Accounts                []Account                  `json:"accounts,omitempty"`
+	Proxies                 []Proxy                    `json:"proxies,omitempty"`
+	ModelAliases            map[string]string          `json:"model_aliases,omitempty"`
+	ModelFallbackToDeepSeek bool                       `json:"model_fallback_to_deepseek,omitempty"`
+	Admin                   AdminConfig                `json:"admin,omitempty"`
+	Runtime                 RuntimeConfig              `json:"runtime,omitempty"`
+	Responses               ResponsesConfig            `json:"responses,omitempty"`
+	Embeddings              EmbeddingsConfig           `json:"embeddings,omitempty"`
+	AutoDelete              AutoDeleteConfig           `json:"auto_delete"`
+	CurrentInputFile        CurrentInputFileConfig     `json:"current_input_file,omitempty"`
+	ThinkingInjection       ThinkingInjectionConfig    `json:"thinking_injection,omitempty"`
+	ExpertTextFileInline    ExpertTextFileInlineConfig `json:"expert_text_file_inline,omitempty"`
+	ExpertPromptSegment     ExpertPromptSegmentConfig  `json:"expert_prompt_segment,omitempty"`
+	AutoRouteVision         AutoRouteVisionConfig      `json:"auto_route_vision,omitempty"`
+	ElasticPool             ElasticPoolConfig          `json:"elastic_pool,omitempty"`
+	Vercel                  VercelConfig               `json:"vercel,omitempty"`
+	VercelSyncHash          string                     `json:"_vercel_sync_hash,omitempty"`
+	VercelSyncTime          int64                      `json:"_vercel_sync_time,omitempty"`
+	AdditionalFields        map[string]any             `json:"-"`
 }
 
 type Account struct {
@@ -50,6 +51,8 @@ type Account struct {
 	// 在收到验证码挑战后主动设置的——挑战意味着风控已经盯上这个账号，
 	// 继续用它只会把情况变得更糟。
 	CooldownUntil float64 `json:"cooldown_until,omitempty"`
+	Provider      string  `json:"provider,omitempty"`
+	Cookies       string  `json:"cookies,omitempty"`
 }
 
 type APIKey struct {

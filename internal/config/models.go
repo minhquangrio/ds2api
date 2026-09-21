@@ -27,6 +27,12 @@ type ModelAliasReader interface {
 	ModelAliases() map[string]string
 }
 
+type ModelTarget struct {
+	Provider  string // "deepseek" | "gemini"
+	Canonical string
+	Variant   string // "nothinking", "search", etc.
+}
+
 const noThinkingModelSuffix = "-nothinking"
 
 var deepSeekBaseModels = []ModelInfo{
@@ -35,6 +41,20 @@ var deepSeekBaseModels = []ModelInfo{
 	{ID: "deepseek-v4-flash-search", Object: "model", Created: 1677610602, OwnedBy: "deepseek", Permission: []any{}},
 	{ID: "deepseek-v4-vision", Object: "model", Created: 1677610602, OwnedBy: "deepseek", Permission: []any{}},
 }
+
+// Gemini Web model names follow gemini-webapi's naming: a canonical name is
+// derived from the model's category, so an account reports "gemini-pro",
+// "gemini-flash" and "gemini-flash-lite". The Basic/Plus/Advanced tier of a given
+// model belongs to the account and is discovered at session init - it is not a
+// separate model - which is why the tier and versioned spellings live in the
+// alias table below rather than in this catalogue.
+var geminiBaseModels = []ModelInfo{
+	{ID: "gemini-pro", Object: "model", Created: 1735689600, OwnedBy: "google"},
+	{ID: "gemini-flash", Object: "model", Created: 1735689600, OwnedBy: "google"},
+	{ID: "gemini-flash-lite", Object: "model", Created: 1735689600, OwnedBy: "google"},
+}
+
+var GeminiModels = appendNoThinkingVariants(geminiBaseModels)
 
 var OllamaCapabilitiesModels = []OllamaCapabilitiesModelInfo{
 	{ID: "deepseek-v4-flash", Capabilities: []string{"tools", "thinking"}},
@@ -91,6 +111,10 @@ func GetModelConfig(model string) (thinking bool, search bool, ok bool) {
 		return !noThinking, false, true
 	case "deepseek-v4-flash-search":
 		return !noThinking, true, true
+	case "gemini-pro", "gemini-flash":
+		return !noThinking, false, true
+	case "gemini-flash-lite":
+		return false, false, true
 	default:
 		return false, false, false
 	}
@@ -105,14 +129,33 @@ func GetModelType(model string) (modelType string, ok bool) {
 		return "expert", true
 	case "deepseek-v4-vision":
 		return "vision", true
+	case "gemini-pro":
+		return "gemini_pro", true
+	case "gemini-flash", "gemini-flash-lite":
+		return "gemini_flash", true
 	default:
 		return "", false
 	}
 }
 
 func IsSupportedDeepSeekModel(model string) bool {
-	_, _, ok := GetModelConfig(model)
-	return ok
+	baseModel, _ := splitNoThinkingModel(model)
+	switch baseModel {
+	case "deepseek-v4-flash", "deepseek-v4-pro", "deepseek-v4-flash-search", "deepseek-v4-vision":
+		return true
+	default:
+		return false
+	}
+}
+
+func IsSupportedGeminiModel(model string) bool {
+	baseModel, _ := splitNoThinkingModel(model)
+	switch baseModel {
+	case "gemini-pro", "gemini-flash", "gemini-flash-lite":
+		return true
+	default:
+		return false
+	}
 }
 
 func IsNoThinkingModel(model string) bool {
@@ -200,47 +243,147 @@ func DefaultModelAliases() map[string]string {
 		"claude-3-haiku":             "deepseek-v4-flash",
 		"claude-3-haiku-20240307":    "deepseek-v4-flash",
 
-		// Gemini current and historical text / multimodal models
-		"gemini-pro":            "deepseek-v4-pro",
-		"gemini-pro-vision":     "deepseek-v4-vision",
-		"gemini-pro-latest":     "deepseek-v4-pro",
-		"gemini-flash-latest":   "deepseek-v4-flash",
-		"gemini-1.5-pro":        "deepseek-v4-pro",
-		"gemini-1.5-flash":      "deepseek-v4-flash",
-		"gemini-1.5-flash-8b":   "deepseek-v4-flash",
-		"gemini-2.0-flash":      "deepseek-v4-flash",
-		"gemini-2.0-flash-lite": "deepseek-v4-flash",
-		"gemini-2.5-pro":        "deepseek-v4-pro",
-		"gemini-2.5-flash":      "deepseek-v4-flash",
-		"gemini-2.5-flash-lite": "deepseek-v4-flash",
-		"gemini-3.1-pro":        "deepseek-v4-pro",
-		"gemini-3-pro":          "deepseek-v4-pro",
-		"gemini-3-flash":        "deepseek-v4-flash",
-		"gemini-3.1-flash":      "deepseek-v4-flash",
-		"gemini-3.1-flash-lite": "deepseek-v4-flash",
+		// Gemini: every accepted spelling of the three models above. gemini-webapi
+		// derives a model's canonical name from its category and treats the
+		// Plus/Advanced variants as the same model, because the tier belongs to the
+		// account and is read from it at session init - so all of these resolve to
+		// one entry, and Canonical is always a name GeminiModels advertises.
+		"gemini-pro-latest":   "gemini-pro",
+		"gemini-pro-vision":   "gemini-pro",
+		"gemini-pro-plus":     "gemini-pro",
+		"gemini-pro-advanced": "gemini-pro",
+		"gemini-1.5-pro":      "gemini-pro",
+		"gemini-2.5-pro":      "gemini-pro",
+		"gemini-3-pro":        "gemini-pro",
+		"gemini-3.1-pro":      "gemini-pro",
+
+		"gemini-flash-latest":   "gemini-flash",
+		"gemini-flash-plus":     "gemini-flash",
+		"gemini-flash-advanced": "gemini-flash",
+		"gemini-1.5-flash":      "gemini-flash",
+		"gemini-1.5-flash-8b":   "gemini-flash",
+		"gemini-2.0-flash":      "gemini-flash",
+		"gemini-2.5-flash":      "gemini-flash",
+		"gemini-3-flash":        "gemini-flash",
+		"gemini-3.1-flash":      "gemini-flash",
+
+		"gemini-flash-lite-plus":     "gemini-flash-lite",
+		"gemini-flash-lite-advanced": "gemini-flash-lite",
+		"gemini-2.0-flash-lite":      "gemini-flash-lite",
+		"gemini-2.5-flash-lite":      "gemini-flash-lite",
+		"gemini-3-flash-lite":        "gemini-flash-lite",
+		"gemini-3.1-flash-lite":      "gemini-flash-lite",
 
 		"llama-3.1-70b-instruct": "deepseek-v4-flash",
 		"qwen-max":               "deepseek-v4-flash",
 	}
 }
 
-func ResolveModel(store ModelAliasReader, requested string) (string, bool) {
+func ResolveModelTarget(store ModelAliasReader, requested string) (ModelTarget, bool) {
 	model := lower(strings.TrimSpace(requested))
 	if model == "" {
-		return "", false
-	}
-	aliases := loadModelAliases(store)
-	if IsSupportedDeepSeekModel(model) {
-		return model, true
-	}
-	if mapped, ok := aliases[model]; ok && IsSupportedDeepSeekModel(mapped) {
-		return mapped, true
+		return ModelTarget{}, false
 	}
 	baseModel, noThinking := splitNoThinkingModel(model)
-	if mapped, ok := aliases[baseModel]; ok && IsSupportedDeepSeekModel(mapped) {
-		return withNoThinkingVariant(mapped, noThinking), true
+
+	// 1. Direct DeepSeek models
+	if IsSupportedDeepSeekModel(baseModel) {
+		variant := ""
+		if noThinking {
+			variant = "nothinking"
+		} else if strings.Contains(baseModel, "search") {
+			variant = "search"
+		}
+		return ModelTarget{
+			Provider:  "deepseek",
+			Canonical: model,
+			Variant:   variant,
+		}, true
 	}
-	return "", false
+
+	// 2. Direct Gemini models
+	if IsSupportedGeminiModel(baseModel) {
+		variant := ""
+		if noThinking {
+			variant = "nothinking"
+		}
+		return ModelTarget{
+			Provider:  "gemini",
+			Canonical: model,
+			Variant:   variant,
+		}, true
+	}
+
+	// 3. Alias lookup
+	aliases := loadModelAliases(store)
+	if mapped, ok := aliases[model]; ok {
+		mappedBase, mappedNoThinking := splitNoThinkingModel(mapped)
+		if IsSupportedDeepSeekModel(mappedBase) {
+			variant := ""
+			if mappedNoThinking {
+				variant = "nothinking"
+			} else if strings.Contains(mappedBase, "search") {
+				variant = "search"
+			}
+			return ModelTarget{
+				Provider:  "deepseek",
+				Canonical: mapped,
+				Variant:   variant,
+			}, true
+		}
+		if IsSupportedGeminiModel(mappedBase) {
+			variant := ""
+			if mappedNoThinking {
+				variant = "nothinking"
+			}
+			return ModelTarget{
+				Provider:  "gemini",
+				Canonical: mapped,
+				Variant:   variant,
+			}, true
+		}
+	}
+
+	// 4. Base model alias lookup with preserved suffix
+	if mapped, ok := aliases[baseModel]; ok {
+		mappedBase, mappedNoThinking := splitNoThinkingModel(mapped)
+		effectiveNoThinking := noThinking || mappedNoThinking
+		canonical := withNoThinkingVariant(mappedBase, effectiveNoThinking)
+		if IsSupportedDeepSeekModel(mappedBase) {
+			variant := ""
+			if effectiveNoThinking {
+				variant = "nothinking"
+			} else if strings.Contains(mappedBase, "search") {
+				variant = "search"
+			}
+			return ModelTarget{
+				Provider:  "deepseek",
+				Canonical: canonical,
+				Variant:   variant,
+			}, true
+		}
+		if IsSupportedGeminiModel(mappedBase) {
+			variant := ""
+			if effectiveNoThinking {
+				variant = "nothinking"
+			}
+			return ModelTarget{
+				Provider:  "gemini",
+				Canonical: canonical,
+				Variant:   variant,
+			}, true
+		}
+	}
+
+	return ModelTarget{}, false
+}
+
+func ResolveModel(store ModelAliasReader, requested string) (string, bool) {
+	target, ok := ResolveModelTarget(store, requested)
+	if !ok {
+		return "", false
+	}
+	return target.Canonical, true
 }
 
 func lower(s string) string {
@@ -254,17 +397,28 @@ func lower(s string) string {
 }
 
 func OpenAIModelsResponse() map[string]any {
-	return map[string]any{"object": "list", "data": DeepSeekModels}
+	all := make([]ModelInfo, 0, len(DeepSeekModels)+len(GeminiModels))
+	all = append(all, DeepSeekModels...)
+	all = append(all, GeminiModels...)
+	return map[string]any{"object": "list", "data": all}
 }
 
 func OpenAIModelByID(store ModelAliasReader, id string) (ModelInfo, bool) {
-	canonical, ok := ResolveModel(store, id)
+	target, ok := ResolveModelTarget(store, id)
 	if !ok {
 		return ModelInfo{}, false
 	}
-	for _, model := range DeepSeekModels {
-		if model.ID == canonical {
-			return model, true
+	if target.Provider == "gemini" {
+		for _, model := range GeminiModels {
+			if model.ID == target.Canonical {
+				return model, true
+			}
+		}
+	} else {
+		for _, model := range DeepSeekModels {
+			if model.ID == target.Canonical {
+				return model, true
+			}
 		}
 	}
 	return ModelInfo{}, false
@@ -275,12 +429,12 @@ func OllamaModelsResponse() map[string]any {
 }
 
 func OllamaModelByID(store ModelAliasReader, id string) (OllamaCapabilitiesModelInfo, bool) {
-	canonical, ok := ResolveModel(store, id)
+	target, ok := ResolveModelTarget(store, id)
 	if !ok {
 		return OllamaCapabilitiesModelInfo{}, false
 	}
 	for _, model := range OllamaCapabilitiesModels {
-		if model.ID == canonical {
+		if model.ID == target.Canonical {
 			return model, true
 		}
 	}
