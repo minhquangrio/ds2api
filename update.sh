@@ -109,17 +109,17 @@ echo -e "  ${GREEN}✓${NC} Mã nguồn mới nhất: ${YELLOW}$LATEST_COMMIT${N
 # ------------------------------------------------------------------------------
 echo ""
 echo -e "${BLUE}[3/5] Kiểm tra giao diện WebUI...${NC}"
-if [ -f "static/admin/index.html" ]; then
-    echo -e "  ${GREEN}✓${NC} Giao diện WebUI đã có sẵn trong static/admin/."
-elif command -v npm >/dev/null 2>&1 && [ -d "webui" ]; then
-    echo -e "  Đang biên dịch lại WebUI..."
+if command -v npm >/dev/null 2>&1 && [ -d "webui" ]; then
+    echo -e "  Phát hiện npm, đang biên dịch lại WebUI từ mã nguồn..."
     cd "$PROJECT_DIR/webui"
     npm ci --prefer-offline --no-audit 2>/dev/null || npm install --prefer-offline 2>/dev/null
     npm run build
     cd "$PROJECT_DIR"
-    echo -e "  ${GREEN}✓${NC} WebUI đã được biên dịch thành công!"
+    echo -e "  ${GREEN}✓${NC} WebUI đã được biên dịch thành công vào static/admin/!"
+elif [ -f "static/admin/index.html" ]; then
+    echo -e "  ${GREEN}✓${NC} Đã có sẵn giao diện WebUI mới nhất từ kho mã nguồn (static/admin/)."
 else
-    echo -e "  ${YELLOW}!${NC} Cảnh báo: Chưa có static/admin/index.html. Đang thử tải từ bản build..."
+    echo -e "  ${YELLOW}!${NC} Cảnh báo: Chưa có static/admin/index.html."
 fi
 
 # ------------------------------------------------------------------------------
@@ -153,6 +153,15 @@ echo -e "${BLUE}[5/5] Khởi động lại dịch vụ...${NC}"
 
 RESTARTED=false
 
+# Lấy port từ config.json nếu có
+TARGET_PORT=5001
+if [ -f "config.json" ]; then
+    CFG_P=$(grep -o '"port"[[:space:]]*:[[:space:]]*[0-9]*' config.json | grep -o '[0-9]*' | head -n 1 || true)
+    if [ -n "$CFG_P" ]; then
+        TARGET_PORT=$CFG_P
+    fi
+fi
+
 # Cách 1: aaPanel Supervisor Manager
 if command -v supervisorctl >/dev/null 2>&1; then
     if supervisorctl status ds2api 2>/dev/null | grep -qE "RUNNING|STOPPED|FATAL"; then
@@ -185,8 +194,11 @@ fi
 
 # Cách 4: Quản lý tiến trình trực tiếp
 if [ "$RESTARTED" = false ]; then
-    echo -e "  Không phát hiện Supervisor/Systemd, đang khởi động lại tiến trình nền..."
-    pkill -f "./ds2api" || true
+    echo -e "  Không phát hiện Supervisor/Systemd, đang dừng tiến trình cũ và khởi động lại..."
+    pkill -9 -f "ds2api" 2>/dev/null || true
+    if command -v fuser >/dev/null 2>&1; then
+        fuser -k -9 "${TARGET_PORT}/tcp" 2>/dev/null || true
+    fi
     sleep 1
     nohup ./ds2api > ds2api.log 2>&1 &
     NEW_PID=$!

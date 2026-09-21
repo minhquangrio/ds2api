@@ -33,7 +33,6 @@ dist/
 *.tsbuildinfo
 .cache/
 .parcel-cache/
-static/admin/
 internal/webui/assets/admin/
 
 # Go compiled binaries
