@@ -65,6 +65,10 @@ func StreamOpenAIChat(ctx context.Context, client *Client, stdReq promptcompat.S
 		}
 	}
 
+	if thinkBuf.Len() == 0 && textBuf.Len() == 0 {
+		return "", "", errors.New("gemini upstream returned empty output (check proxy/cookies)")
+	}
+
 	emitChunk(map[string]any{}, "stop")
 	_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
 	if canFlush {
@@ -122,6 +126,10 @@ func StreamGeminiContent(ctx context.Context, client *Client, stdReq promptcompa
 		if chunk.IsFinished {
 			break
 		}
+	}
+
+	if thinkBuf.Len() == 0 && textBuf.Len() == 0 {
+		return "", "", errors.New("gemini upstream returned empty output (check proxy/cookies)")
 	}
 
 	emitGemini([]any{map[string]any{"text": ""}}, "STOP")
@@ -237,6 +245,10 @@ func StreamClaudeMessages(ctx context.Context, client *Client, stdReq promptcomp
 		},
 		"usage": map[string]any{"output_tokens": outputTokens},
 	})
+
+	if thinkBuf.Len() == 0 && textBuf.Len() == 0 {
+		return "", "", errors.New("gemini upstream returned empty output (check proxy/cookies)")
+	}
 
 	sendClaudeEvent(w, flusher, canFlush, "message_stop", map[string]any{
 		"type": "message_stop",
