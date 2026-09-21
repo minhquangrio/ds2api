@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Pencil, Play, Plus, Shield, Trash2, X } from 'lucide-react'
+import { Pencil, Play, Plus, Shield, Sparkles, Trash2, X } from 'lucide-react'
 import clsx from 'clsx'
 
 import { useI18n } from '../../i18n'
@@ -171,6 +171,40 @@ function ProxiesTable({
     )
 }
 
+function parseProxyQuickString(val) {
+    if (!val || !val.trim()) return null
+    const str = val.trim()
+    if (str.includes('://')) {
+        try {
+            const u = new URL(str)
+            const proto = u.protocol.replace(':', '').toLowerCase()
+            return {
+                type: ['http', 'https', 'socks5', 'socks5h'].includes(proto) ? proto : 'http',
+                host: u.hostname,
+                port: Number(u.port) || (proto.startsWith('socks') ? 1080 : 80),
+                username: decodeURIComponent(u.username || ''),
+                password: decodeURIComponent(u.password || '')
+            }
+        } catch (_) {}
+    }
+    const parts = str.split(':').map(s => s.trim())
+    if (parts.length >= 4) {
+        return {
+            host: parts[0],
+            port: Number(parts[1]) || 1080,
+            username: parts[2],
+            password: parts.slice(3).join(':')
+        }
+    }
+    if (parts.length === 2) {
+        return {
+            host: parts[0],
+            port: Number(parts[1]) || 1080
+        }
+    }
+    return null
+}
+
 function ProxyFormModal({
     show,
     t,
@@ -181,11 +215,33 @@ function ProxyFormModal({
     onClose,
     onSubmit,
 }) {
+    const [quickInput, setQuickInput] = useState('')
+    const [quickFeedback, setQuickFeedback] = useState('')
+
     if (!show) {
         return null
     }
 
     const isEditing = Boolean(editingProxy?.id)
+
+    const handleQuickInput = (val) => {
+        setQuickInput(val)
+        const parsed = parseProxyQuickString(val)
+        if (parsed) {
+            setForm(prev => ({
+                ...prev,
+                host: parsed.host || prev.host,
+                port: parsed.port || prev.port,
+                username: parsed.username !== undefined ? parsed.username : prev.username,
+                password: parsed.password !== undefined ? parsed.password : prev.password,
+                type: parsed.type || prev.type,
+                name: prev.name || (parsed.host ? `${parsed.host}:${parsed.port}` : prev.name)
+            }))
+            setQuickFeedback(t('proxyManager.quickPasteSuccess'))
+        } else {
+            setQuickFeedback('')
+        }
+    }
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
@@ -205,6 +261,23 @@ function ProxyFormModal({
                 </div>
 
                 <div className="p-6 space-y-4">
+                    <div className="bg-muted/30 border border-border/80 rounded-lg p-3 space-y-1.5">
+                        <label className="flex items-center gap-1.5 text-xs font-semibold text-primary">
+                            <Sparkles className="w-3.5 h-3.5" />
+                            {t('proxyManager.quickPasteLabel')}
+                        </label>
+                        <input
+                            type="text"
+                            className="input-field text-xs font-mono"
+                            placeholder={t('proxyManager.quickPastePlaceholder')}
+                            value={quickInput}
+                            onChange={e => handleQuickInput(e.target.value)}
+                        />
+                        {quickFeedback && (
+                            <p className="text-[11px] text-emerald-500 font-medium">✓ {quickFeedback}</p>
+                        )}
+                    </div>
+
                     <div className="grid md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium mb-1.5">{t('proxyManager.nameLabel')}</label>
