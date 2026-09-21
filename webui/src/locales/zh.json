@@ -15,9 +15,22 @@
         "switchToDark": "切换到暗色模式"
     },
     "nav": {
+        "groups": {
+            "gateway": "网关核心",
+            "upstream": "上游资源",
+            "system": "系统设置"
+        },
+        "overview": {
+            "label": "Token 总览",
+            "desc": "Token 流量监控与网关运行指标"
+        },
+        "keys": {
+            "label": "API 密钥",
+            "desc": "管理客户端访问密钥与配额"
+        },
         "accounts": {
-            "label": "账号管理",
-            "desc": "管理 DeepSeek 账号池"
+            "label": "上游账号",
+            "desc": "管理 DeepSeek 与 Gemini 账号池"
         },
         "proxies": {
             "label": "代理 IP",
@@ -28,8 +41,8 @@
             "desc": "测试 API 连接与响应"
         },
         "history": {
-            "label": "响应记录",
-            "desc": "查看服务器保存的上游响应归档"
+            "label": "日志与 Token",
+            "desc": "详细的请求日志与 Token 消耗流水"
         },
         "import": {
             "label": "批量导入",
@@ -127,7 +140,37 @@
             "extraOk": "正常可用",
             "refresh": "刷新",
             "refreshing": "正在刷新配额...",
-            "loadFailed": "获取配额失败: {error}"
+            "loadFailed": "获取配额失败: {error}",
+            "poolTitle": "Gemini 账号池配额中心",
+            "poolDesc": "监控 Gemini 账号池的每周总配额、5小时算力及重置时间窗口",
+            "refreshAll": "刷新全部配额",
+            "refreshingAll": "正在刷新全部...",
+            "singleAccountTitle": "Gemini 账号配额",
+            "multiAccountTitle": "Gemini 账号池总配额 ({count} 个账号)",
+            "totalAvailableCredits": "5 小时总可用次数",
+            "totalWeeklyCredits": "每周总可用额度",
+            "total5hCredits": "5 小时总可用额度",
+            "weeklyCapacity": "每周配额",
+            "h5Capacity": "5小时算力",
+            "readyAccounts": "就绪账号",
+            "throttledAccounts": "等待重置 (受限)",
+            "throttledWeekly": "每周额度耗尽",
+            "throttled5h": "等待5小时重置",
+            "filterAll": "全部 ({count})",
+            "filterReady": "就绪 ({count})",
+            "filterAttention": "需关注 ({count})",
+            "weeklyResetAt": "每周重置: {time}",
+            "avgWeeklyUsage": "已用 {pct}% 周额度",
+            "usedPct": "{pct}% 已用",
+            "noWeeklyLimit": "无周限制",
+            "nextReset": "最近重置窗口: {time}",
+            "allReady": "所有 Gemini 账号均就绪可用",
+            "viewDetails": "查看详情",
+            "statusReady": "就绪",
+            "statusThrottled": "等待重置",
+            "statusError": "连接异常",
+            "noGeminiAccounts": "账号池中暂无 Gemini 账号。",
+            "remainingPct": "{pct}% 可用"
         },
         "addKeySuccess": "API 密钥添加成功",
         "updateKeySuccess": "API 密钥更新成功",
@@ -583,5 +626,52 @@
             "three": "更新 Vercel 项目中的环境变量：",
             "four": "触发重新部署以应用新的环境变量。"
         }
+    },
+    "overview": {
+        "title": "网关与 Token 仪表盘",
+        "desc": "实时监控 Token 消耗流量、上游账号池健康状态与快速 API 接入",
+        "liveGateway": "网关在线",
+        "totalTokens": "Token 消耗总量",
+        "promptTokens": "Prompt Tokens",
+        "completionTokens": "Completion Tokens",
+        "reasoningTokens": "Reasoning Tokens",
+        "totalRequests": "请求总数",
+        "successRate": "请求成功率",
+        "avgLatency": "平均延迟",
+        "upstreamNodes": "上游节点",
+        "upstreamReady": "{ready}/{total} 就绪",
+        "activeKeys": "活跃 API 密钥",
+        "tokenUsageTrend": "Token 消耗趋势",
+        "modelDistribution": "模型调用占比",
+        "quickIntegration": "快速接入",
+        "baseUrl": "Base URL",
+        "defaultApiKey": "默认 API 密钥",
+        "copySnippet": "复制代码",
+        "copied": "已复制!",
+        "recentRequests": "近期请求流",
+        "viewAllLogs": "查看全部日志",
+        "noRequestsYet": "暂无 API 请求记录。开始发送请求即可实时追踪 Token 指标。",
+        "snippetTabCurl": "cURL",
+        "snippetTabPython": "Python",
+        "snippetTabNode": "Node.js",
+        "refreshData": "刷新数据",
+        "tokensPerSec": "预估生成速率",
+        "requestsInFlight": "正在处理"
+    },
+    "apiKeysManager": {
+        "title": "API 密钥管理",
+        "desc": "配置与分发供您的外部应用（如 Cursor, NextChat 等）连接本网关的访问密钥",
+        "createKey": "创建新密钥",
+        "generateRandomKey": "生成随机密钥",
+        "keyCount": "已配置 {count} 个密钥",
+        "defaultKeyNotice": "列表中排在首位的密钥将作为快速接入示例中的默认密钥。",
+        "keyLabel": "密钥名称",
+        "keyPlaceholder": "输入 API 密钥字符（或点击生成）",
+        "remarkLabel": "备注说明",
+        "createdAt": "创建时间",
+        "actions": "操作",
+        "confirmDelete": "确定要删除此 API 密钥吗？",
+        "integrationGuideTitle": "API 密钥使用指南",
+        "integrationGuideText": "在 Cursor、NextChat、Claude Code、Cline 或 OpenAI 官方 SDK 中，将此密钥填入 Authorization: Bearer <KEY> 请求头中即可直接调用。"
     }
 }

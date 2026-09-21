@@ -15,9 +15,22 @@
         "switchToDark": "Chuyển sang giao diện tối"
     },
     "nav": {
+        "groups": {
+            "gateway": "Gateway Core",
+            "upstream": "Tài nguyên Upstream",
+            "system": "Hệ thống"
+        },
+        "overview": {
+            "label": "Tổng quan Token",
+            "desc": "Thống kê lưu lượng token và trạng thái gateway"
+        },
+        "keys": {
+            "label": "Khoá API",
+            "desc": "Quản lý khoá truy cập API và hạn ngạch"
+        },
         "accounts": {
-            "label": "Quản lý tài khoản",
-            "desc": "Quản lý nhóm tài khoản DeepSeek"
+            "label": "Tài khoản Upstream",
+            "desc": "Quản lý nhóm tài khoản DeepSeek & Gemini"
         },
         "proxies": {
             "label": "Proxy IP",
@@ -28,8 +41,8 @@
             "desc": "Kiểm tra kết nối và phản hồi API"
         },
         "history": {
-            "label": "Lịch sử phản hồi",
-            "desc": "Xem nhật ký phản hồi từ DeepSeek trên máy chủ"
+            "label": "Lịch sử & Token",
+            "desc": "Nhật ký chi tiết các lượt gọi và số lượng token"
         },
         "import": {
             "label": "Nhập hàng loạt",
@@ -127,7 +140,37 @@
             "extraOk": "Hoạt động bình thường",
             "refresh": "Làm mới",
             "refreshing": "Đang tải hạn mức...",
-            "loadFailed": "Không thể lấy thông tin hạn mức: {error}"
+            "loadFailed": "Không thể lấy thông tin hạn mức: {error}",
+            "poolTitle": "Cụm Hạn Mức Gemini Web",
+            "poolDesc": "Giám sát tổng hạn mức theo tuần, năng lực điện toán 5 giờ và chu kỳ hồi phục của các tài khoản Gemini",
+            "refreshAll": "Làm mới tất cả hạn mức",
+            "refreshingAll": "Đang làm mới tất cả...",
+            "singleAccountTitle": "Hạn mức Tài khoản Gemini",
+            "multiAccountTitle": "Hạn mức Cụm Gemini ({count} tài khoản)",
+            "totalAvailableCredits": "Tổng Credits 5h khả dụng",
+            "totalWeeklyCredits": "Tổng Credits tuần khả dụng",
+            "total5hCredits": "Tổng Credits 5h khả dụng",
+            "weeklyCapacity": "Hạn mức Tuần",
+            "h5Capacity": "Hạn mức 5 Giờ",
+            "readyAccounts": "Tài khoản sẵn sàng",
+            "throttledAccounts": "Chờ hồi phục",
+            "throttledWeekly": "Cạn hạn mức tuần",
+            "throttled5h": "Chờ hồi 5h",
+            "filterAll": "Tất cả ({count})",
+            "filterReady": "Sẵn sàng ({count})",
+            "filterAttention": "Cần chú ý ({count})",
+            "weeklyResetAt": "Reset tuần: {time}",
+            "avgWeeklyUsage": "Đã dùng {pct}% tuần",
+            "usedPct": "{pct}% đã dùng",
+            "noWeeklyLimit": "Không giới hạn",
+            "nextReset": "Đợt hồi phục gần nhất: {time}",
+            "allReady": "Tất cả tài khoản Gemini đang sẵn sàng",
+            "viewDetails": "Xem chi tiết",
+            "statusReady": "Sẵn sàng",
+            "statusThrottled": "Chờ Reset",
+            "statusError": "Lỗi kết nối",
+            "noGeminiAccounts": "Chưa có tài khoản Gemini nào trong pool.",
+            "remainingPct": "{pct}% khả dụng"
         },
         "addKeySuccess": "Thêm khoá API thành công.",
         "updateKeySuccess": "Cập nhật khoá API thành công.",
@@ -583,5 +626,52 @@
             "three": "Cập nhật biến môi trường trên Vercel:",
             "four": "Kích hoạt triển khai lại để áp dụng các biến môi trường mới."
         }
+    },
+    "overview": {
+        "title": "Bảng điều khiển Gateway & Token",
+        "desc": "Theo dõi lưu lượng token thời gian thực, sức khỏe pool tài khoản và tích hợp API",
+        "liveGateway": "Gateway Hoạt động",
+        "totalTokens": "Tổng Token tiêu thụ",
+        "promptTokens": "Prompt Tokens",
+        "completionTokens": "Completion Tokens",
+        "reasoningTokens": "Reasoning Tokens",
+        "totalRequests": "Lượt yêu cầu",
+        "successRate": "Tỷ lệ thành công",
+        "avgLatency": "Độ trễ trung bình",
+        "upstreamNodes": "Tài khoản Upstream",
+        "upstreamReady": "{ready}/{total} Sẵn sàng",
+        "activeKeys": "Khoá API hoạt động",
+        "tokenUsageTrend": "Lưu lượng Token theo thời gian",
+        "modelDistribution": "Phân bổ theo Mô hình",
+        "quickIntegration": "Tích hợp nhanh",
+        "baseUrl": "Base URL",
+        "defaultApiKey": "Khoá API mặc định",
+        "copySnippet": "Sao chép mã",
+        "copied": "Đã sao chép!",
+        "recentRequests": "Hoạt động gần đây",
+        "viewAllLogs": "Xem toàn bộ nhật ký",
+        "noRequestsYet": "Chưa có lượt gọi API nào. Bắt đầu gửi request để theo dõi token.",
+        "snippetTabCurl": "cURL",
+        "snippetTabPython": "Python",
+        "snippetTabNode": "Node.js",
+        "refreshData": "Làm mới dữ liệu",
+        "tokensPerSec": "Tốc độ ước tính",
+        "requestsInFlight": "Đang xử lý"
+    },
+    "apiKeysManager": {
+        "title": "Quản lý Khoá API",
+        "desc": "Cấp phát và quản lý khoá API để ứng dụng của bạn gọi qua Gateway",
+        "createKey": "Tạo khoá mới",
+        "generateRandomKey": "Tạo chuỗi ngẫu nhiên",
+        "keyCount": "{count} khoá API đã cấu hình",
+        "defaultKeyNotice": "Khoá đầu tiên trong danh sách sẽ được dùng làm khoá mặc định trong các ví dụ tích hợp.",
+        "keyLabel": "Tên gợi nhớ",
+        "keyPlaceholder": "Nhập khoá API (hoặc bấm tạo ngẫu nhiên)",
+        "remarkLabel": "Ghi chú",
+        "createdAt": "Thời gian tạo",
+        "actions": "Thao tác",
+        "confirmDelete": "Bạn có chắc chắn muốn xoá khoá API này không?",
+        "integrationGuideTitle": "Hướng dẫn sử dụng Khoá API",
+        "integrationGuideText": "Sử dụng khoá API này trong Header Authorization: Bearer <KEY> khi cấu hình NextChat, Cursor, Claude Code, Cline hoặc OpenAI SDK."
     }
 }

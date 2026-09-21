@@ -298,11 +298,11 @@ export default function AccountsTable({
                                     {acc.provider === 'gemini' && (
                                         <button
                                             onClick={() => onViewQuota && onViewQuota(acc)}
-                                            className="flex items-center gap-1 px-2 lg:px-2.5 py-1 lg:py-1.5 text-[10px] lg:text-xs font-medium border border-border rounded-md hover:bg-secondary hover:text-primary transition-colors text-muted-foreground"
+                                            className="flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] lg:text-xs font-semibold border border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 rounded-lg transition-colors shadow-sm"
                                             title={t('accountManager.quota.button')}
                                         >
-                                            <Gauge className="w-3.5 h-3.5 text-primary" />
-                                            <span className="hidden sm:inline">{t('accountManager.quota.button')}</span>
+                                            <Gauge className="w-3.5 h-3.5 text-purple-400" />
+                                            <span>{t('accountManager.quota.button')}</span>
                                         </button>
                                     )}
                                     <button

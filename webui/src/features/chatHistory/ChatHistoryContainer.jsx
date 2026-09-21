@@ -30,22 +30,22 @@ function TokenStatsSummaryBar({ stats, t, hasItems }) {
     if (!hasItems) return null
 
     return (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 rounded-2xl border border-border bg-card/70 shadow-sm">
-            <div className="rounded-xl border border-primary/30 bg-primary/10 px-3.5 py-2.5">
-                <div className="text-[11px] font-medium text-primary">{t('chatHistory.statsTotalTokens')}</div>
-                <div className="text-lg font-bold text-primary font-mono mt-0.5">{stats.total.toLocaleString()}</div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-2xl border border-border/80 bg-card/80 shadow-sm">
+            <div className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-3">
+                <div className="text-[11px] font-semibold text-primary uppercase tracking-wider">{t('chatHistory.statsTotalTokens')}</div>
+                <div className="text-xl font-bold text-primary font-mono mt-1">{stats.total.toLocaleString()}</div>
             </div>
-            <div className="rounded-xl border border-border bg-background px-3.5 py-2.5">
-                <div className="text-[11px] font-medium text-muted-foreground">{t('chatHistory.statsPromptTokens')}</div>
-                <div className="text-sm font-semibold text-foreground font-mono mt-0.5">{stats.prompt.toLocaleString()}</div>
+            <div className="rounded-xl border border-border/70 bg-background/80 px-4 py-3">
+                <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{t('chatHistory.statsPromptTokens')}</div>
+                <div className="text-base font-bold text-sky-400 font-mono mt-1">{stats.prompt.toLocaleString()}</div>
             </div>
-            <div className="rounded-xl border border-border bg-background px-3.5 py-2.5">
-                <div className="text-[11px] font-medium text-muted-foreground">{t('chatHistory.statsCompletionTokens')}</div>
-                <div className="text-sm font-semibold text-foreground font-mono mt-0.5">{stats.completion.toLocaleString()}</div>
+            <div className="rounded-xl border border-border/70 bg-background/80 px-4 py-3">
+                <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{t('chatHistory.statsCompletionTokens')}</div>
+                <div className="text-base font-bold text-emerald-400 font-mono mt-1">{stats.completion.toLocaleString()}</div>
             </div>
-            <div className="rounded-xl border border-border bg-background px-3.5 py-2.5">
-                <div className="text-[11px] font-medium text-muted-foreground">{t('chatHistory.statsAvgTokensPerReq')}</div>
-                <div className="text-sm font-semibold text-foreground font-mono mt-0.5">{stats.avg.toLocaleString()}</div>
+            <div className="rounded-xl border border-border/70 bg-background/80 px-4 py-3">
+                <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{t('chatHistory.statsAvgTokensPerReq')}</div>
+                <div className="text-base font-bold text-foreground font-mono mt-1">{stats.avg.toLocaleString()}</div>
             </div>
         </div>
     )

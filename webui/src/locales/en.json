@@ -15,9 +15,22 @@
         "switchToDark": "Switch to dark mode"
     },
     "nav": {
+        "groups": {
+            "gateway": "Gateway Core",
+            "upstream": "Upstream Nodes",
+            "system": "System"
+        },
+        "overview": {
+            "label": "Token Overview",
+            "desc": "Token traffic analytics and gateway health"
+        },
+        "keys": {
+            "label": "API Keys",
+            "desc": "Manage API access keys and quotas"
+        },
         "accounts": {
-            "label": "Account Management",
-            "desc": "Manage the DeepSeek account pool"
+            "label": "Upstream Accounts",
+            "desc": "Manage DeepSeek & Gemini account pools"
         },
         "proxies": {
             "label": "Proxy IPs",
@@ -28,8 +41,8 @@
             "desc": "Test API connectivity and responses"
         },
         "history": {
-            "label": "Responses",
-            "desc": "Browse server-side upstream response records"
+            "label": "Logs & Tokens",
+            "desc": "Detailed request logs and token consumption"
         },
         "import": {
             "label": "Batch Import",
@@ -127,7 +140,37 @@
             "extraOk": "Normal",
             "refresh": "Refresh",
             "refreshing": "Loading quota...",
-            "loadFailed": "Failed to load quota: {error}"
+            "loadFailed": "Failed to load quota: {error}",
+            "poolTitle": "Gemini Compute Pool & Quotas",
+            "poolDesc": "Monitor total weekly quota, 5-hour compute capacity, and reset windows across Gemini accounts",
+            "refreshAll": "Refresh All Quotas",
+            "refreshingAll": "Refreshing all...",
+            "singleAccountTitle": "Gemini Account Quota",
+            "multiAccountTitle": "Gemini Pool Quota ({count} accounts)",
+            "totalAvailableCredits": "Total Available 5h Credits",
+            "totalWeeklyCredits": "Total Available Weekly Credits",
+            "total5hCredits": "Total Available 5h Credits",
+            "weeklyCapacity": "Weekly Quota",
+            "h5Capacity": "5h Compute",
+            "readyAccounts": "Ready Accounts",
+            "throttledAccounts": "Resetting / Throttled",
+            "throttledWeekly": "Weekly Exhausted",
+            "throttled5h": "Waiting 5h Reset",
+            "filterAll": "All ({count})",
+            "filterReady": "Ready ({count})",
+            "filterAttention": "Needs Attention ({count})",
+            "weeklyResetAt": "Weekly reset: {time}",
+            "avgWeeklyUsage": "{pct}% weekly used",
+            "usedPct": "{pct}% used",
+            "noWeeklyLimit": "No weekly limit",
+            "nextReset": "Next Reset: {time}",
+            "allReady": "All Gemini accounts are ready",
+            "viewDetails": "View Details",
+            "statusReady": "Ready",
+            "statusThrottled": "Resetting",
+            "statusError": "Connection Error",
+            "noGeminiAccounts": "No Gemini accounts found in pool.",
+            "remainingPct": "{pct}% available"
         },
         "addKeySuccess": "API key added successfully.",
         "updateKeySuccess": "API key updated successfully.",
@@ -583,5 +626,52 @@
             "three": "Update the env var in Vercel:",
             "four": "Trigger a redeploy to apply the updated environment variables."
         }
+    },
+    "overview": {
+        "title": "Gateway & Token Dashboard",
+        "desc": "Real-time token analytics, upstream account pool health, and quick API integration",
+        "liveGateway": "Gateway Online",
+        "totalTokens": "Total Tokens Used",
+        "promptTokens": "Prompt Tokens",
+        "completionTokens": "Completion Tokens",
+        "reasoningTokens": "Reasoning Tokens",
+        "totalRequests": "Total Requests",
+        "successRate": "Success Rate",
+        "avgLatency": "Avg Latency",
+        "upstreamNodes": "Upstream Nodes",
+        "upstreamReady": "{ready}/{total} Ready",
+        "activeKeys": "Active API Keys",
+        "tokenUsageTrend": "Token Consumption Trend",
+        "modelDistribution": "Model Distribution",
+        "quickIntegration": "Quick Integration",
+        "baseUrl": "Base URL",
+        "defaultApiKey": "Default API Key",
+        "copySnippet": "Copy Code",
+        "copied": "Copied!",
+        "recentRequests": "Recent Requests",
+        "viewAllLogs": "View All Logs",
+        "noRequestsYet": "No API requests yet. Start sending traffic to track token metrics.",
+        "snippetTabCurl": "cURL",
+        "snippetTabPython": "Python",
+        "snippetTabNode": "Node.js",
+        "refreshData": "Refresh Data",
+        "tokensPerSec": "Est. Speed",
+        "requestsInFlight": "In Flight"
+    },
+    "apiKeysManager": {
+        "title": "API Keys Management",
+        "desc": "Provision and manage API keys for your applications to connect through this Gateway",
+        "createKey": "Create API Key",
+        "generateRandomKey": "Generate Random Key",
+        "keyCount": "{count} configured API keys",
+        "defaultKeyNotice": "The first key in the list is used as the default in integration examples.",
+        "keyLabel": "Key Name / Label",
+        "keyPlaceholder": "Enter API key string (or click generate)",
+        "remarkLabel": "Remark",
+        "createdAt": "Created At",
+        "actions": "Actions",
+        "confirmDelete": "Are you sure you want to delete this API key?",
+        "integrationGuideTitle": "How to Use Your API Key",
+        "integrationGuideText": "Pass this key in the Authorization: Bearer <KEY> header when configuring Cursor, NextChat, Claude Code, Cline, or the OpenAI SDK."
     }
 }

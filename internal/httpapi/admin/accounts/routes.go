@@ -14,6 +14,7 @@ func RegisterRoutes(r chi.Router, h *Handler) {
 	r.Post("/accounts", h.addAccount)
 	r.Put("/accounts/{identifier}", h.updateAccount)
 	r.Delete("/accounts/{identifier}", h.deleteAccount)
+	r.Get("/accounts/gemini/quotas", h.getAllGeminiQuotas)
 	r.Get("/accounts/{identifier}/quota", h.getAccountQuota)
 	r.Put("/accounts/{identifier}/enabled", h.toggleAccountEnabled)
 	r.Post("/accounts/enabled/batch", h.batchToggleAccountEnabled)

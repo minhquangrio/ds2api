@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Gauge, RotateCw, AlertCircle, Sparkles, CheckCircle2, Clock, ShieldAlert } from 'lucide-react'
+import { X, Gauge, RotateCw, AlertCircle, Sparkles, CheckCircle2, Clock, ShieldAlert, Calendar } from 'lucide-react'
 import clsx from 'clsx'
 
 export default function GeminiQuotaModal({
@@ -9,14 +9,13 @@ export default function GeminiQuotaModal({
     t,
     onClose,
 }) {
-    if (!show || !account) return null
-
     const [loading, setLoading] = useState(true)
     const [refreshing, setRefreshing] = useState(false)
     const [error, setError] = useState(null)
     const [data, setData] = useState(null)
 
     const fetchQuota = async (forceRefresh = false) => {
+        if (!account) return
         if (forceRefresh) {
             setRefreshing(true)
         } else {
@@ -42,14 +41,33 @@ export default function GeminiQuotaModal({
     }
 
     useEffect(() => {
-        fetchQuota(false)
-    }, [account])
+        if (show && account) {
+            fetchQuota(false)
+        }
+    }, [show, account])
+
+    if (!show || !account) return null
 
     const formatResetTime = (isoString) => {
         if (!isoString) return ''
         try {
             const d = new Date(isoString)
             return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        } catch {
+            return ''
+        }
+    }
+
+    const formatResetDateTime = (isoString) => {
+        if (!isoString) return ''
+        try {
+            const d = new Date(isoString)
+            const now = new Date()
+            const isToday = d.toDateString() === now.toDateString()
+            const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            if (isToday) return timeStr
+            const dateStr = d.toLocaleDateString([], { day: '2-digit', month: '2-digit' })
+            return `${dateStr} ${timeStr}`
         } catch {
             return ''
         }
@@ -202,25 +220,29 @@ export default function GeminiQuotaModal({
                                     {metricWeekly && (
                                         <div className="p-3.5 rounded-xl border border-border bg-card/60 space-y-2">
                                             <div className="flex items-center justify-between text-xs">
-                                                <span className="font-medium text-muted-foreground">
+                                                <span className="font-medium text-muted-foreground flex items-center gap-1.5">
+                                                    <Calendar className="w-3.5 h-3.5 text-indigo-400" />
                                                     {t('accountManager.quota.weeklyTitle')}
                                                 </span>
                                                 {metricWeekly.reset_at && (
-                                                    <span className="text-[11px] text-muted-foreground">
-                                                        {formatResetTime(metricWeekly.reset_at)}
+                                                    <span className="text-[11px] text-muted-foreground font-mono">
+                                                        {formatResetDateTime(metricWeekly.reset_at)}
                                                     </span>
                                                 )}
                                             </div>
                                             <div className="text-sm font-bold text-foreground">
                                                 {metricWeekly.remaining_credits !== undefined ? (
                                                     t('accountManager.quota.creditsRemainingSimple', { remaining: metricWeekly.remaining_credits })
-                                                ) : '--'}
+                                                ) : t('accountManager.quota.noWeeklyLimit')}
                                             </div>
                                             <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
                                                 <div
-                                                    className="h-full bg-primary rounded-full transition-all duration-300"
+                                                    className="h-full bg-indigo-500 rounded-full transition-all duration-300"
                                                     style={{ width: `${Math.max(0, Math.min(100, 100 - (metricWeekly.usage_percentage ?? 0)))}%` }}
                                                 />
+                                            </div>
+                                            <div className="text-[10px] text-muted-foreground">
+                                                {t('accountManager.quota.usedPct', { pct: metricWeekly.usage_percentage ?? 0 })}
                                             </div>
                                         </div>
                                     )}

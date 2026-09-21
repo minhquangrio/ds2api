@@ -12,34 +12,34 @@
 
 :root {
   /* Deep slate canvas — softer than pure black, easier on the eyes */
-  --color-background: hsl(222 26% 9%);
-  --color-foreground: hsl(210 20% 96%);
+  --color-background: hsl(224 32% 7%);
+  --color-foreground: hsl(210 20% 98%);
 
   /* Elevated surfaces carry a subtle blue undertone */
-  --color-card: hsl(222 24% 12%);
-  --color-card-foreground: hsl(210 20% 96%);
-  --color-popover: hsl(222 24% 11%);
-  --color-popover-foreground: hsl(210 20% 96%);
+  --color-card: hsl(224 28% 11%);
+  --color-card-foreground: hsl(210 20% 98%);
+  --color-popover: hsl(224 28% 10%);
+  --color-popover-foreground: hsl(210 20% 98%);
 
-  /* Amber accent — professional, distinct, never garish */
-  --color-primary: hsl(45 93% 47%);
-  --color-primary-foreground: hsl(240 10% 3.9%);
+  /* Emerald AI Gateway accent — live, performant, distinct */
+  --color-primary: hsl(158 75% 44%);
+  --color-primary-foreground: hsl(210 20% 98%);
 
   /* Layered neutrals for depth without heaviness */
-  --color-secondary: hsl(222 18% 17%);
-  --color-secondary-foreground: hsl(210 20% 92%);
-  --color-muted: hsl(222 15% 20%);
-  --color-muted-foreground: hsl(217 12% 62%);
-  --color-accent: hsl(222 15% 20%);
-  --color-accent-foreground: hsl(210 20% 96%);
+  --color-secondary: hsl(224 20% 16%);
+  --color-secondary-foreground: hsl(210 20% 94%);
+  --color-muted: hsl(224 18% 17%);
+  --color-muted-foreground: hsl(218 14% 62%);
+  --color-accent: hsl(224 18% 18%);
+  --color-accent-foreground: hsl(210 20% 98%);
 
   --color-destructive: hsl(0 72% 58%);
   --color-destructive-foreground: hsl(0 0% 98%);
 
   /* Hairline borders with a cool tint */
-  --color-border: hsl(222 14% 22%);
-  --color-input: hsl(222 14% 22%);
-  --color-ring: hsl(45 93% 47%);
+  --color-border: hsl(224 16% 20%);
+  --color-input: hsl(224 16% 20%);
+  --color-ring: hsl(158 75% 44%);
 
   /* Semantic status tokens (shared across themes) */
   --color-success: hsl(160 84% 39%);
@@ -56,19 +56,19 @@
   --color-card-foreground: hsl(222 30% 13%);
   --color-popover: hsl(0 0% 100%);
   --color-popover-foreground: hsl(222 30% 13%);
-  --color-primary: hsl(45 93% 50%);
-  --color-primary-foreground: hsl(240 10% 3.9%);
+  --color-primary: hsl(158 75% 38%);
+  --color-primary-foreground: hsl(0 0% 100%);
   --color-secondary: hsl(213 22% 93%);
   --color-secondary-foreground: hsl(222 30% 18%);
   --color-muted: hsl(213 22% 93%);
   --color-muted-foreground: hsl(220 10% 42%);
-  --color-accent: hsl(45 50% 93%);
-  --color-accent-foreground: hsl(45 80% 22%);
+  --color-accent: hsl(158 50% 92%);
+  --color-accent-foreground: hsl(158 80% 18%);
   --color-destructive: hsl(0 68% 50%);
   --color-destructive-foreground: hsl(0 0% 100%);
   --color-border: hsl(216 18% 88%);
   --color-input: hsl(216 18% 88%);
-  --color-ring: hsl(45 93% 50%);
+  --color-ring: hsl(158 75% 38%);
 }
 
 /* ---------------------------------------------------------------- */
@@ -97,7 +97,7 @@ body {
 
 /* Refined selection */
 ::selection {
-  background: hsl(45 93% 47% / 0.28);
+  background: hsl(158 75% 44% / 0.28);
   color: inherit;
 }
 

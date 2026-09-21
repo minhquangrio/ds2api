@@ -10,6 +10,7 @@ import AddAccountModal from './AddAccountModal'
 import EditAccountModal from './EditAccountModal'
 import ElasticPoolModal from './ElasticPoolModal'
 import GeminiQuotaModal from './GeminiQuotaModal'
+import GeminiPoolQuotaCard from './GeminiPoolQuotaCard'
 
 export default function AccountManagerContainer({ config, onRefresh, onMessage, authFetch }) {
     const { t } = useI18n()
@@ -116,6 +117,13 @@ export default function AccountManagerContainer({ config, onRefresh, onMessage, 
 
             <QueueCards queueStatus={queueStatus} t={t} />
 
+            <GeminiPoolQuotaCard
+                accounts={accounts}
+                apiFetch={apiFetch}
+                t={t}
+                onViewQuota={(acc) => setQuotaAccount(acc)}
+            />
+
             <ApiKeysPanel
                 t={t}
                 config={config}
@@ -208,13 +216,15 @@ export default function AccountManagerContainer({ config, onRefresh, onMessage, 
                 onSave={saveElasticPool}
             />
 
-            <GeminiQuotaModal
-                show={Boolean(quotaAccount)}
-                account={quotaAccount}
-                apiFetch={apiFetch}
-                t={t}
-                onClose={() => setQuotaAccount(null)}
-            />
+            {Boolean(quotaAccount) && (
+                <GeminiQuotaModal
+                    show={Boolean(quotaAccount)}
+                    account={quotaAccount}
+                    apiFetch={apiFetch}
+                    t={t}
+                    onClose={() => setQuotaAccount(null)}
+                />
+            )}
         </div>
     )
 }

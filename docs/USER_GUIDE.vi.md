@@ -107,26 +107,45 @@ Mở trình duyệt và truy cập `http://localhost:5001/admin`.
 - Nhập **Khoá admin** (`DS2API_ADMIN_KEY` trong `config.json` hoặc biến môi trường).
 - Tích chọn "Ghi nhớ phiên này" để không cần đăng nhập lại lần sau.
 
-### 4.2 Chuyển đổi Ngôn ngữ sang Tiếng Việt
-- Ở góc trên bên phải thanh điều hướng, nhấp vào nút chuyển đổi ngôn ngữ (icon quả địa cầu `中` / `EN` / `VI`) cho đến khi hiển thị nhãn **VI · Tiếng Việt**.
+### 4.2 Chuyển đổi Ngôn ngữ & Giao diện (Theme)
+- Ở góc trên bên phải thanh điều hướng, nhấp vào icon quả địa cầu (`中` / `EN` / `VI`) để chọn **VI · Tiếng Việt**.
+- Nhấp icon Mặt trời/Mặt trăng để chuyển đổi giữa **Giao diện tối (Dark Mode)** và **Giao diện sáng (Light Mode)**.
 
-### 4.3 Quản lý Tài khoản DeepSeek
-- **Thêm tài khoản mới**: Nhấp nút **Thêm tài khoản**, nhập Email/SĐT, Mật khẩu, Tên gợi nhớ và Ghi chú.
-- **Làm mới Token**: Nhấp nút **Làm mới tất cả token** để kiểm tra trạng thái đăng nhập của toàn bộ tài khoản trong pool.
+### 4.3 Dashboard Tổng quan Token (Token Overview)
+- **Chỉ số lưu lượng Token**: Theo dõi tổng số token đã sử dụng, phân rã chi tiết giữa *Prompt Tokens* (đầu vào), *Completion Tokens* (đầu ra) và *Reasoning Tokens* (suy luận R1).
+- **Hiệu năng & Độ tin cậy**: Hiển thị tỷ lệ thành công của request (% 200 OK) và độ trễ phản hồi trung bình (`ms`).
+- **Biểu đồ tiêu thụ**: Biểu đồ trực quan hoá lưu lượng token theo thời gian thực.
+- **Tỷ lệ phân bổ Model**: Thống kê mức độ tiêu thụ của từng model (`deepseek-chat`, `deepseek-reasoner`, `gemini-2.5`, v.v.).
+- **Tích hợp nhanh (Quick Integration)**: Xem nhanh Base URL (`http://.../v1`), khoá API mặc định và sao chép mã mẫu gọi API (cURL, Python `OpenAI`, Node.js `OpenAI`).
+
+### 4.4 Quản lý Khoá API (API Keys Console)
+- Phân hệ độc lập quản lý toàn bộ khoá API cấp cho các ứng dụng client.
+- **Tạo khoá mới**: Tạo khoá thủ công hoặc nhấp **Tạo ngẫu nhiên** để sinh khoá an toàn có tiền tố `sk-ds2-...`.
+- **Ẩn/Hiện & Sao chép**: Nhấp icon con mắt để ẩn/hiện chuỗi khoá, nhấp icon Copy để sao chép vào bộ nhớ tạm.
+- **Chỉnh sửa & Xoá**: Đổi tên gợi nhớ, ghi chú và bật/tắt quyền Tool Calls cho từng key.
+
+### 4.5 Quản lý Cụm Tài khoản Upstream (DeepSeek & Gemini)
+- **Thêm tài khoản mới**: Nhấp nút **Thêm tài khoản**, nhập Email/SĐT, Mật khẩu hoặc Cookies/Token, Tên gợi nhớ và Ghi chú.
+- **Làm mới & Kiểm tra**: Nhấp nút **Kiểm tra tất cả** để kiểm tra trạng thái đăng nhập của toàn bộ tài khoản trong pool.
 - **Bật / Tắt tài khoản**: Bạn có thể bật/tắt thủ công từng tài khoản hoặc dùng nút hàng loạt để tạm ngưng tài khoản khi cần.
-- **Elastic Pool (Pool linh hoạt)**: Khi bật tính năng này, hệ thống sẽ tự động kích hoạt số lượng tài khoản chỉ định (ví dụ: 1-3 tài khoản) và tự động thay thế bằng tài khoản mới trong pool khi có tài khoản bị giới hạn hoặc lỗi.
+- **Elastic Pool (Pool linh hoạt)**: Khi bật tính năng này, hệ thống sẽ tự động kích hoạt số lượng tài khoản chỉ định và tự động thay thế bằng tài khoản mới trong pool khi có tài khoản bị giới hạn hoặc lỗi.
+- **Giám sát Hạn mức Gemini (Gemini Compute Quota Pool)**:
+  - Tự động phát hiện khi có tài khoản Gemini trong danh sách và hiển thị card quản trị hạn mức chuyên biệt.
+  - **Trường hợp 1 tài khoản**: Hiển thị hạn mức 5 giờ trượt (Compute Credits), tỷ lệ tiêu thụ %, hạn mức tuần, AI Credits và hạn mức của từng model cụ thể kèm thời gian tự động reset.
+  - **Trường hợp nhiều tài khoản (Pool)**: Tự động tổng hợp tổng năng lực tính toán toàn cụm (Total Available 5h Credits), số tài khoản Sẵn sàng (Ready) so với Tạm nghẽn (Throttled / 100%), và thời điểm hồi phục sớm nhất của node bị nghẽn (`Next Reset`).
+  - Hỗ trợ nút **Làm mới tất cả hạn mức** (đồng bộ song song có kiểm soát luồng) và nút xem chi tiết từng tài khoản.
 
-### 4.4 Quản lý Khoá API (API Keys)
-- Nhấp **Thêm khoá** để tạo khoá API mới cho các ứng dụng bên thứ ba.
-- Bạn có thể nhấp vào biểu tượng sao chép để lấy giá trị khoá, hoặc sửa Tên/Ghi chú của từng khoá.
-
-### 4.5 Quản lý Proxy IP
+### 4.6 Quản lý Proxy IP
 - Nếu các tài khoản DeepSeek của bạn cần chạy qua các địa chỉ IP đầu ra khác nhau để tránh bị trùng IP, bạn có thể thêm các nút **HTTP**, **HTTPS**, **SOCKS5** hoặc **SOCKS5H** trong tab **Proxy IP**.
-- Nhấp **Kiểm tra proxy** để đo độ trễ kết nối từ máy chủ tới nghẽn đầu ra DeepSeek.
+- Nhấp **Kiểm tra proxy** để đo độ trễ kết nối từ máy chủ tới máy chủ DeepSeek.
 
-### 4.6 Trình Kiểm Tra API (API Test)
-- Cung cấp giao diện nhắn tin thử nghiệm trực tiếp ngay trong WebUI.
-- Hỗ trợ chọn mô hình (`deepseek-v4-flash`, `deepseek-v4-pro`, `deepseek-v4-vision`, v.v.), bật/tắt chế độ Streaming, và chọn tài khoản chỉ định hoặc xoay vòng ngẫu nhiên.
+### 4.7 Nhật ký & Chi tiết Token (Logs & Token Ledger)
+- Xem chi tiết từng lượt gọi API qua Gateway kèm mã trạng thái HTTP, thời gian xử lý (`elapsed_ms`), model gọi và số lượng prompt/completion tokens chính xác.
+- Nhấp vào từng dòng để xem payload hội thoại và phản hồi hoàn chỉnh.
+
+### 4.8 Trình Kiểm Tra API (API Test)
+- Cung cấp giao diện playground nhắn tin thử nghiệm trực tiếp ngay trong WebUI.
+- Hỗ trợ chọn mô hình, bật/tắt chế độ Streaming, và chọn tài khoản chỉ định hoặc xoay vòng ngẫu nhiên.
 
 ---
 
