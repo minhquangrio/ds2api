@@ -76,6 +76,8 @@
     },
     "actions": {
         "cancel": "Hủy",
+        "close": "Đóng",
+        "failed": "Thất bại",
         "add": "Thêm",
         "delete": "Xóa",
         "copy": "Sao chép",

@@ -76,6 +76,8 @@
     },
     "actions": {
         "cancel": "Cancel",
+        "close": "Close",
+        "failed": "Failed",
         "add": "Add",
         "delete": "Delete",
         "copy": "Copy",
