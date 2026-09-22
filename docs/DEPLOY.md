@@ -226,7 +226,6 @@ healthcheck:
 | `LOG_LEVEL` | `INFO` | 可选，日志级别。 |
 | `DS2API_CONFIG_JSON` | 原始 JSON 或 Base64 JSON | 可选，用于用环境变量初始化配置。 |
 | `DS2API_ENV_WRITEBACK` | `1` | 可选；当设置了 `DS2API_CONFIG_JSON` 且希望首次启动后写入 `/data/config.json` 时再启用。 |
-| `DS2API_GEMINI_COOKIE_REFRESH_INTERVAL` | `600` | 可选；Gemini Web Cookie 后台定时刷新间隔（秒，默认 600，最小 60）。 |
 
 7. 暴露 HTTP 端口 `5001`，健康检查路径可填 `/healthz`。
 8. 部署完成后访问 `/admin`，用 `DS2API_ADMIN_KEY` 登录，然后在管理台导入或编辑配置。首次空卷可以没有 `/data/config.json`，服务会先启动，第一次保存时自动创建该文件。

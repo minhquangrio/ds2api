@@ -11,7 +11,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"ds2api/internal/config"
-	"ds2api/internal/geminiweb"
 )
 
 func (h *Handler) listAccounts(w http.ResponseWriter, r *http.Request) {
@@ -150,16 +149,6 @@ func (h *Handler) updateAccount(w http.ResponseWriter, r *http.Request) {
 	cookies, cookiesOK := fieldStringOptional(req, "cookies")
 	proxyID, proxyIDOK := fieldStringOptional(req, "proxy_id")
 
-	var oldAcc config.Account
-	var foundOld bool
-	for _, a := range h.Store.Snapshot().Accounts {
-		if accountMatchesIdentifier(a, identifier) {
-			oldAcc = a
-			foundOld = true
-			break
-		}
-	}
-
 	err := h.Store.Update(func(c *config.Config) error {
 		for i, acc := range c.Accounts {
 			if !accountMatchesIdentifier(acc, identifier) {
@@ -192,27 +181,6 @@ func (h *Handler) updateAccount(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"detail": err.Error()})
 		return
 	}
-	if poolTypeOK {
-		h.Pool.Reset()
-	}
-	if foundOld && oldAcc.IsGemini() {
-		var newAcc config.Account
-		for _, a := range h.Store.Snapshot().Accounts {
-			if accountMatchesIdentifier(a, identifier) {
-				newAcc = a
-				break
-			}
-		}
-		proxyChanged := proxyIDOK && proxyID != oldAcc.ProxyID
-		cookiesChanged := cookiesOK && cookies != oldAcc.Cookies
-		idChanged := oldAcc.Identifier() != newAcc.Identifier()
-		if proxyChanged || cookiesChanged || idChanged {
-			geminiweb.DefaultRuntime().RemoveClient(oldAcc.Identifier())
-			if idChanged && newAcc.Identifier() != "" {
-				geminiweb.DefaultRuntime().RemoveClient(newAcc.Identifier())
-			}
-		}
-	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "total_accounts": len(h.Store.Snapshot().Accounts)})
 }
 
@@ -221,17 +189,6 @@ func (h *Handler) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	if decoded, err := url.PathUnescape(identifier); err == nil {
 		identifier = decoded
 	}
-
-	var canonicalID string
-	var isGemini bool
-	for _, a := range h.Store.Snapshot().Accounts {
-		if accountMatchesIdentifier(a, identifier) {
-			canonicalID = a.Identifier()
-			isGemini = a.IsGemini()
-			break
-		}
-	}
-
 	err := h.Store.Update(func(c *config.Config) error {
 		idx := -1
 		for i, a := range c.Accounts {
@@ -251,9 +208,6 @@ func (h *Handler) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.Pool.Reset()
-	if isGemini && canonicalID != "" {
-		geminiweb.DefaultRuntime().RemoveClient(canonicalID)
-	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "total_accounts": len(h.Store.Snapshot().Accounts)})
 }
 

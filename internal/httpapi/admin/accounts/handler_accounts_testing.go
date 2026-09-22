@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -126,26 +125,14 @@ func (h *Handler) testAccount(ctx context.Context, acc config.Account, model, me
 			return result
 		}
 		if strings.TrimSpace(message) == "" {
-			if rotErr := client.RotateAndInitSession(ctx, geminiweb.RotateSessionOptions{Force: true, SkipDiscovery: false}); rotErr != nil {
-				if errors.Is(rotErr, geminiweb.ErrRotationThrottled) {
-					result["message"] = "Cookie 刚刚已刷新，请至少间隔 10 秒后再试"
-				} else {
-					result["message"] = "Gemini Cookie 刷新/验证失败: " + rotErr.Error()
-					return result
-				}
-			}
 			sess := client.Session()
 			if sess.AccessToken == "" {
 				result["message"] = "Gemini 会话初始化失败 (无 AccessToken)"
 				return result
 			}
 			result["success"] = true
-			result["message"] = "Gemini 会话及 Cookie 刷新成功"
+			result["message"] = "Gemini 会话初始化成功"
 			result["response_time"] = int(time.Since(start).Milliseconds())
-			if h.Store != nil && h.Store.IsEnvBacked() {
-				result["config_writable"] = false
-				result["config_warning"] = "Cookie 已在内存中刷新成功，但当前运行于只读环境（Vercel/Env-backed），新 Cookie 不会自动持久化到文件；请在 Vercel Sync 同步配置。"
-			}
 			return result
 		}
 		res, err := client.Generate(ctx, message, geminiweb.GenerateOptions{
@@ -158,10 +145,6 @@ func (h *Handler) testAccount(ctx context.Context, acc config.Account, model, me
 		result["success"] = true
 		result["message"] = res.Text
 		result["response_time"] = int(time.Since(start).Milliseconds())
-		if h.Store != nil && h.Store.IsEnvBacked() {
-			result["config_writable"] = false
-			result["config_warning"] = "Cookie 已在内存中刷新成功，但当前运行于只读环境（Vercel/Env-backed），新 Cookie 不会自动持久化到文件；请在 Vercel Sync 同步配置。"
-		}
 		return result
 	}
 

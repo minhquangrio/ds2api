@@ -20,27 +20,14 @@ type SessionParams struct {
 	PushID      string // qKIAYe
 }
 
-// defaultStreamTimeout caps a single StreamGenerate call end to end. Gemini Web
-// answers legitimately run for minutes (long thinking, tool calls), so it is far
-// larger than the 60s client-wide timeout that the short RPC calls rely on.
-const defaultStreamTimeout = 5 * time.Minute
-
 type Client struct {
 	mu             sync.RWMutex
-	rotateMu       sync.Mutex
-	lastRotated    time.Time
 	cookieHeader   string
 	cookiesMap     map[string]string
-	proxyID        string
 	proxy          string
-	rotateURL      string
-	appURL         string
-	streamGenURL   string
-	batchExecURL   string
 	session        SessionParams
 	modelSpecs     map[string]ModelSpec // alias -> spec, filled by DiscoverModels
 	cloakClient    *httpcloak.Client
-	streamTimeout  time.Duration
 	onCookieUpdate func(newCookies string)
 	quotaCache     *GeminiAccountQuotaSummary
 	quotaCached    time.Time
@@ -48,17 +35,8 @@ type Client struct {
 }
 
 type ClientOptions struct {
-	ProxyID            string
-	Proxy              string
-	Timeout            time.Duration
-	InsecureSkipVerify bool
-	ForceHTTP1         bool
-	RotateURL          string
-	AppURL             string
-	StreamGenerateURL  string
-	BatchExecuteURL    string
-	// StreamTimeout overrides defaultStreamTimeout for StreamGenerate only.
-	StreamTimeout time.Duration
+	Proxy   string
+	Timeout time.Duration
 }
 
 func NewClient(rawCookies string, opts ...ClientOptions) (*Client, error) {
@@ -74,17 +52,8 @@ func NewClient(rawCookies string, opts ...ClientOptions) (*Client, error) {
 
 	cloakOpts := []httpcloak.Option{
 		httpcloak.WithTimeout(60 * time.Second),
-	}
-	if opt.ForceHTTP1 {
-		cloakOpts = append(cloakOpts, httpcloak.WithForceHTTP1())
-	} else {
-		cloakOpts = append(cloakOpts, httpcloak.WithForceHTTP2())
-	}
-	if opt.InsecureSkipVerify {
-		cloakOpts = append(cloakOpts, httpcloak.WithInsecureSkipVerify())
-	}
-	if opt.RotateURL == "" && opt.AppURL == "" && opt.StreamGenerateURL == "" {
-		cloakOpts = append(cloakOpts, httpcloak.WithTLSOnly())
+		httpcloak.WithForceHTTP2(),
+		httpcloak.WithTLSOnly(),
 	}
 	if opt.Timeout > 0 {
 		cloakOpts = append(cloakOpts, httpcloak.WithTimeout(opt.Timeout))
@@ -95,23 +64,12 @@ func NewClient(rawCookies string, opts ...ClientOptions) (*Client, error) {
 
 	client := httpcloak.NewClient("chrome-150-windows", cloakOpts...)
 
-	streamTimeout := opt.StreamTimeout
-	if streamTimeout <= 0 {
-		streamTimeout = defaultStreamTimeout
-	}
-
 	c := &Client{
-		cookieHeader:  cookieHeader,
-		cookiesMap:    cookieMap,
-		proxyID:       opt.ProxyID,
-		proxy:         opt.Proxy,
-		rotateURL:     opt.RotateURL,
-		appURL:        opt.AppURL,
-		streamGenURL:  opt.StreamGenerateURL,
-		batchExecURL:  opt.BatchExecuteURL,
-		cloakClient:   client,
-		streamTimeout: streamTimeout,
-		modelSpecs:    make(map[string]ModelSpec),
+		cookieHeader: cookieHeader,
+		cookiesMap:   cookieMap,
+		proxy:        opt.Proxy,
+		cloakClient:  client,
+		modelSpecs:   make(map[string]ModelSpec),
 	}
 
 	return c, nil

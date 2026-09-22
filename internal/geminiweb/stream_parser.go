@@ -21,22 +21,17 @@ type ParsedChunk struct {
 }
 
 type StreamParser struct {
-	buffer          string
-	prefixDone      bool
-	lastText        string
-	lastThought     string
-	CID             string
-	RID             string
-	RCID            string
-	lastBlockReason string
+	buffer      string
+	prefixDone  bool
+	lastText    string
+	lastThought string
+	CID         string
+	RID         string
+	RCID        string
 }
 
 func NewStreamParser() *StreamParser {
 	return &StreamParser{}
-}
-
-func (p *StreamParser) BlockReason() string {
-	return p.lastBlockReason
 }
 
 // Feed receives raw bytes from the HTTP stream and returns completed chunks.
@@ -130,15 +125,6 @@ func (p *StreamParser) parseFrame(payload string) (*ParsedChunk, error) {
 
 		candidate, ok := nestedValue(inner, 4, 0).([]any)
 		if !ok {
-			if len(env) > 3 {
-				metaBytes, _ := json.Marshal(env[3:])
-				s := strings.ReplaceAll(string(metaBytes), "\n", " ")
-				s = strings.TrimSpace(s)
-				if len([]rune(s)) > 150 {
-					s = string([]rune(s)[:150]) + "..."
-				}
-				p.lastBlockReason = s
-			}
 			continue
 		}
 		if rcid, ok := nestedValue(candidate, 0).(string); ok && rcid != "" {

@@ -9,7 +9,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"ds2api/internal/config"
-	"ds2api/internal/geminiweb"
 	"ds2api/internal/util"
 )
 
@@ -74,7 +73,6 @@ func (h *Handler) updateConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.Pool.Reset()
-	geminiweb.DefaultRuntime().ResetClients()
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "message": "配置已更新"})
 }
 
@@ -231,6 +229,5 @@ func (h *Handler) batchImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.Pool.Reset()
-	geminiweb.DefaultRuntime().ResetClients()
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "imported_keys": importedKeys, "imported_accounts": importedAccounts})
 }

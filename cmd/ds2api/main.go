@@ -7,14 +7,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	"ds2api/internal/auth"
 	"ds2api/internal/config"
-	"ds2api/internal/geminiweb"
 	"ds2api/internal/server"
 	"ds2api/internal/webui"
 )
@@ -30,15 +28,6 @@ func main() {
 	if err != nil {
 		config.Logger.Error("server initialization failed", "error", err)
 		os.Exit(1)
-	}
-	if !config.IsVercel() {
-		intervalSec := 600
-		if raw := strings.TrimSpace(os.Getenv("DS2API_GEMINI_COOKIE_REFRESH_INTERVAL")); raw != "" {
-			if v, err := strconv.Atoi(raw); err == nil && v >= 60 {
-				intervalSec = v
-			}
-		}
-		geminiweb.DefaultRuntime().StartBackgroundRefresher(context.Background(), app.Store, time.Duration(intervalSec)*time.Second)
 	}
 	port := strings.TrimSpace(os.Getenv("PORT"))
 	if port == "" {
@@ -84,7 +73,6 @@ func main() {
 	shutdownErr := srv.Shutdown(ctx)
 	// Release pooled upstream/proxy connections after the HTTP server stops
 	// accepting work, so graceful shutdown does not leak transport resources.
-	_ = geminiweb.DefaultRuntime().Close()
 	app.DS.Close()
 	if err := shutdownErr; err != nil {
 		config.Logger.Error("graceful shutdown failed, forcing exit", "error", err)

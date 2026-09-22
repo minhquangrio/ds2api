@@ -74,13 +74,6 @@ func (r *StreamReader) ReadChunk() (*ParsedChunk, error) {
 	}
 }
 
-func (r *StreamReader) BlockReason() string {
-	if r == nil || r.parser == nil {
-		return ""
-	}
-	return r.parser.BlockReason()
-}
-
 func (r *StreamReader) Close() error {
 	if r.closed {
 		return nil
@@ -169,7 +162,7 @@ func (c *Client) StreamGenerate(ctx context.Context, prompt string, opts Generat
 		params.Set("f.sid", session.SessionID)
 	}
 
-	genURL := c.getStreamGenerateURL() + "?" + params.Encode()
+	genURL := StreamGenerateURL + "?" + params.Encode()
 
 	modelHeader := BuildModelHeader(spec, opts.Thinking, clientSessionID)
 
@@ -190,33 +183,24 @@ func (c *Client) StreamGenerate(ctx context.Context, prompt string, opts Generat
 		URL:     genURL,
 		Headers: headers,
 		Body:    strings.NewReader(postForm.Encode()),
-		// StreamGenerate is the one long-lived call in this package: the 60s
-		// client-wide budget would cut off legitimate multi-minute answers.
-		Timeout: c.streamTimeout,
 	}
 
-	resp, err := c.DoStream(ctx, req)
+	resp, err := c.Do(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("gemini stream generate request failed: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		buf := make([]byte, 1024)
-		n, _ := resp.Read(buf)
-		_ = resp.Close()
-		errMsg := fmt.Sprintf("gemini stream generate status %d %s: %s", resp.StatusCode, http.StatusText(resp.StatusCode), string(buf[:n]))
-		if resp.StatusCode == http.StatusUnauthorized {
-			return nil, fmt.Errorf("%w: %s", ErrUnauthenticated, errMsg)
-		}
-		return nil, errors.New(errMsg)
+		n, _ := resp.Body.Read(buf)
+		_ = resp.Body.Close()
+		return nil, fmt.Errorf("gemini stream generate status %d %s: %s", resp.StatusCode, http.StatusText(resp.StatusCode), string(buf[:n]))
 	}
 
 	c.checkSetCookies(resp.Headers)
 
-	// DoStream hands back the live body, so the caller sees each chunk as Gemini
-	// emits it instead of after the whole answer has been buffered.
 	return &StreamReader{
-		body:   resp,
+		body:   resp.Body,
 		parser: NewStreamParser(),
 	}, nil
 }

@@ -76,8 +76,6 @@
     },
     "actions": {
         "cancel": "取消",
-        "close": "关闭",
-        "failed": "失败",
         "add": "添加",
         "delete": "删除",
         "copy": "复制",
