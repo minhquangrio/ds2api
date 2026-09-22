@@ -17,10 +17,14 @@ import (
 // It returns the accumulated thinking and text so the caller can record history
 // after the stream has actually finished; writing the turn beforehand would log
 // a successful reply even when the upstream stream failed mid-way.
-func StreamOpenAIChat(ctx context.Context, accountID string, client *Client, stdReq promptcompat.StandardRequest, w http.ResponseWriter) (string, string, error) {
+//
+// started reports whether any SSE byte reached the client. Once it is true the
+// status line is committed, so a failure can only be logged; while it is false
+// the caller can still report the failure as an HTTP error response.
+func StreamOpenAIChat(ctx context.Context, accountID string, client *Client, stdReq promptcompat.StandardRequest, w http.ResponseWriter) (thinking, text string, started bool, err error) {
 	reader, err := prepareStream(ctx, client, stdReq)
 	if err != nil {
-		return "", "", err
+		return "", "", false, err
 	}
 	defer func() { _ = reader.Close() }()
 
@@ -30,6 +34,7 @@ func StreamOpenAIChat(ctx context.Context, accountID string, client *Client, std
 	created := time.Now().Unix()
 
 	emitChunk := func(delta map[string]any, finish any) {
+		started = true
 		emitSSEJSON(w, map[string]any{
 			"id": id, "object": "chat.completion.chunk", "created": created, "model": stdReq.ResponseModel,
 			"choices": []any{map[string]any{"index": 0, "delta": delta, "finish_reason": finish}},
@@ -45,7 +50,7 @@ func StreamOpenAIChat(ctx context.Context, accountID string, client *Client, std
 		chunk, readErr := reader.ReadChunk()
 		if readErr != nil {
 			if errors.Is(readErr, context.Canceled) || errors.Is(readErr, context.DeadlineExceeded) {
-				return thinkBuf.String(), textBuf.String(), readErr
+				return thinkBuf.String(), textBuf.String(), started, readErr
 			}
 			break
 		}
@@ -66,7 +71,7 @@ func StreamOpenAIChat(ctx context.Context, accountID string, client *Client, std
 	}
 
 	if thinkBuf.Len() == 0 && textBuf.Len() == 0 {
-		return "", "", upstreamEmptyError(accountID, reader)
+		return "", "", started, upstreamEmptyError(accountID, reader)
 	}
 
 	emitChunk(map[string]any{}, "stop")
@@ -74,15 +79,16 @@ func StreamOpenAIChat(ctx context.Context, accountID string, client *Client, std
 	if canFlush {
 		flusher.Flush()
 	}
-	return thinkBuf.String(), textBuf.String(), nil
+	return thinkBuf.String(), textBuf.String(), started, nil
 }
 
 // StreamGeminiContent relays a streamed Gemini turn as Gemini content chunks,
-// returning the accumulated thinking and text for the caller to record.
-func StreamGeminiContent(ctx context.Context, accountID string, client *Client, stdReq promptcompat.StandardRequest, w http.ResponseWriter) (string, string, error) {
+// returning the accumulated thinking and text for the caller to record. started
+// reports whether any SSE byte reached the client, as in StreamOpenAIChat.
+func StreamGeminiContent(ctx context.Context, accountID string, client *Client, stdReq promptcompat.StandardRequest, w http.ResponseWriter) (thinking, text string, started bool, err error) {
 	reader, err := prepareStream(ctx, client, stdReq)
 	if err != nil {
-		return "", "", err
+		return "", "", false, err
 	}
 	defer func() { _ = reader.Close() }()
 
@@ -90,6 +96,7 @@ func StreamGeminiContent(ctx context.Context, accountID string, client *Client, 
 	flusher, canFlush := w.(http.Flusher)
 
 	emitGemini := func(parts []any, finish string) {
+		started = true
 		candidate := map[string]any{
 			"content": map[string]any{"role": "model", "parts": parts},
 			"index":   0,
@@ -108,7 +115,7 @@ func StreamGeminiContent(ctx context.Context, accountID string, client *Client, 
 		chunk, readErr := reader.ReadChunk()
 		if readErr != nil {
 			if errors.Is(readErr, context.Canceled) || errors.Is(readErr, context.DeadlineExceeded) {
-				return thinkBuf.String(), textBuf.String(), readErr
+				return thinkBuf.String(), textBuf.String(), started, readErr
 			}
 			break
 		}
@@ -129,19 +136,20 @@ func StreamGeminiContent(ctx context.Context, accountID string, client *Client, 
 	}
 
 	if thinkBuf.Len() == 0 && textBuf.Len() == 0 {
-		return "", "", upstreamEmptyError(accountID, reader)
+		return "", "", started, upstreamEmptyError(accountID, reader)
 	}
 
 	emitGemini([]any{map[string]any{"text": ""}}, "STOP")
-	return thinkBuf.String(), textBuf.String(), nil
+	return thinkBuf.String(), textBuf.String(), started, nil
 }
 
 // StreamClaudeMessages relays a streamed Gemini turn as Claude message events,
-// returning the accumulated thinking and text for the caller to record.
-func StreamClaudeMessages(ctx context.Context, accountID string, client *Client, stdReq promptcompat.StandardRequest, w http.ResponseWriter) (string, string, error) {
+// returning the accumulated thinking and text for the caller to record. started
+// reports whether any SSE byte reached the client, as in StreamOpenAIChat.
+func StreamClaudeMessages(ctx context.Context, accountID string, client *Client, stdReq promptcompat.StandardRequest, w http.ResponseWriter) (thinking, text string, started bool, err error) {
 	reader, err := prepareStream(ctx, client, stdReq)
 	if err != nil {
-		return "", "", err
+		return "", "", false, err
 	}
 	defer func() { _ = reader.Close() }()
 
@@ -149,6 +157,7 @@ func StreamClaudeMessages(ctx context.Context, accountID string, client *Client,
 	flusher, canFlush := w.(http.Flusher)
 	msgID := fmt.Sprintf("msg_%d", time.Now().UnixNano())
 
+	started = true
 	sendClaudeEvent(w, flusher, canFlush, "message_start", map[string]any{
 		"type": "message_start",
 		"message": map[string]any{
@@ -167,7 +176,7 @@ func StreamClaudeMessages(ctx context.Context, accountID string, client *Client,
 		chunk, readErr := reader.ReadChunk()
 		if readErr != nil {
 			if errors.Is(readErr, context.Canceled) || errors.Is(readErr, context.DeadlineExceeded) {
-				return thinkBuf.String(), textBuf.String(), readErr
+				return thinkBuf.String(), textBuf.String(), started, readErr
 			}
 			break
 		}
@@ -247,13 +256,13 @@ func StreamClaudeMessages(ctx context.Context, accountID string, client *Client,
 	})
 
 	if thinkBuf.Len() == 0 && textBuf.Len() == 0 {
-		return "", "", upstreamEmptyError(accountID, reader)
+		return "", "", started, upstreamEmptyError(accountID, reader)
 	}
 
 	sendClaudeEvent(w, flusher, canFlush, "message_stop", map[string]any{
 		"type": "message_stop",
 	})
-	return thinkBuf.String(), textBuf.String(), nil
+	return thinkBuf.String(), textBuf.String(), started, nil
 }
 
 func prepareStream(ctx context.Context, client *Client, stdReq promptcompat.StandardRequest) (*StreamReader, error) {

@@ -117,13 +117,18 @@ func (h *Handler) handleClaudeDirect(w http.ResponseWriter, r *http.Request) boo
 			return true
 		}
 		if stdReq.Stream {
-			// Recorded after the stream finishes: SSE bytes are already sent, so a
-			// mid-stream failure is logged to history rather than written to the body.
-			thinking, text, streamErr := geminiweb.StreamClaudeMessages(r.Context(), a.AccountID, client, stdReq, w)
+			// Recorded after the stream finishes: once the first SSE byte is out the
+			// status line is committed, so a mid-stream failure is logged to history
+			// rather than written to the body. Before that first byte the client can
+			// still be told what went wrong.
+			thinking, text, started, streamErr := geminiweb.StreamClaudeMessages(r.Context(), a.AccountID, client, stdReq, w)
 			if streamErr != nil {
 				config.Logger.Warn("[gemini] stream error", "error", streamErr)
 				if historySession != nil {
 					historySession.Error(http.StatusBadGateway, streamErr.Error(), "upstream_error", thinking, text)
+				}
+				if !started {
+					writeClaudeError(w, http.StatusBadGateway, streamErr.Error())
 				}
 				return true
 			}
