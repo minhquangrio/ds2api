@@ -26,6 +26,7 @@ type Client struct {
 	lastRotated    time.Time
 	cookieHeader   string
 	cookiesMap     map[string]string
+	proxyID        string
 	proxy          string
 	rotateURL      string
 	appURL         string
@@ -41,6 +42,7 @@ type Client struct {
 }
 
 type ClientOptions struct {
+	ProxyID            string
 	Proxy              string
 	Timeout            time.Duration
 	InsecureSkipVerify bool
@@ -88,6 +90,7 @@ func NewClient(rawCookies string, opts ...ClientOptions) (*Client, error) {
 	c := &Client{
 		cookieHeader: cookieHeader,
 		cookiesMap:   cookieMap,
+		proxyID:      opt.ProxyID,
 		proxy:        opt.Proxy,
 		rotateURL:    opt.RotateURL,
 		appURL:       opt.AppURL,

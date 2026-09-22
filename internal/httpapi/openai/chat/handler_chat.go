@@ -130,7 +130,7 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 		// History is recorded only after the stream finishes, so a failed or
 		// truncated stream is not logged as a successful reply. SSE bytes are
 		// already on the wire by then, so the error is recorded, not written.
-		thinking, text, streamErr := geminiweb.StreamOpenAIChat(r.Context(), client, stdReq, w)
+		thinking, text, streamErr := geminiweb.StreamOpenAIChat(r.Context(), a.AccountID, client, stdReq, w)
 		if streamErr != nil {
 			config.Logger.Warn("[gemini] stream error", "error", streamErr)
 			if historySession != nil {

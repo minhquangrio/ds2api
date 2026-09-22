@@ -74,6 +74,13 @@ func (r *StreamReader) ReadChunk() (*ParsedChunk, error) {
 	}
 }
 
+func (r *StreamReader) BlockReason() string {
+	if r == nil || r.parser == nil {
+		return ""
+	}
+	return r.parser.BlockReason()
+}
+
 func (r *StreamReader) Close() error {
 	if r.closed {
 		return nil

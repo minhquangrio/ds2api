@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"ds2api/internal/config"
+	"ds2api/internal/geminiweb"
 )
 
 func (h *Handler) configImport(w http.ResponseWriter, r *http.Request) {
@@ -139,6 +140,7 @@ func (h *Handler) configImport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.Pool.Reset()
+	geminiweb.DefaultRuntime().ResetClients()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success":           true,
 		"mode":              mode,

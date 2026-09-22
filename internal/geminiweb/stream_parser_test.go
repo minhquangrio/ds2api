@@ -141,3 +141,23 @@ func TestCleanGeminiText(t *testing.T) {
 		t.Errorf("plain text must survive cleaning")
 	}
 }
+
+func TestStreamParserNoCandidateBlockReason(t *testing.T) {
+	parser := NewStreamParser()
+
+	payload := `[["wrb.fr",null,"[null,[\"cid_123\",\"rid_456\"],null,null,null]",null,null,null,"BLOCKED_SAFETY"]]`
+	chunks, err := parser.Feed([]byte(buildFrame(payload, true)))
+	if err != nil {
+		t.Fatalf("Feed failed: %v", err)
+	}
+	if len(chunks) != 0 {
+		t.Errorf("expected 0 chunks from no-candidate frame, got %d", len(chunks))
+	}
+	reason := parser.BlockReason()
+	if reason == "" {
+		t.Errorf("expected non-empty BlockReason for no-candidate frame")
+	}
+	if !strings.Contains(reason, "BLOCKED_SAFETY") {
+		t.Errorf("expected BlockReason to contain metadata 'BLOCKED_SAFETY', got %q", reason)
+	}
+}

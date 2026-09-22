@@ -17,7 +17,7 @@ import (
 // It returns the accumulated thinking and text so the caller can record history
 // after the stream has actually finished; writing the turn beforehand would log
 // a successful reply even when the upstream stream failed mid-way.
-func StreamOpenAIChat(ctx context.Context, client *Client, stdReq promptcompat.StandardRequest, w http.ResponseWriter) (string, string, error) {
+func StreamOpenAIChat(ctx context.Context, accountID string, client *Client, stdReq promptcompat.StandardRequest, w http.ResponseWriter) (string, string, error) {
 	reader, err := prepareStream(ctx, client, stdReq)
 	if err != nil {
 		return "", "", err
@@ -66,7 +66,7 @@ func StreamOpenAIChat(ctx context.Context, client *Client, stdReq promptcompat.S
 	}
 
 	if thinkBuf.Len() == 0 && textBuf.Len() == 0 {
-		return "", "", errors.New("gemini upstream returned empty output (check proxy/cookies)")
+		return "", "", upstreamEmptyError(accountID, reader)
 	}
 
 	emitChunk(map[string]any{}, "stop")
@@ -79,7 +79,7 @@ func StreamOpenAIChat(ctx context.Context, client *Client, stdReq promptcompat.S
 
 // StreamGeminiContent relays a streamed Gemini turn as Gemini content chunks,
 // returning the accumulated thinking and text for the caller to record.
-func StreamGeminiContent(ctx context.Context, client *Client, stdReq promptcompat.StandardRequest, w http.ResponseWriter) (string, string, error) {
+func StreamGeminiContent(ctx context.Context, accountID string, client *Client, stdReq promptcompat.StandardRequest, w http.ResponseWriter) (string, string, error) {
 	reader, err := prepareStream(ctx, client, stdReq)
 	if err != nil {
 		return "", "", err
@@ -129,7 +129,7 @@ func StreamGeminiContent(ctx context.Context, client *Client, stdReq promptcompa
 	}
 
 	if thinkBuf.Len() == 0 && textBuf.Len() == 0 {
-		return "", "", errors.New("gemini upstream returned empty output (check proxy/cookies)")
+		return "", "", upstreamEmptyError(accountID, reader)
 	}
 
 	emitGemini([]any{map[string]any{"text": ""}}, "STOP")
@@ -138,7 +138,7 @@ func StreamGeminiContent(ctx context.Context, client *Client, stdReq promptcompa
 
 // StreamClaudeMessages relays a streamed Gemini turn as Claude message events,
 // returning the accumulated thinking and text for the caller to record.
-func StreamClaudeMessages(ctx context.Context, client *Client, stdReq promptcompat.StandardRequest, w http.ResponseWriter) (string, string, error) {
+func StreamClaudeMessages(ctx context.Context, accountID string, client *Client, stdReq promptcompat.StandardRequest, w http.ResponseWriter) (string, string, error) {
 	reader, err := prepareStream(ctx, client, stdReq)
 	if err != nil {
 		return "", "", err
@@ -247,7 +247,7 @@ func StreamClaudeMessages(ctx context.Context, client *Client, stdReq promptcomp
 	})
 
 	if thinkBuf.Len() == 0 && textBuf.Len() == 0 {
-		return "", "", errors.New("gemini upstream returned empty output (check proxy/cookies)")
+		return "", "", upstreamEmptyError(accountID, reader)
 	}
 
 	sendClaudeEvent(w, flusher, canFlush, "message_stop", map[string]any{

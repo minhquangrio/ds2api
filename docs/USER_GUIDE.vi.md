@@ -137,8 +137,9 @@ Mở trình duyệt và truy cập `http://localhost:5001/admin`.
   - Hỗ trợ nút **Làm mới tất cả hạn mức** (đồng bộ song song có kiểm soát luồng) và nút xem chi tiết từng tài khoản.
 
 ### 4.6 Quản lý Proxy IP
-- Nếu các tài khoản DeepSeek của bạn cần chạy qua các địa chỉ IP đầu ra khác nhau để tránh bị trùng IP, bạn có thể thêm các nút **HTTP**, **HTTPS**, **SOCKS5** hoặc **SOCKS5H** trong tab **Proxy IP**.
+- Nếu các tài khoản DeepSeek hoặc Google Gemini của bạn cần chạy qua các địa chỉ IP đầu ra khác nhau để tránh bị trùng IP hoặc vượt qua giới hạn địa lý, bạn có thể thêm các nút **HTTP**, **HTTPS**, **SOCKS5** hoặc **SOCKS5H** trong tab **Proxy IP**.
 - Nhấp **Kiểm tra proxy** để đo độ trễ kết nối từ máy chủ tới máy chủ DeepSeek.
+- **Tự động đồng bộ tức thì trong RAM (Hot-Reload)**: Hệ thống tích hợp cơ chế Generation Counter tự động giải phóng kết nối cũ trong bộ nhớ RAM khi bạn sửa, gỡ bỏ hoặc gán lại Proxy cho bất kỳ tài khoản nào trên WebUI. Yêu cầu kế tiếp sẽ lập tức đi qua cấu hình proxy mới mà không cần phải khởi động lại máy chủ.
 
 ### 4.7 Nhật ký & Chi tiết Token (Logs & Token Ledger)
 - Xem chi tiết từng lượt gọi API qua Gateway kèm mã trạng thái HTTP, thời gian xử lý (`elapsed_ms`), model gọi và số lượng prompt/completion tokens chính xác.

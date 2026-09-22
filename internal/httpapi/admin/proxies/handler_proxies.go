@@ -11,6 +11,7 @@ import (
 
 	"ds2api/internal/config"
 	dsclient "ds2api/internal/deepseek/client"
+	"ds2api/internal/geminiweb"
 )
 
 var proxyConnectivityTester = func(ctx context.Context, proxy config.Proxy) map[string]any {
@@ -105,6 +106,8 @@ func (h *Handler) updateProxy(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"detail": err.Error()})
 		return
 	}
+	h.Pool.Reset()
+	geminiweb.DefaultRuntime().ResetClients()
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "proxy": proxyResponse(proxy)})
 }
 
@@ -141,6 +144,8 @@ func (h *Handler) deleteProxy(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"detail": err.Error()})
 		return
 	}
+	h.Pool.Reset()
+	geminiweb.DefaultRuntime().ResetClients()
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})
 }
 
@@ -174,6 +179,16 @@ func (h *Handler) updateAccountProxy(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewDecoder(r.Body).Decode(&req)
 	proxyID := fieldString(req, "proxy_id")
 
+	var canonicalID string
+	var isGemini bool
+	for _, a := range h.Store.Snapshot().Accounts {
+		if accountMatchesIdentifier(a, identifier) {
+			canonicalID = a.Identifier()
+			isGemini = a.IsGemini()
+			break
+		}
+	}
+
 	err := h.Store.Update(func(c *config.Config) error {
 		if proxyID != "" {
 			if _, ok := findProxyByID(*c, proxyID); !ok {
@@ -198,5 +213,8 @@ func (h *Handler) updateAccountProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.Pool.Reset()
+	if isGemini && canonicalID != "" {
+		geminiweb.DefaultRuntime().RemoveClient(canonicalID)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "proxy_id": proxyID})
 }

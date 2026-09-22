@@ -70,9 +70,9 @@ func (r *Runtime) runWorker(ctx context.Context, store StoreAccountLookup, inter
 func (r *Runtime) tickRotate(ctx context.Context, store StoreAccountLookup, failures map[string]int) {
 	r.mu.RLock()
 	active := make(map[string]*Client, len(r.clients))
-	for id, c := range r.clients {
-		if !c.closed {
-			active[id] = c
+	for id, client := range r.clients {
+		if client != nil && !client.IsClosed() {
+			active[id] = client
 		}
 	}
 	r.mu.RUnlock()
