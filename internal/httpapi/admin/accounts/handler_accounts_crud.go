@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"ds2api/internal/config"
+	"ds2api/internal/geminiweb"
 )
 
 func (h *Handler) listAccounts(w http.ResponseWriter, r *http.Request) {
@@ -149,11 +150,13 @@ func (h *Handler) updateAccount(w http.ResponseWriter, r *http.Request) {
 	cookies, cookiesOK := fieldStringOptional(req, "cookies")
 	proxyID, proxyIDOK := fieldStringOptional(req, "proxy_id")
 
+	var canonicalID string
 	err := h.Store.Update(func(c *config.Config) error {
 		for i, acc := range c.Accounts {
 			if !accountMatchesIdentifier(acc, identifier) {
 				continue
 			}
+			canonicalID = acc.Identifier()
 			if nameOK {
 				c.Accounts[i].Name = name
 			}
@@ -163,8 +166,8 @@ func (h *Handler) updateAccount(w http.ResponseWriter, r *http.Request) {
 			if poolTypeOK {
 				c.Accounts[i].PoolType = config.NormalizePoolType(poolType)
 			}
-			if cookiesOK {
-				c.Accounts[i].Cookies = cookies
+			if cookiesOK && strings.TrimSpace(cookies) != "" {
+				c.Accounts[i].Cookies = strings.TrimSpace(cookies)
 			}
 			if proxyIDOK {
 				c.Accounts[i].ProxyID = proxyID
@@ -181,6 +184,11 @@ func (h *Handler) updateAccount(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"detail": err.Error()})
 		return
 	}
+	h.Pool.Reset()
+	geminiweb.DefaultRuntime().InvalidateClient(identifier)
+	if canonicalID != "" && canonicalID != identifier {
+		geminiweb.DefaultRuntime().InvalidateClient(canonicalID)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "total_accounts": len(h.Store.Snapshot().Accounts)})
 }
 
@@ -189,11 +197,13 @@ func (h *Handler) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	if decoded, err := url.PathUnescape(identifier); err == nil {
 		identifier = decoded
 	}
+	var canonicalID string
 	err := h.Store.Update(func(c *config.Config) error {
 		idx := -1
 		for i, a := range c.Accounts {
 			if accountMatchesIdentifier(a, identifier) {
 				idx = i
+				canonicalID = a.Identifier()
 				break
 			}
 		}
@@ -208,6 +218,10 @@ func (h *Handler) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.Pool.Reset()
+	geminiweb.DefaultRuntime().InvalidateClient(identifier)
+	if canonicalID != "" && canonicalID != identifier {
+		geminiweb.DefaultRuntime().InvalidateClient(canonicalID)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "total_accounts": len(h.Store.Snapshot().Accounts)})
 }
 

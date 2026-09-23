@@ -264,6 +264,7 @@
         "namePlaceholder": "e.g. Primary Account A",
         "remarkOptional": "Remark (optional)",
         "remarkPlaceholder": "e.g. Team shared / test only",
+        "cookiesEditPlaceholder": "Leave blank to keep current Cookies, or paste new Cookies (__Secure-1PSID=...)...",
         "toolsEnabledLabel": "Enable tool calls",
         "toolsEnabledHint": "Whether to inject tool instructions.",
         "toolsEnabledOn": "Tool calls: enabled",

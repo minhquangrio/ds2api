@@ -157,6 +157,31 @@ func (c *Client) UpdateCookie(name, value string) {
 	}
 }
 
+// Matches checks whether the client's cached cookies and proxy match the given config.
+func (c *Client) Matches(rawCookies string, proxy string) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.closed {
+		return false
+	}
+	if strings.TrimSpace(c.proxy) != strings.TrimSpace(proxy) {
+		return false
+	}
+	targetMap, _, err := ParseCookies(rawCookies)
+	if err != nil || len(targetMap) == 0 {
+		return false
+	}
+	if len(targetMap) != len(c.cookiesMap) {
+		return false
+	}
+	for k, v := range targetMap {
+		if c.cookiesMap[k] != v {
+			return false
+		}
+	}
+	return true
+}
+
 // ParseCookies supports:
 // 1. Raw header: "__Secure-1PSID=...; __Secure-1PSIDTS=..."
 // 2. JSON object: {"__Secure-1PSID": "..."} or {"cookies": {...}}

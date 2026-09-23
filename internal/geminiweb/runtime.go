@@ -34,6 +34,34 @@ func DefaultRuntime() *Runtime {
 	return defaultRuntime
 }
 
+// InvalidateClient closes and evicts the cached client for the given account identifier.
+func (r *Runtime) InvalidateClient(id string) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		id = "default"
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if existing, found := r.clients[id]; found {
+		if err := existing.Close(); err != nil {
+			config.Logger.Warn("[geminiweb] failed to close invalidated client", "id", id, "error", err)
+		}
+		delete(r.clients, id)
+	}
+}
+
+// InvalidateAll closes and evicts all cached clients.
+func (r *Runtime) InvalidateAll() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for id, existing := range r.clients {
+		if err := existing.Close(); err != nil {
+			config.Logger.Warn("[geminiweb] failed to close client during invalidate all", "id", id, "error", err)
+		}
+		delete(r.clients, id)
+	}
+}
+
 func (r *Runtime) GetClient(ctx context.Context, acc config.Account, store any) (*Client, error) {
 	if strings.TrimSpace(acc.Cookies) == "" {
 		return nil, errors.New("gemini account has no cookies configured")
@@ -42,13 +70,6 @@ func (r *Runtime) GetClient(ctx context.Context, acc config.Account, store any) 
 	id := acc.Identifier()
 	if id == "" {
 		id = "default"
-	}
-
-	r.mu.RLock()
-	existing, found := r.clients[id]
-	r.mu.RUnlock()
-	if found && !existing.closed {
-		return existing, nil
 	}
 
 	proxyURL := ""
@@ -62,6 +83,23 @@ func (r *Runtime) GetClient(ctx context.Context, acc config.Account, store any) 
 				}
 			}
 		}
+	}
+
+	r.mu.RLock()
+	existing, found := r.clients[id]
+	r.mu.RUnlock()
+	if found {
+		if !existing.closed && existing.Matches(acc.Cookies, proxyURL) {
+			return existing, nil
+		}
+		if err := existing.Close(); err != nil {
+			config.Logger.Warn("[geminiweb] failed to close stale client", "id", id, "error", err)
+		}
+		r.mu.Lock()
+		if cur, ok := r.clients[id]; ok && cur == existing {
+			delete(r.clients, id)
+		}
+		r.mu.Unlock()
 	}
 
 	client, err := NewClient(acc.Cookies, ClientOptions{
@@ -79,15 +117,24 @@ func (r *Runtime) GetClient(ctx context.Context, acc config.Account, store any) 
 	}
 
 	if _, err := client.InitSession(ctx); err != nil {
-		_ = client.Close()
+		if closeErr := client.Close(); closeErr != nil {
+			config.Logger.Warn("[geminiweb] failed to close client on init failure", "id", id, "error", closeErr)
+		}
 		return nil, fmt.Errorf("failed to initialize gemini session: %w", err)
 	}
 
 	r.mu.Lock()
-	if existing, found := r.clients[id]; found && !existing.closed {
+	if existing, found := r.clients[id]; found && !existing.closed && existing.Matches(acc.Cookies, proxyURL) {
 		r.mu.Unlock()
-		_ = client.Close()
+		if closeErr := client.Close(); closeErr != nil {
+			config.Logger.Warn("[geminiweb] failed to close duplicate client", "id", id, "error", closeErr)
+		}
 		return existing, nil
+	}
+	if old, found := r.clients[id]; found && old != nil && old != client {
+		if closeErr := old.Close(); closeErr != nil {
+			config.Logger.Warn("[geminiweb] failed to close replaced client", "id", id, "error", closeErr)
+		}
 	}
 	r.clients[id] = client
 	r.mu.Unlock()

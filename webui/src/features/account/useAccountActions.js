@@ -185,10 +185,14 @@ export function useAccountActions({ apiFetch, t, onMessage, onRefresh, config, f
         }
         setLoading(true)
         try {
+            const payload = { ...editAccount }
+            if (!payload.cookies?.trim()) {
+                delete payload.cookies
+            }
             const res = await apiFetch(`/admin/accounts/${encodeURIComponent(identifier)}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(editAccount),
+                body: JSON.stringify(payload),
             })
             if (res.ok) {
                 onMessage('success', t('accountManager.updateAccountSuccess'))

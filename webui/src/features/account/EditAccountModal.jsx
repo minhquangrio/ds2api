@@ -57,7 +57,7 @@ export default function EditAccountModal({
                             <label className="block text-sm font-medium mb-1.5">Gemini Cookies</label>
                             <textarea
                                 className="input-field bg-background font-mono text-xs h-24"
-                                placeholder="__Secure-1PSID=...; __Secure-1PSIDTS=... hoặc JSON"
+                                placeholder={t('accountManager.cookiesEditPlaceholder')}
                                 value={editAccount.cookies || ''}
                                 onChange={e => setEditAccount({ ...editAccount, cookies: e.target.value })}
                             />

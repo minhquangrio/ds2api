@@ -264,6 +264,7 @@
         "namePlaceholder": "例如：主账号 A",
         "remarkOptional": "备注（可选）",
         "remarkPlaceholder": "例如：团队共享 / 仅测试用",
+        "cookiesEditPlaceholder": "留空表示保持当前 Cookies 不变，或粘贴新 Cookies (__Secure-1PSID=...)...",
         "toolsEnabledLabel": "启用工具调用",
         "toolsEnabledHint": "是否注入工具说明",
         "toolsEnabledOn": "工具调用：已启用",

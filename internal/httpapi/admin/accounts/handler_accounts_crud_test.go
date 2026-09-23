@@ -164,3 +164,61 @@ func TestBatchToggleAccountEnabledRejectsMissingField(t *testing.T) {
 		t.Fatalf("expected 400 for missing enabled, got %d body=%s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestUpdateAccountEmptyCookiesPreservesExistingCookies(t *testing.T) {
+	h := newAdminTestHandler(t, `{
+		"accounts":[{"name":"gemini-1","provider":"gemini","cookies":"__Secure-1PSID=orig_sid","remark":"old"}]
+	}`)
+
+	r := chi.NewRouter()
+	r.Put("/admin/accounts/{identifier}", h.updateAccount)
+
+	// Send empty cookies in body (e.g. from WebUI edit modal where cookies field is blank)
+	body := []byte(`{"name":"gemini-1","cookies":"","remark":"new remark"}`)
+	req := httptest.NewRequest(http.MethodPut, "/admin/accounts/gemini-1", strings.NewReader(string(body)))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	snap := h.Store.Snapshot()
+	if len(snap.Accounts) != 1 {
+		t.Fatalf("expected 1 account, got %d", len(snap.Accounts))
+	}
+	acc := snap.Accounts[0]
+	if acc.Cookies != "__Secure-1PSID=orig_sid" {
+		t.Fatalf("expected cookies to be preserved, got %q", acc.Cookies)
+	}
+	if acc.Remark != "new remark" {
+		t.Fatalf("expected remark to be updated, got %q", acc.Remark)
+	}
+}
+
+func TestUpdateAccountNewCookiesUpdatesSuccessfully(t *testing.T) {
+	h := newAdminTestHandler(t, `{
+		"accounts":[{"name":"gemini-1","provider":"gemini","cookies":"__Secure-1PSID=orig_sid"}]
+	}`)
+
+	r := chi.NewRouter()
+	r.Put("/admin/accounts/{identifier}", h.updateAccount)
+
+	body := []byte(`{"cookies":"__Secure-1PSID=new_sid"}`)
+	req := httptest.NewRequest(http.MethodPut, "/admin/accounts/gemini-1", strings.NewReader(string(body)))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	snap := h.Store.Snapshot()
+	if len(snap.Accounts) != 1 {
+		t.Fatalf("expected 1 account, got %d", len(snap.Accounts))
+	}
+	acc := snap.Accounts[0]
+	if acc.Cookies != "__Secure-1PSID=new_sid" {
+		t.Fatalf("expected cookies to be updated to new_sid, got %q", acc.Cookies)
+	}
+}

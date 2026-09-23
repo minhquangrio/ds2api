@@ -264,6 +264,7 @@
         "namePlaceholder": "Ví dụ: Tài khoản chính A",
         "remarkOptional": "Ghi chú (tùy chọn)",
         "remarkPlaceholder": "Ví dụ: Dùng chung nhóm / chỉ thử nghiệm",
+        "cookiesEditPlaceholder": "Để trống nếu giữ nguyên Cookies hiện tại, hoặc dán Cookies mới (__Secure-1PSID=...)...",
         "toolsEnabledLabel": "Bật gọi công cụ (Tool Calls)",
         "toolsEnabledHint": "Có chèn hướng dẫn gọi công cụ hay không.",
         "toolsEnabledOn": "Gọi công cụ: Bật",
