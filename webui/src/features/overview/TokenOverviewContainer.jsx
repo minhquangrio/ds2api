@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
     Activity,
     Zap,
@@ -17,14 +17,52 @@ import {
     Server,
     Gauge,
     Calendar,
+    Radio,
+    BarChart3,
+    SlidersHorizontal,
+    Timer,
+    Play,
+    Pause,
+    RotateCcw,
 } from 'lucide-react'
 import clsx from 'clsx'
 
 import { useI18n } from '../../i18n'
 import { estimateItemTokens } from '../chatHistory/ChatHistoryContainer'
 
+export function parseItemTimestamp(ts) {
+    if (!ts) return null
+    const num = Number(ts)
+    if (!Number.isFinite(num) || num <= 0) return null
+    return num > 1e11 ? num : num * 1000
+}
+
+function formatTokenCount(num) {
+    if (!num || num <= 0) return '0'
+    if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`
+    if (num >= 10_000) return `${Math.round(num / 1_000)}k`
+    if (num >= 1_000) return `${(num / 1_000).toFixed(1)}k`
+    return String(num)
+}
+
+const TIME_RANGE_OPTIONS = [
+    { key: 'all', labelKey: 'overview.rangeAll' },
+    { key: '15m', labelKey: 'overview.range15m', durationMs: 15 * 60 * 1000 },
+    { key: '1h', labelKey: 'overview.range1h', durationMs: 60 * 60 * 1000 },
+    { key: '24h', labelKey: 'overview.range24h', durationMs: 24 * 60 * 60 * 1000 },
+    { key: '7d', labelKey: 'overview.range7d', durationMs: 7 * 24 * 60 * 60 * 1000 },
+    { key: '30d', labelKey: 'overview.range30d', durationMs: 30 * 24 * 60 * 60 * 1000 },
+    { key: 'custom', labelKey: 'overview.rangeCustom' },
+]
+
+const CADENCE_OPTIONS = [
+    { ms: 3000, labelKey: 'overview.cadence3s', short: '3s' },
+    { ms: 5000, labelKey: 'overview.cadence5s', short: '5s' },
+    { ms: 10000, labelKey: 'overview.cadence10s', short: '10s' },
+]
+
 export default function TokenOverviewContainer({ config, authFetch, onNavigate, onMessage }) {
-    const { t } = useI18n()
+    const { t, lang } = useI18n()
     const apiFetch = authFetch || fetch
 
     const [historyItems, setHistoryItems] = useState([])
@@ -37,6 +75,49 @@ export default function TokenOverviewContainer({ config, authFetch, onNavigate, 
     const [copiedTarget, setCopiedTarget] = useState(null)
     const [hoveredBucket, setHoveredBucket] = useState(null)
 
+    // Time filter states
+    const [timeRange, setTimeRange] = useState(() => {
+        if (typeof localStorage === 'undefined') return 'all'
+        const stored = localStorage.getItem('ds2api_overview_timerange')
+        return stored || 'all'
+    })
+    const [customStart, setCustomStart] = useState('')
+    const [customEnd, setCustomEnd] = useState('')
+    const [customAppliedStart, setCustomAppliedStart] = useState('')
+    const [customAppliedEnd, setCustomAppliedEnd] = useState('')
+    const [chartViewMode, setChartViewMode] = useState('buckets') // 'buckets' | 'requests'
+
+    // Real-time live monitoring states
+    const [realtimeEnabled, setRealtimeEnabled] = useState(() => {
+        if (typeof localStorage === 'undefined') return false
+        return localStorage.getItem('ds2api_overview_realtime') === 'true'
+    })
+    const [refreshCadence, setRefreshCadence] = useState(() => {
+        if (typeof localStorage === 'undefined') return 5000
+        const stored = Number(localStorage.getItem('ds2api_overview_cadence'))
+        return [3000, 5000, 10000].includes(stored) ? stored : 5000
+    })
+    const [lastUpdatedTime, setLastUpdatedTime] = useState(null)
+    const [dataPulse, setDataPulse] = useState(false)
+
+    const historyETagRef = useRef('')
+    const inFlightRef = useRef(false)
+
+    useEffect(() => {
+        if (typeof localStorage === 'undefined') return
+        localStorage.setItem('ds2api_overview_timerange', timeRange)
+    }, [timeRange])
+
+    useEffect(() => {
+        if (typeof localStorage === 'undefined') return
+        localStorage.setItem('ds2api_overview_realtime', String(realtimeEnabled))
+    }, [realtimeEnabled])
+
+    useEffect(() => {
+        if (typeof localStorage === 'undefined') return
+        localStorage.setItem('ds2api_overview_cadence', String(refreshCadence))
+    }, [refreshCadence])
+
     const copyToClipboard = useCallback((text, targetId) => {
         navigator.clipboard.writeText(text).then(() => {
             setCopiedTarget(targetId)
@@ -45,21 +126,38 @@ export default function TokenOverviewContainer({ config, authFetch, onNavigate, 
     }, [])
 
     const loadData = useCallback(async (isSilent = false) => {
+        if (inFlightRef.current) return
+        inFlightRef.current = true
+
         if (!isSilent) setLoading(true)
         else setRefreshing(true)
 
         try {
+            const historyHeaders = {}
+            if (isSilent && historyETagRef.current) {
+                historyHeaders['If-None-Match'] = historyETagRef.current
+            }
+
             const [historyRes, accountsRes, queueRes, geminiQuotasRes] = await Promise.allSettled([
-                apiFetch('/admin/chat-history?limit=100'),
+                apiFetch('/admin/chat-history?limit=100', { headers: historyHeaders }),
                 apiFetch('/admin/accounts'),
                 apiFetch('/admin/queue/status'),
                 apiFetch('/admin/accounts/gemini/quotas')
             ])
 
-            if (historyRes.status === 'fulfilled' && historyRes.value.ok) {
-                const data = await historyRes.value.json()
-                const items = Array.isArray(data) ? data : (data.items || [])
-                setHistoryItems(items)
+            let hasNewHistory = false
+            if (historyRes.status === 'fulfilled') {
+                const res = historyRes.value
+                if (res.ok) {
+                    const etag = res.headers?.get('ETag') || ''
+                    if (etag) historyETagRef.current = etag
+                    const data = await res.json()
+                    const items = Array.isArray(data) ? data : (data.items || [])
+                    setHistoryItems(items)
+                    hasNewHistory = true
+                } else if (res.status === 304) {
+                    // Cache fresh, no change needed
+                }
             }
 
             if (accountsRes.status === 'fulfilled' && accountsRes.value.ok) {
@@ -78,19 +176,67 @@ export default function TokenOverviewContainer({ config, authFetch, onNavigate, 
                 const gData = await geminiQuotasRes.value.json()
                 setGeminiQuotas(Array.isArray(gData.accounts) ? gData.accounts : [])
             }
+
+            setLastUpdatedTime(new Date())
+            if (hasNewHistory && isSilent) {
+                setDataPulse(true)
+                setTimeout(() => setDataPulse(false), 800)
+            }
         } catch (_err) {
             // Best effort load
         } finally {
+            inFlightRef.current = false
             setLoading(false)
             setRefreshing(false)
         }
     }, [apiFetch, config?.accounts])
 
+    // Initial load
     useEffect(() => {
         loadData()
     }, [loadData])
 
-    // Compute token analytics
+    // Real-time live polling interval
+    useEffect(() => {
+        if (!realtimeEnabled) return undefined
+        const timer = window.setInterval(() => {
+            loadData(true)
+        }, refreshCadence)
+        return () => window.clearInterval(timer)
+    }, [realtimeEnabled, refreshCadence, loadData])
+
+    // Filter items based on selected timeRange
+    const filteredHistoryItems = useMemo(() => {
+        if (!historyItems.length) return []
+        if (timeRange === 'all') return historyItems
+
+        const now = Date.now()
+        if (timeRange === 'custom') {
+            const startMs = customAppliedStart ? new Date(customAppliedStart).getTime() : 0
+            const endMs = customAppliedEnd ? new Date(customAppliedEnd).getTime() : Infinity
+            return historyItems.filter((item) => {
+                const ts = parseItemTimestamp(item.created_at)
+                if (!ts) return false
+                return ts >= startMs && ts <= endMs
+            })
+        }
+
+        const opt = TIME_RANGE_OPTIONS.find((o) => o.key === timeRange)
+        if (!opt || !opt.durationMs) return historyItems
+
+        const cutoff = now - opt.durationMs
+        return historyItems.filter((item) => {
+            const ts = parseItemTimestamp(item.created_at)
+            return ts && ts >= cutoff
+        })
+    }, [historyItems, timeRange, customAppliedStart, customAppliedEnd])
+
+    // Streaming requests count
+    const streamingCount = useMemo(() => {
+        return historyItems.filter((item) => item.status === 'streaming').length
+    }, [historyItems])
+
+    // Compute token analytics based on FILTERED history items
     const telemetry = useMemo(() => {
         let totalPrompt = 0
         let totalCompletion = 0
@@ -99,10 +245,12 @@ export default function TokenOverviewContainer({ config, authFetch, onNavigate, 
         let successRequests = 0
         let totalElapsedMs = 0
         let measuredElapsedCount = 0
+        let minTs = Infinity
+        let maxTs = 0
 
         const modelStats = {}
 
-        historyItems.forEach((item) => {
+        filteredHistoryItems.forEach((item) => {
             const { prompt, completion, total } = estimateItemTokens(item)
             const reasoning = Number(item.reasoning_tokens) || 0
 
@@ -110,6 +258,12 @@ export default function TokenOverviewContainer({ config, authFetch, onNavigate, 
             totalCompletion += completion
             totalReasoning += reasoning
             totalTokens += total
+
+            const ts = parseItemTimestamp(item.created_at)
+            if (ts) {
+                if (ts < minTs) minTs = ts
+                if (ts > maxTs) maxTs = ts
+            }
 
             const isSuccess = item.status === 'ok' || (item.status_code && item.status_code >= 200 && item.status_code < 400)
             if (isSuccess) successRequests += 1
@@ -127,9 +281,18 @@ export default function TokenOverviewContainer({ config, authFetch, onNavigate, 
             modelStats[modelName].tokens += total
         })
 
-        const totalReqs = historyItems.length
+        const totalReqs = filteredHistoryItems.length
         const successRate = totalReqs > 0 ? Math.round((successRequests / totalReqs) * 100) : 100
         const avgLatencyMs = measuredElapsedCount > 0 ? Math.round(totalElapsedMs / measuredElapsedCount) : 0
+
+        // Calculate rate (tokens/s and tokens/min)
+        let tokensPerSec = 0
+        let tokensPerMin = 0
+        if (totalReqs > 0 && maxTs > minTs) {
+            const spanSec = Math.max(1, Math.round((maxTs - minTs) / 1000))
+            tokensPerSec = Number((totalTokens / spanSec).toFixed(1))
+            tokensPerMin = Math.round(tokensPerSec * 60)
+        }
 
         // Sorted models
         const sortedModels = Object.entries(modelStats)
@@ -149,9 +312,11 @@ export default function TokenOverviewContainer({ config, authFetch, onNavigate, 
             totalReqs,
             successRate,
             avgLatencyMs,
+            tokensPerSec,
+            tokensPerMin,
             models: sortedModels,
         }
-    }, [historyItems])
+    }, [filteredHistoryItems])
 
     // Upstream nodes health
     const upstreamHealth = useMemo(() => {
@@ -184,7 +349,7 @@ export default function TokenOverviewContainer({ config, authFetch, onNavigate, 
         }
     }, [accounts, config?.accounts])
 
-    // Gemini Pool Quota calculation (Both 5h and Weekly totals)
+    // Gemini Pool Quota calculation
     const geminiPoolStats = useMemo(() => {
         let total5hCredits = 0
         let totalWeeklyCredits = 0
@@ -243,53 +408,174 @@ export default function TokenOverviewContainer({ config, authFetch, onNavigate, 
         }
     }, [geminiQuotas])
 
-    // Token Usage Timeline (16 buckets)
+    // Token Usage Timeline Bars: Adaptive Buckets or Per-Request Flow
     const timelineBars = useMemo(() => {
-        const bucketCount = 16
-        if (!historyItems.length) {
-            return Array.from({ length: bucketCount }, (_, i) => ({
-                id: i,
+        if (!filteredHistoryItems.length) return []
+
+        if (chartViewMode === 'requests') {
+            // Per-request view: take up to 20 latest requests, ordered chronologically
+            const recent = filteredHistoryItems.slice(0, 20).reverse()
+            return recent.map((item, idx) => {
+                const est = estimateItemTokens(item)
+                const ts = parseItemTimestamp(item.created_at)
+                const date = ts ? new Date(ts) : null
+                const label = date
+                    ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                    : `#${idx + 1}`
+                const fullTime = date
+                    ? `${date.toLocaleDateString([], { month: '2-digit', day: '2-digit' })} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
+                    : label
+
+                return {
+                    id: item.id || `req-${idx}`,
+                    prompt: est.prompt,
+                    completion: est.completion,
+                    total: est.total,
+                    model: item.model || '',
+                    status: item.status || (item.status_code ? String(item.status_code) : ''),
+                    elapsedMs: item.elapsed_ms || null,
+                    count: 1,
+                    label,
+                    fullTime,
+                }
+            })
+        }
+
+        // Time Buckets View: Aggregate requests into time intervals
+        const now = Date.now()
+        let numBuckets = 16
+        let bucketDurationMs = 60 * 1000 // default 1 min
+        let windowStart = now - (numBuckets * bucketDurationMs)
+        let isDateScale = false
+
+        if (timeRange === '15m') {
+            numBuckets = 15
+            bucketDurationMs = 60 * 1000 // 1 min
+            windowStart = now - (15 * 60 * 1000)
+        } else if (timeRange === '1h') {
+            numBuckets = 12
+            bucketDurationMs = 5 * 60 * 1000 // 5 mins
+            windowStart = now - (60 * 60 * 1000)
+        } else if (timeRange === '24h') {
+            numBuckets = 24
+            bucketDurationMs = 60 * 60 * 1000 // 1 hour
+            windowStart = now - (24 * 60 * 60 * 1000)
+        } else if (timeRange === '7d') {
+            numBuckets = 7
+            bucketDurationMs = 24 * 60 * 60 * 1000 // 1 day
+            windowStart = now - (7 * 24 * 60 * 60 * 1000)
+            isDateScale = true
+        } else if (timeRange === '30d') {
+            numBuckets = 15
+            bucketDurationMs = 2 * 24 * 60 * 60 * 1000 // 2 days
+            windowStart = now - (30 * 24 * 60 * 60 * 1000)
+            isDateScale = true
+        } else {
+            // 'all' or 'custom': compute dynamically from items
+            let minTs = Infinity
+            let maxTs = now
+            filteredHistoryItems.forEach((item) => {
+                const ts = parseItemTimestamp(item.created_at)
+                if (ts && ts < minTs) minTs = ts
+                if (ts && ts > maxTs) maxTs = ts
+            })
+            if (minTs === Infinity) minTs = now - 3600 * 1000
+            const span = Math.max(60 * 1000, maxTs - minTs)
+            numBuckets = Math.min(20, Math.max(8, Math.round(span / (60 * 1000))))
+            bucketDurationMs = Math.ceil(span / numBuckets)
+            windowStart = minTs
+            if (span > 2 * 24 * 60 * 60 * 1000) isDateScale = true
+        }
+
+        // Initialize empty buckets
+        const buckets = []
+        for (let i = 0; i < numBuckets; i++) {
+            const bStart = windowStart + (i * bucketDurationMs)
+            const bEnd = bStart + bucketDurationMs
+            const date = new Date(bStart)
+            const endDate = new Date(bEnd)
+
+            let label = ''
+            if (isDateScale) {
+                label = `${date.getDate()}/${date.getMonth() + 1}`
+            } else if (bucketDurationMs >= 3600 * 1000) {
+                label = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            } else {
+                label = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            }
+
+            const fullTime = `${date.toLocaleDateString([], { month: '2-digit', day: '2-digit' })} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+
+            buckets.push({
+                id: `bucket-${i}`,
+                bStart,
+                bEnd,
                 prompt: 0,
                 completion: 0,
                 total: 0,
                 count: 0,
-                label: `Step ${i + 1}`,
-            }))
-        }
-
-        const reversed = [...historyItems].reverse()
-        const chunkSize = Math.max(1, Math.ceil(reversed.length / bucketCount))
-        const buckets = []
-
-        for (let i = 0; i < bucketCount; i++) {
-            const slice = reversed.slice(i * chunkSize, (i + 1) * chunkSize)
-            let p = 0
-            let c = 0
-            let tot = 0
-            slice.forEach((item) => {
-                const est = estimateItemTokens(item)
-                p += est.prompt
-                c += est.completion
-                tot += est.total
-            })
-            buckets.push({
-                id: i,
-                prompt: p,
-                completion: c,
-                total: tot,
-                count: slice.length,
-                label: slice.length > 0 && slice[0].created_at
-                    ? new Date(slice[0].created_at * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                    : `${i + 1}`,
+                elapsedSum: 0,
+                models: new Set(),
+                label,
+                fullTime,
             })
         }
-        return buckets
-    }, [historyItems])
+
+        // Fill buckets with filtered items
+        filteredHistoryItems.forEach((item) => {
+            const ts = parseItemTimestamp(item.created_at)
+            if (!ts) return
+            const est = estimateItemTokens(item)
+
+            // Find matching bucket
+            const bucket = buckets.find((b) => ts >= b.bStart && ts < b.bEnd)
+            if (bucket) {
+                bucket.prompt += est.prompt
+                bucket.completion += est.completion
+                bucket.total += est.total
+                bucket.count += 1
+                if (item.elapsed_ms) bucket.elapsedSum += item.elapsed_ms
+                if (item.model) bucket.models.add(item.model)
+            } else if (ts >= buckets[buckets.length - 1].bEnd) {
+                // Attach to last bucket if slightly ahead
+                const last = buckets[buckets.length - 1]
+                last.prompt += est.prompt
+                last.completion += est.completion
+                last.total += est.total
+                last.count += 1
+                if (item.elapsed_ms) last.elapsedSum += item.elapsed_ms
+                if (item.model) last.models.add(item.model)
+            }
+        })
+
+        return buckets.map((b) => ({
+            ...b,
+            model: Array.from(b.models).slice(0, 2).join(', ') + (b.models.size > 2 ? '...' : ''),
+            elapsedMs: b.count > 0 ? Math.round(b.elapsedSum / b.count) : null,
+        }))
+    }, [filteredHistoryItems, chartViewMode, timeRange])
 
     const maxBucketTotal = useMemo(() => {
-        const max = Math.max(...timelineBars.map((b) => b.total), 1000)
-        return max
+        if (!timelineBars.length) return 1000
+        const max = Math.max(...timelineBars.map((b) => b.total), 0)
+        return max > 0 ? max : 1000
     }, [timelineBars])
+
+    // Apply custom range
+    const handleApplyCustomRange = () => {
+        if (!customStart && !customEnd) return
+        setCustomAppliedStart(customStart)
+        setCustomAppliedEnd(customEnd)
+    }
+
+    // Reset filter
+    const handleResetFilter = () => {
+        setTimeRange('all')
+        setCustomStart('')
+        setCustomEnd('')
+        setCustomAppliedStart('')
+        setCustomAppliedEnd('')
+    }
 
     // Gateway base URL and keys
     const baseUrl = typeof window !== 'undefined'
@@ -343,34 +629,91 @@ for await (const chunk of stream) {
 }`
     }
 
-    const recentStream = historyItems.slice(0, 6)
+    const recentStream = filteredHistoryItems.slice(0, 6)
 
     return (
         <div className="space-y-6 pb-12">
             {/* Header Telemetry Row */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-3">
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-3 flex-wrap">
                         {t('overview.title')}
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
                             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                             {t('overview.liveGateway')}
                         </span>
+                        {streamingCount > 0 && (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/20 animate-pulse">
+                                <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                                {streamingCount} {t('overview.streamingInFlight')}
+                            </span>
+                        )}
                     </h1>
                     <p className="text-sm text-muted-foreground mt-1">
                         {t('overview.desc')}
                     </p>
                 </div>
-                <div className="flex items-center gap-3">
+
+                {/* Control Actions: Real-time Live Mode & Manual Refresh */}
+                <div className="flex flex-wrap items-center gap-2.5">
+                    {/* Real-time Toggle Button */}
+                    <div className="flex items-center rounded-xl border border-border bg-card/80 p-1 shadow-sm">
+                        <button
+                            onClick={() => setRealtimeEnabled(prev => !prev)}
+                            className={clsx(
+                                "inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
+                                realtimeEnabled
+                                    ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-sm"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
+                            )}
+                            title={realtimeEnabled ? t('overview.realtimeActive') : t('overview.realtimePaused')}
+                        >
+                            <span className="relative flex h-2 w-2">
+                                {realtimeEnabled && (
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                                )}
+                                <span className={clsx(
+                                    "relative inline-flex rounded-full h-2 w-2",
+                                    realtimeEnabled ? "bg-emerald-500" : "bg-muted-foreground/40"
+                                )} />
+                            </span>
+                            <span className="font-semibold">{t('overview.realtime')}</span>
+                        </button>
+
+                        {/* Cadence dropdown if realtime is enabled */}
+                        {realtimeEnabled && (
+                            <div className="flex items-center gap-0.5 pl-1.5 border-l border-border/60">
+                                {CADENCE_OPTIONS.map((c) => (
+                                    <button
+                                        key={c.ms}
+                                        onClick={() => setRefreshCadence(c.ms)}
+                                        className={clsx(
+                                            "px-2 py-1 rounded text-[11px] font-mono transition-colors",
+                                            refreshCadence === c.ms
+                                                ? "bg-primary text-primary-foreground font-bold shadow-xs"
+                                                : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                                        )}
+                                        title={t(c.labelKey)}
+                                    >
+                                        {c.short}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Manual Refresh Button */}
                     <button
                         onClick={() => loadData(true)}
                         disabled={refreshing}
                         className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-medium border border-border bg-card/80 text-foreground hover:bg-secondary transition-all disabled:opacity-50"
-                        title={t('overview.refreshData')}
+                        title={lastUpdatedTime ? `${t('overview.refreshData')} (Last: ${lastUpdatedTime.toLocaleTimeString()})` : t('overview.refreshData')}
                     >
                         <RefreshCw className={clsx("w-3.5 h-3.5", refreshing && "animate-spin text-primary")} />
-                        {t('overview.refreshData')}
+                        <span className="hidden sm:inline">{t('overview.refreshData')}</span>
                     </button>
+
+                    {/* Create Key */}
                     <button
                         onClick={() => onNavigate('keys')}
                         className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-primary text-primary-foreground hover:opacity-90 transition-all shadow-sm"
@@ -381,8 +724,91 @@ for await (const chunk of stream) {
                 </div>
             </div>
 
+            {/* Time Range Filter Bar */}
+            <div className="p-4 rounded-2xl border border-border/80 bg-card/80 shadow-sm space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-primary shrink-0" />
+                        <span className="text-xs font-bold text-foreground uppercase tracking-wider">
+                            {t('overview.timeRange')}
+                        </span>
+                        <span className="text-xs text-muted-foreground font-mono">
+                            ({t('overview.filteredSummary', {
+                                count: filteredHistoryItems.length,
+                                tokens: formatTokenCount(telemetry.totalTokens)
+                            })})
+                        </span>
+                    </div>
+
+                    {/* Quick reset button if filtered and less than total */}
+                    {timeRange !== 'all' && (
+                        <button
+                            onClick={handleResetFilter}
+                            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors self-start sm:self-auto"
+                        >
+                            <RotateCcw className="w-3 h-3" />
+                            {t('overview.resetFilter')}
+                        </button>
+                    )}
+                </div>
+
+                {/* Presets Button Pills */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                    {TIME_RANGE_OPTIONS.map((opt) => {
+                        const isActive = timeRange === opt.key
+                        return (
+                            <button
+                                key={opt.key}
+                                onClick={() => setTimeRange(opt.key)}
+                                className={clsx(
+                                    "px-3 py-1.5 rounded-xl text-xs font-medium transition-all border",
+                                    isActive
+                                        ? "bg-primary text-primary-foreground border-primary shadow-sm font-semibold"
+                                        : "bg-background/80 text-muted-foreground border-border/70 hover:text-foreground hover:bg-secondary/70 hover:border-border"
+                                )}
+                                title={t('overview.filterPresetTooltip', { range: t(opt.labelKey) })}
+                            >
+                                {t(opt.labelKey)}
+                            </button>
+                        )
+                    })}
+                </div>
+
+                {/* Custom Time Range Picker inputs (visible when 'custom' selected) */}
+                {timeRange === 'custom' && (
+                    <div className="pt-3 border-t border-border/60 flex flex-wrap items-center gap-3 text-xs">
+                        <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground font-medium">{t('overview.customFrom')}:</span>
+                            <input
+                                type="datetime-local"
+                                value={customStart}
+                                onChange={(e) => setCustomStart(e.target.value)}
+                                className="px-2.5 py-1.5 rounded-lg border border-border bg-background text-foreground text-xs font-mono focus:outline-hidden focus:ring-1 focus:ring-primary"
+                            />
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground font-medium">{t('overview.customTo')}:</span>
+                            <input
+                                type="datetime-local"
+                                value={customEnd}
+                                onChange={(e) => setCustomEnd(e.target.value)}
+                                className="px-2.5 py-1.5 rounded-lg border border-border bg-background text-foreground text-xs font-mono focus:outline-hidden focus:ring-1 focus:ring-primary"
+                            />
+                        </div>
+
+                        <button
+                            onClick={handleApplyCustomRange}
+                            className="px-3 py-1.5 rounded-lg bg-secondary text-foreground hover:bg-secondary/80 font-medium transition-colors border border-border"
+                        >
+                            {t('overview.applyRange')}
+                        </button>
+                    </div>
+                )}
+            </div>
+
             {/* Core Metrics Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className={clsx("grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 transition-all duration-300", dataPulse && "ring-1 ring-primary/40 rounded-2xl")}>
                 {/* 1. Total Tokens Hero Card */}
                 <div className="p-5 rounded-2xl border border-border/80 bg-card/90 shadow-sm flex flex-col justify-between relative overflow-hidden group">
                     <div className="flex items-start justify-between">
@@ -416,7 +842,7 @@ for await (const chunk of stream) {
                     </div>
                 </div>
 
-                {/* 2. Requests & Success Rate */}
+                {/* 2. Requests & Rate / Success */}
                 <div className="p-5 rounded-2xl border border-border/80 bg-card/90 shadow-sm flex flex-col justify-between">
                     <div className="flex items-start justify-between">
                         <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
@@ -427,8 +853,17 @@ for await (const chunk of stream) {
                         </div>
                     </div>
                     <div className="mt-3">
-                        <div className="text-3xl font-extrabold tracking-tight font-mono text-foreground">
-                            {telemetry.totalReqs.toLocaleString()}
+                        <div className="flex items-baseline justify-between">
+                            <div className="text-3xl font-extrabold tracking-tight font-mono text-foreground">
+                                {telemetry.totalReqs.toLocaleString()}
+                            </div>
+                            {telemetry.tokensPerSec > 0 && (
+                                <div className="text-right">
+                                    <span className="text-[11px] font-mono font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                                        ~{telemetry.tokensPerSec} {t('overview.tokensPerSecUnit')}
+                                    </span>
+                                </div>
+                            )}
                         </div>
                         <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/60 text-xs">
                             <span className="text-muted-foreground">{t('overview.successRate')}</span>
@@ -632,69 +1067,202 @@ for await (const chunk of stream) {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Visualizer: Token Burn Trend */}
                 <div className="lg:col-span-2 p-6 rounded-2xl border border-border/80 bg-card/90 shadow-sm flex flex-col justify-between">
-                    <div className="flex items-center justify-between mb-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                         <div>
                             <h2 className="text-base font-bold text-foreground flex items-center gap-2">
                                 <TrendingUp className="w-4 h-4 text-primary" />
                                 {t('overview.tokenUsageTrend')}
                             </h2>
                             <p className="text-xs text-muted-foreground mt-0.5">
-                                Breakdown of input (prompt) vs output (completion) tokens across recent requests
+                                {t('overview.tokenUsageTrendDesc')}
                             </p>
                         </div>
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                            <span className="flex items-center gap-1.5">
-                                <span className="w-2.5 h-2.5 rounded-sm bg-sky-500/80" />
-                                Prompt
-                            </span>
-                            <span className="flex items-center gap-1.5">
-                                <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500/80" />
-                                Completion
-                            </span>
+
+                        {/* Controls: Chart View Mode + Legend */}
+                        <div className="flex flex-wrap items-center gap-3 text-xs self-start sm:self-auto">
+                            {/* Switch View Mode: Buckets vs Requests */}
+                            <div className="flex items-center rounded-lg border border-border bg-secondary/70 p-0.5">
+                                <button
+                                    onClick={() => setChartViewMode('buckets')}
+                                    className={clsx(
+                                        "px-2.5 py-1 rounded text-[11px] font-medium transition-colors flex items-center gap-1",
+                                        chartViewMode === 'buckets' ? "bg-card text-foreground shadow-xs font-semibold" : "text-muted-foreground hover:text-foreground"
+                                    )}
+                                >
+                                    <BarChart3 className="w-3 h-3" />
+                                    {t('overview.viewModeBuckets')}
+                                </button>
+                                <button
+                                    onClick={() => setChartViewMode('requests')}
+                                    className={clsx(
+                                        "px-2.5 py-1 rounded text-[11px] font-medium transition-colors flex items-center gap-1",
+                                        chartViewMode === 'requests' ? "bg-card text-foreground shadow-xs font-semibold" : "text-muted-foreground hover:text-foreground"
+                                    )}
+                                >
+                                    <SlidersHorizontal className="w-3 h-3" />
+                                    {t('overview.viewModeRequests')}
+                                </button>
+                            </div>
+
+                            {/* Legend */}
+                            <div className="flex items-center gap-2.5 text-muted-foreground">
+                                <span className="flex items-center gap-1.5">
+                                    <span className="w-2.5 h-2.5 rounded-xs bg-sky-500 shadow-xs" />
+                                    Prompt
+                                </span>
+                                <span className="flex items-center gap-1.5">
+                                    <span className="w-2.5 h-2.5 rounded-xs bg-emerald-500 shadow-xs" />
+                                    Completion
+                                </span>
+                            </div>
                         </div>
                     </div>
 
                     {/* Chart area */}
-                    <div className="h-44 flex items-end gap-1.5 pt-4 pb-2 px-1 relative">
-                        {timelineBars.map((b) => {
-                            const promptHeight = maxBucketTotal > 0 ? (b.prompt / maxBucketTotal) * 100 : 0
-                            const completionHeight = maxBucketTotal > 0 ? (b.completion / maxBucketTotal) * 100 : 0
-                            const isHovered = hoveredBucket === b.id
-
-                            return (
-                                <div
-                                    key={b.id}
-                                    className="flex-1 flex flex-col justify-end h-full group relative cursor-pointer"
-                                    onMouseEnter={() => setHoveredBucket(b.id)}
-                                    onMouseLeave={() => setHoveredBucket(null)}
-                                >
-                                    {/* Tooltip */}
-                                    {isHovered && b.total > 0 && (
-                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-20 px-2.5 py-1.5 rounded-lg bg-popover border border-border shadow-xl text-[11px] whitespace-nowrap pointer-events-none">
-                                            <div className="font-semibold text-foreground">{b.label}</div>
-                                            <div className="text-sky-400 font-mono">In: {b.prompt.toLocaleString()}</div>
-                                            <div className="text-emerald-400 font-mono">Out: {b.completion.toLocaleString()}</div>
-                                            <div className="font-bold text-foreground font-mono mt-0.5">Total: {b.total.toLocaleString()}</div>
-                                        </div>
-                                    )}
-
-                                    <div className="w-full flex flex-col justify-end rounded-t-sm overflow-hidden bg-muted/40 transition-all duration-150">
-                                        <div
-                                            className="w-full bg-emerald-500/85 transition-all duration-300"
-                                            style={{ height: `${Math.min(100, completionHeight)}%` }}
-                                        />
-                                        <div
-                                            className="w-full bg-sky-500/85 transition-all duration-300"
-                                            style={{ height: `${Math.min(100, promptHeight)}%` }}
-                                        />
+                    {timelineBars.length === 0 ? (
+                        <div className="h-48 flex flex-col items-center justify-center text-center p-6 rounded-xl border border-dashed border-border/60 bg-muted/10">
+                            <TrendingUp className="w-8 h-8 text-muted-foreground/30 mb-2" />
+                            <div className="text-sm font-medium text-foreground">{t('overview.noRequestsInRange')}</div>
+                            <button
+                                onClick={handleResetFilter}
+                                className="mt-3 text-xs text-primary hover:underline font-semibold"
+                            >
+                                {t('overview.resetFilter')} &rarr;
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="flex flex-col justify-between h-48 pt-2">
+                            {/* Plot Area with background grid lines */}
+                            <div className="h-36 relative flex items-end gap-1.5 sm:gap-2 px-1">
+                                {/* Horizontal grid reference lines & Y-axis labels */}
+                                <div className="absolute inset-0 flex flex-col justify-between pointer-events-none pb-0.5">
+                                    <div className="border-b border-dashed border-border/40 w-full flex justify-end">
+                                        <span className="text-[9px] font-mono text-muted-foreground/60 -mt-2.5 pr-0.5 select-none">
+                                            {formatTokenCount(maxBucketTotal)}
+                                        </span>
                                     </div>
-                                    <div className="text-[10px] text-muted-foreground text-center truncate mt-1">
-                                        {b.label}
+                                    <div className="border-b border-dashed border-border/30 w-full flex justify-end">
+                                        <span className="text-[9px] font-mono text-muted-foreground/50 -mt-2.5 pr-0.5 select-none">
+                                            {formatTokenCount(Math.round(maxBucketTotal / 2))}
+                                        </span>
+                                    </div>
+                                    <div className="border-b border-border/60 w-full flex justify-end">
+                                        <span className="text-[9px] font-mono text-muted-foreground/40 -mt-2 pr-0.5 select-none">
+                                            0
+                                        </span>
                                     </div>
                                 </div>
-                            )
-                        })}
-                    </div>
+
+                                {/* Bars */}
+                                {timelineBars.map((b, idx) => {
+                                    const barHeightPercent = maxBucketTotal > 0 ? (b.total / maxBucketTotal) * 100 : 0
+                                    const displayHeight = b.total > 0 ? Math.min(100, Math.max(barHeightPercent, 4)) : 0
+                                    const isHovered = hoveredBucket === b.id
+
+                                    // Position tooltip safely to prevent overflow on first/last bars
+                                    const tooltipAlignClass = idx === 0
+                                        ? 'left-0'
+                                        : idx === timelineBars.length - 1
+                                            ? 'right-0'
+                                            : 'left-1/2 -translate-x-1/2'
+
+                                    return (
+                                        <div
+                                            key={b.id}
+                                            className="flex-1 max-w-[40px] h-full flex flex-col justify-end items-center relative group cursor-pointer z-10"
+                                            onMouseEnter={() => setHoveredBucket(b.id)}
+                                            onMouseLeave={() => setHoveredBucket(null)}
+                                        >
+                                            {/* Column hover guide track */}
+                                            <div className="absolute inset-0 rounded-md bg-muted/20 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none -z-10" />
+
+                                            {/* Tooltip */}
+                                            {isHovered && (
+                                                <div className={`absolute bottom-full mb-2 ${tooltipAlignClass} z-30 px-3 py-2.5 rounded-xl bg-popover/95 backdrop-blur-md border border-border shadow-2xl text-[11px] whitespace-nowrap pointer-events-none transition-all duration-150`}>
+                                                    <div className="flex items-center justify-between gap-3 pb-1.5 mb-1.5 border-b border-border/50">
+                                                        <span className="font-semibold text-foreground font-mono">{b.fullTime}</span>
+                                                        {b.count > 1 && (
+                                                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-mono">
+                                                                {b.count} reqs
+                                                            </span>
+                                                        )}
+                                                        {b.model && (
+                                                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground font-mono truncate max-w-[120px]">
+                                                                {b.model}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center justify-between gap-4">
+                                                            <span className="text-muted-foreground flex items-center gap-1.5">
+                                                                <span className="w-2 h-2 rounded-full bg-sky-500" />
+                                                                Prompt:
+                                                            </span>
+                                                            <span className="text-sky-400 font-mono font-medium">{b.prompt.toLocaleString()}</span>
+                                                        </div>
+                                                        <div className="flex items-center justify-between gap-4">
+                                                            <span className="text-muted-foreground flex items-center gap-1.5">
+                                                                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                                                                Completion:
+                                                            </span>
+                                                            <span className="text-emerald-400 font-mono font-medium">{b.completion.toLocaleString()}</span>
+                                                        </div>
+                                                        {b.elapsedMs && (
+                                                            <div className="flex items-center justify-between gap-4 text-muted-foreground text-[10px]">
+                                                                <span className="flex items-center gap-1.5">
+                                                                    <Clock className="w-2.5 h-2.5" />
+                                                                    Latency:
+                                                                </span>
+                                                                <span className="font-mono">{b.elapsedMs}ms</span>
+                                                            </div>
+                                                        )}
+                                                        <div className="flex items-center justify-between gap-4 pt-1.5 mt-1 border-t border-border/50 font-bold">
+                                                            <span className="text-foreground">Total:</span>
+                                                            <span className="text-foreground font-mono">{b.total.toLocaleString()}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Stacked Bar with flex distribution */}
+                                            <div
+                                                className="w-full max-w-[28px] flex flex-col justify-end rounded-t-md overflow-hidden transition-all duration-200 group-hover:brightness-110 shadow-xs"
+                                                style={{ height: `${displayHeight}%` }}
+                                            >
+                                                {/* Completion tokens (top) */}
+                                                {b.completion > 0 && (
+                                                    <div
+                                                        className="w-full bg-emerald-500 hover:bg-emerald-400 transition-colors"
+                                                        style={{ flex: `${b.completion} 0 0%` }}
+                                                    />
+                                                )}
+                                                {/* Prompt tokens (bottom) */}
+                                                {b.prompt > 0 && (
+                                                    <div
+                                                        className="w-full bg-sky-500 hover:bg-sky-400 transition-colors"
+                                                        style={{ flex: `${b.prompt} 0 0%` }}
+                                                    />
+                                                )}
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+
+                            {/* X-Axis Labels */}
+                            <div className="flex gap-1.5 sm:gap-2 px-1 mt-2 border-t border-transparent">
+                                {timelineBars.map((b) => (
+                                    <div
+                                        key={b.id}
+                                        className="flex-1 max-w-[40px] text-[10px] text-muted-foreground text-center truncate font-mono select-none"
+                                        title={b.fullTime}
+                                    >
+                                        {b.label}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Model Distribution Panel */}
@@ -705,7 +1273,7 @@ for await (const chunk of stream) {
                             {t('overview.modelDistribution')}
                         </h2>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                            Tokens consumed by requested LLM model
+                            Tokens consumed by requested LLM model ({timeRange !== 'all' ? t(`overview.range${timeRange.charAt(0).toUpperCase() + timeRange.slice(1)}`) || timeRange : t('overview.allTime')})
                         </p>
 
                         <div className="mt-5 space-y-4">
@@ -726,7 +1294,7 @@ for await (const chunk of stream) {
                                     return (
                                         <div key={m.name} className="space-y-1.5">
                                             <div className="flex items-center justify-between text-xs">
-                                                <span className="font-semibold text-foreground font-mono">{m.name}</span>
+                                                <span className="font-semibold text-foreground font-mono truncate max-w-[150px]">{m.name}</span>
                                                 <span className="font-mono text-muted-foreground">
                                                     {m.tokens.toLocaleString()} ({m.percentage}%)
                                                 </span>
@@ -742,7 +1310,7 @@ for await (const chunk of stream) {
                                 })
                             ) : (
                                 <div className="text-xs text-muted-foreground py-8 text-center">
-                                    {t('overview.noRequestsYet')}
+                                    {t('overview.noRequestsInRange')}
                                 </div>
                             )}
                         </div>
@@ -773,7 +1341,7 @@ for await (const chunk of stream) {
                                         className={clsx(
                                             "px-2.5 py-1 rounded text-xs font-medium transition-colors",
                                             activeSnippetTab === tab
-                                                ? "bg-card text-foreground shadow-sm"
+                                                ? "bg-card text-foreground shadow-xs"
                                                 : "text-muted-foreground hover:text-foreground"
                                         )}
                                     >
@@ -872,8 +1440,9 @@ for await (const chunk of stream) {
                                 {recentStream.map((item) => {
                                     const est = estimateItemTokens(item)
                                     const isSuccess = item.status === 'ok' || (item.status_code && item.status_code < 400)
-                                    const timeStr = item.created_at
-                                        ? new Date(item.created_at * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                                    const ts = parseItemTimestamp(item.created_at)
+                                    const timeStr = ts
+                                        ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
                                         : '—'
 
                                     return (
@@ -913,7 +1482,7 @@ for await (const chunk of stream) {
                     </div>
 
                     <div className="mt-4 pt-3 border-t border-border/60 flex items-center justify-between text-xs text-muted-foreground">
-                        <span>Showing {recentStream.length} latest requests</span>
+                        <span>Showing {recentStream.length} {timeRange !== 'all' ? `filtered` : `latest`} requests</span>
                         <button
                             onClick={() => onNavigate('history')}
                             className="text-primary hover:underline font-medium"
