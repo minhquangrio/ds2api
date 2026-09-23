@@ -60,9 +60,15 @@ func (h *Handler) PreprocessInlineFileInputs(ctx context.Context, a *auth.Reques
 	if h == nil || h.DS == nil || len(req) == 0 {
 		return nil
 	}
+	if a != nil && (a.Provider == "gemini" || a.Account.IsGemini()) {
+		return nil
+	}
 	modelType := "default"
 	if requestedModel, ok := req["model"].(string); ok {
 		if target, ok := config.ResolveModelTarget(h.Store, requestedModel); ok {
+			if target.Provider == "gemini" {
+				return nil
+			}
 			if resolvedType, ok := config.GetModelType(target.Canonical); ok {
 				modelType = resolvedType
 			}

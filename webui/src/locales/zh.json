@@ -76,6 +76,7 @@
     },
     "actions": {
         "cancel": "取消",
+        "close": "关闭",
         "add": "添加",
         "delete": "删除",
         "copy": "复制",
@@ -84,7 +85,8 @@
         "testing": "正在刷新...",
         "loading": "加载中...",
         "save": "保存",
-        "saving": "保存中..."
+        "saving": "保存中...",
+        "failed": "失败"
     },
     "messages": {
         "deleted": "删除成功",

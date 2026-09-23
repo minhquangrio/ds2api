@@ -28,9 +28,15 @@ func (h *Handler) PreprocessInlineTextFilesForExpert(ctx context.Context, a *aut
 	if h == nil || len(req) == 0 {
 		return nil
 	}
+	if a != nil && (a.Provider == "gemini" || a.Account.IsGemini()) {
+		return nil
+	}
 	modelType := "default"
 	if requestedModel, ok := req["model"].(string); ok {
 		if target, ok := config.ResolveModelTarget(h.Store, requestedModel); ok {
+			if target.Provider == "gemini" {
+				return nil
+			}
 			if resolvedType, ok := config.GetModelType(target.Canonical); ok {
 				modelType = resolvedType
 			}
@@ -240,7 +246,7 @@ func (s *expertTextInlineState) tryInlineTextBlock(block map[string]any) (map[st
 	}
 	// Existing uploaded file referenced by id.
 	if fileID := strings.TrimSpace(shared.AsString(block["file_id"])); fileID != "" {
-		return s.inlineStoredFile(fileID, block)
+		return s.inlineStoredFile(fileID)
 	}
 	// Fresh inline base64 / data-url file payload.
 	decoded, ok, err := decodeOpenAIInlineFileBlock(block)
@@ -262,7 +268,7 @@ func (s *expertTextInlineState) tryInlineTextBlock(block map[string]any) (map[st
 	return textBlock(decoded.Data), true, nil
 }
 
-func (s *expertTextInlineState) inlineStoredFile(fileID string, block map[string]any) (map[string]any, bool, error) {
+func (s *expertTextInlineState) inlineStoredFile(fileID string) (map[string]any, bool, error) {
 	if s.store == nil {
 		return nil, false, nil
 	}

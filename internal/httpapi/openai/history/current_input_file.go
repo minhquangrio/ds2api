@@ -40,6 +40,9 @@ func (s Service) ApplyCurrentInputFile(ctx context.Context, a *auth.RequestAuth,
 	if stdReq.CurrentInputFileApplied || s.DS == nil || s.Store == nil || a == nil || !s.Store.CurrentInputFileEnabled() {
 		return stdReq, nil
 	}
+	if isGeminiCurrentInputRequest(a) {
+		return stdReq, nil
+	}
 	if modelType, ok := config.GetModelType(stdReq.ResolvedModel); ok && modelType == "expert" {
 		return stdReq, nil
 	}
@@ -259,4 +262,8 @@ func replaceGeneratedCurrentInputRefs(existing []string, oldHistoryID, oldToolsI
 		filtered = append(filtered, trimmed)
 	}
 	return prependUniqueRefFileIDs(filtered, newHistoryID, newToolsID)
+}
+
+func isGeminiCurrentInputRequest(a *auth.RequestAuth) bool {
+	return a != nil && (a.Provider == "gemini" || a.Account.IsGemini())
 }

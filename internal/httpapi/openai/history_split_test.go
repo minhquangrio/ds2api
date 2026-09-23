@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"ds2api/internal/auth"
+	"ds2api/internal/config"
 	dsclient "ds2api/internal/deepseek/client"
 	"ds2api/internal/promptcompat"
 	"ds2api/internal/util"
@@ -127,6 +128,63 @@ func TestApplyCurrentInputFileSkipsShortInputWhenThresholdNotReached(t *testing.
 	}
 	if out.FinalPrompt != stdReq.FinalPrompt {
 		t.Fatalf("expected prompt unchanged on first turn")
+	}
+}
+
+func TestApplyCurrentInputFileSkipsGeminiRequest(t *testing.T) {
+	ds := &inlineUploadDSStub{}
+	h := &openAITestSurface{
+		Store: mockOpenAIConfig{
+			currentInputEnabled: true,
+			currentInputMin:     5,
+		},
+		DS: ds,
+	}
+	longInput := "This is a long input exceeding threshold"
+	req := map[string]any{
+		"model": "gemini-flash-lite-nothinking",
+		"messages": []any{
+			map[string]any{"role": "user", "content": longInput},
+		},
+	}
+	stdReq, err := promptcompat.NormalizeOpenAIChatRequest(h.Store, req, "")
+	if err != nil {
+		t.Fatalf("normalize failed: %v", err)
+	}
+
+	// 1. Skip when model is Gemini
+	out, err := h.applyCurrentInputFile(context.Background(), &auth.RequestAuth{Provider: "gemini"}, stdReq)
+	if err != nil {
+		t.Fatalf("apply current input file failed: %v", err)
+	}
+	if len(ds.uploadCalls) != 0 {
+		t.Fatalf("expected no upload for gemini request, got %d", len(ds.uploadCalls))
+	}
+	if out.CurrentInputFileApplied {
+		t.Fatalf("expected CurrentInputFileApplied to be false for gemini")
+	}
+
+	// 2. Skip when account provider is Gemini even with DeepSeek model name
+	dsReq := map[string]any{
+		"model": "deepseek-v4-flash",
+		"messages": []any{
+			map[string]any{"role": "user", "content": longInput},
+		},
+	}
+	stdDsReq, err := promptcompat.NormalizeOpenAIChatRequest(h.Store, dsReq, "")
+	if err != nil {
+		t.Fatalf("normalize failed: %v", err)
+	}
+	geminiAcc := config.Account{Provider: "gemini", Cookies: "test-cookies"}
+	out2, err := h.applyCurrentInputFile(context.Background(), &auth.RequestAuth{Provider: "gemini", Account: geminiAcc}, stdDsReq)
+	if err != nil {
+		t.Fatalf("apply current input file failed: %v", err)
+	}
+	if len(ds.uploadCalls) != 0 {
+		t.Fatalf("expected no upload for gemini account, got %d", len(ds.uploadCalls))
+	}
+	if out2.CurrentInputFileApplied {
+		t.Fatalf("expected CurrentInputFileApplied to be false for gemini account")
 	}
 }
 

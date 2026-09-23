@@ -346,6 +346,7 @@ OpenAI 的文件上传现在不再是"只传文件本体"的通用路径，而�
 
 - `current_input_file` 默认关闭；它在统一 completion runtime 入口全局生效，用于把“完整上下文”合并进 `HISTORY.txt` 上下文文件。当最新 user turn 的纯文本长度达到 `current_input_file.min_chars`（默认 `0`）时，runtime 会上传一个文件名为 `HISTORY.txt` 的上下文文件。文件内容会先经过各协议入口的标准化，再序列化成按轮次编号的 `HISTORY.txt` 风格 transcript，带有 `# HISTORY.txt` 标题和 `=== N. ROLE ===` 分段；在 `Prior conversation history and tool progress.` 描述行之后紧挨着插入一段 continuation 说明（“从 HISTORY.txt 的最新状态继续推进”），该说明不再注入 live prompt。如果当前请求声明了可用工具，还会把工具名称、描述和参数 schema 单独上传成 `TOOLS.txt`，带有 `# TOOLS.txt` 标题。live prompt 中则只保留一个极短的 `继续会话` user 消息，并在有工具文件时明确可用工具 schema 位于 `TOOLS.txt`；system prompt 也会在统一 EPSE 工具格式约束前说明 `TOOLS.txt` 是可调用工具和 schema 的权威来源，同时保留本轮工具选择策略，避免把任务拉回起点。
 - 如果 `current_input_file.enabled=false`，请求会直接透传，不上传任何拆分上下文文件。
+- Gemini 上游（Provider 为 `gemini`）使用 Google Gemini Web 原生协议，不经过 DeepSeek 文件上传接口。因此即使 `current_input_file` 开启，也不会为 Gemini 请求触发 `HISTORY.txt` / `TOOLS.txt` 上传与替换；同理，面向 DeepSeek 上游的内联文件上传（`file_inline_upload` 与 `expert_text_file_inline`）也会对 Gemini 请求直接跳过。
 - expert（pro）模型不支持文件上传。即使 `current_input_file` 已开启且达到阈值，runtime 也不会为 expert 模型上传 `HISTORY.txt` / `TOOLS.txt`；同时客户端传入的所有 `ref_file_ids` 和内联文件附件也会在 completion payload 中被丢弃（不会发送给上游）。
 - 即使触发 `current_input_file` 后 live prompt 被缩短，对客户端回包里的上下文 token 统计，仍会沿用**拆分前的完整 prompt 语义**做计数，而不是按缩短后的占位 prompt 计算；否则会把真实上下文显著算小。
 

@@ -76,6 +76,7 @@
     },
     "actions": {
         "cancel": "Hủy",
+        "close": "Đóng",
         "add": "Thêm",
         "delete": "Xóa",
         "copy": "Sao chép",
@@ -84,7 +85,8 @@
         "testing": "Đang làm mới...",
         "loading": "Đang tải...",
         "save": "Lưu",
-        "saving": "Đang lưu..."
+        "saving": "Đang lưu...",
+        "failed": "Thất bại"
     },
     "messages": {
         "deleted": "Xóa thành công",

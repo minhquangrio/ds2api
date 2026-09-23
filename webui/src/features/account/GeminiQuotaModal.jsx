@@ -343,7 +343,7 @@ export default function GeminiQuotaModal({
                         onClick={onClose}
                         className="px-4 py-2 text-xs font-medium bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-lg transition-colors"
                     >
-                        {t('actions.close') || 'Đóng'}
+                        {t('actions.close')}
                     </button>
                 </div>
             </div>

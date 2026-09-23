@@ -76,6 +76,7 @@
     },
     "actions": {
         "cancel": "Cancel",
+        "close": "Close",
         "add": "Add",
         "delete": "Delete",
         "copy": "Copy",
@@ -84,7 +85,8 @@
         "testing": "Refreshing...",
         "loading": "Loading...",
         "save": "Save",
-        "saving": "Saving..."
+        "saving": "Saving...",
+        "failed": "Failed"
     },
     "messages": {
         "deleted": "Deleted successfully",
