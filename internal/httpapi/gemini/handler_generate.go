@@ -93,6 +93,11 @@ func (h *Handler) handleGeminiDirect(w http.ResponseWriter, r *http.Request, str
 		return true
 	}
 	defer h.Auth.Release(a)
+	if err := h.Auth.EnforceKeyModelQuota(r, h.UsageLedger, stdReq.ResolvedModel); err != nil {
+		status, msg := auth.MapAuthStatus(err)
+		writeGeminiError(w, status, msg)
+		return true
+	}
 	stdReq, err = h.applyCurrentInputFile(r.Context(), a, stdReq)
 	if err != nil {
 		status, message := mapCurrentInputFileError(err)

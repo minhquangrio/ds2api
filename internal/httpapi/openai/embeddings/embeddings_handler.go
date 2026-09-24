@@ -20,16 +20,13 @@ type Handler struct {
 	Auth        shared.AuthResolver
 	DS          shared.DeepSeekCaller
 	ChatHistory *chathistory.Store
+	UsageLedger auth.CallerTokenReader
 }
 
 func (h *Handler) Embeddings(w http.ResponseWriter, r *http.Request) {
 	a, err := h.Auth.Determine(r)
 	if err != nil {
-		status := http.StatusUnauthorized
-		detail := err.Error()
-		if err == auth.ErrNoAccount {
-			status = http.StatusTooManyRequests
-		}
+		status, detail := auth.MapAuthStatus(err)
 		shared.WriteOpenAIError(w, status, detail)
 		return
 	}
@@ -51,8 +48,18 @@ func (h *Handler) Embeddings(w http.ResponseWriter, r *http.Request) {
 		shared.WriteOpenAIError(w, http.StatusBadRequest, "Request must include 'model'.")
 		return
 	}
-	if _, ok := config.ResolveModelTarget(h.Store, model); !ok {
+	target, ok := config.ResolveModelTarget(h.Store, model)
+	if !ok {
 		shared.WriteOpenAIError(w, http.StatusBadRequest, fmt.Sprintf("Model '%s' is not available.", model))
+		return
+	}
+	canonicalModel := target.Canonical
+	if canonicalModel == "" {
+		canonicalModel = model
+	}
+	if err := h.Auth.EnforceKeyModelQuota(r, h.UsageLedger, canonicalModel); err != nil {
+		status, detail := auth.MapAuthStatus(err)
+		shared.WriteOpenAIError(w, status, detail)
 		return
 	}
 

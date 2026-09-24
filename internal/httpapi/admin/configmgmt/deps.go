@@ -36,6 +36,12 @@ func fieldStringOptional(m map[string]any, key string) (string, bool) {
 func fieldBoolOptional(m map[string]any, key string) (bool, bool) {
 	return adminshared.FieldBoolOptional(m, key)
 }
+func fieldStringSlice(m map[string]any, key string) ([]string, bool) {
+	return adminshared.FieldStringSlice(m, key)
+}
+func fieldInt64Optional(m map[string]any, key string) (int64, bool) {
+	return adminshared.FieldInt64Optional(m, key)
+}
 func normalizeAccountForStorage(acc config.Account) config.Account {
 	return adminshared.NormalizeAccountForStorage(acc)
 }

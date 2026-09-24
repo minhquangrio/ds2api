@@ -107,14 +107,46 @@ export default function ApiKeysPanel({
                                         {maskSecret(item.key)}
                                     </button>
                                     <div className="text-sm text-muted-foreground truncate">{item.remark || '-'}</div>
-                                    <span className={clsx(
-                                        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium w-fit",
-                                        item.tools_enabled
-                                            ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
-                                            : "bg-muted text-muted-foreground"
-                                    )}>
-                                        {item.tools_enabled ? t('accountManager.toolsEnabledOn') : t('accountManager.toolsEnabledOff')}
-                                    </span>
+                                    <div className="flex flex-wrap items-center gap-1.5 col-span-1 md:col-span-3 pt-1">
+                                        <span className={clsx(
+                                            "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium w-fit",
+                                            item.tools_enabled
+                                                ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                                                : "bg-muted text-muted-foreground"
+                                        )}>
+                                            {item.tools_enabled ? t('accountManager.toolsEnabledOn') : t('accountManager.toolsEnabledOff')}
+                                        </span>
+                                        <span className={clsx(
+                                            "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium w-fit border",
+                                            Array.isArray(item.accounts) && item.accounts.length > 0
+                                                ? "bg-blue-500/10 text-blue-500 border-blue-500/20"
+                                                : "bg-muted/50 text-muted-foreground border-border"
+                                        )} title={Array.isArray(item.accounts) && item.accounts.length > 0 ? item.accounts.join(', ') : t('accountManager.allAccounts')}>
+                                            {Array.isArray(item.accounts) && item.accounts.length > 0
+                                                ? t('accountManager.accountsSelected', { count: item.accounts.length })
+                                                : t('accountManager.allAccounts')}
+                                        </span>
+                                        <span className={clsx(
+                                            "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium w-fit border font-mono",
+                                            Array.isArray(item.models) && item.models.length > 0
+                                                ? "bg-purple-500/10 text-purple-400 border-purple-500/20"
+                                                : "bg-muted/50 text-muted-foreground border-border font-sans"
+                                        )} title={Array.isArray(item.models) && item.models.length > 0 ? item.models.join(', ') : t('accountManager.allModels')}>
+                                            {Array.isArray(item.models) && item.models.length > 0
+                                                ? t('accountManager.modelsSelected', { count: item.models.length })
+                                                : t('accountManager.allModels')}
+                                        </span>
+                                        <span className={clsx(
+                                            "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium w-fit border",
+                                            item.quota_tokens > 0
+                                                ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+                                                : "bg-muted/50 text-muted-foreground border-border"
+                                        )}>
+                                            {item.quota_tokens > 0
+                                                ? t('accountManager.quotaTokens', { quota: Number(item.quota_tokens).toLocaleString() })
+                                                : t('accountManager.unlimitedQuota')}
+                                        </span>
+                                    </div>
                                     {copiedKey === item.key && (
                                         <span className="text-xs text-green-500 animate-pulse">{t('accountManager.copied')}</span>
                                     )}

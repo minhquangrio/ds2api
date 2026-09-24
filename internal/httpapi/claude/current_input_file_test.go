@@ -86,6 +86,9 @@ func (claudeCurrentInputAuth) ToolsEnabledForRequest(_ *http.Request) bool { ret
 func (claudeCurrentInputAuth) SetAccountMutedUntil(_ *auth.RequestAuth, _ float64) {}
 
 func (claudeCurrentInputAuth) SetAccountBanned(_ *auth.RequestAuth, _ string) {}
+func (claudeCurrentInputAuth) EnforceKeyModelQuota(_ *http.Request, _ auth.CallerTokenReader, _ string) error {
+	return nil
+}
 
 type claudeCurrentInputDS struct {
 	uploads []dsclient.UploadFileRequest

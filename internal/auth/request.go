@@ -22,6 +22,7 @@ const toolsDisabledCtxKey ctxKey = "tools_disabled"
 
 var (
 	ErrUnauthorized      = errors.New("unauthorized: missing auth token")
+	ErrAccountNotAllowed = errors.New("target account is not assigned to this API key")
 	ErrNoAccount         = errors.New("no accounts configured or all accounts are busy")
 	ErrNoProviderAccount = errors.New("no accounts configured for requested provider")
 	ErrAllAccountsBusy   = errors.New("all accounts are busy")
@@ -34,6 +35,12 @@ func MapAuthStatus(err error) (int, string) {
 	switch {
 	case errors.Is(err, ErrUnauthorized):
 		return http.StatusUnauthorized, "Unauthorized"
+	case errors.Is(err, ErrAccountNotAllowed):
+		return http.StatusForbidden, "Target account is not assigned to this API key"
+	case errors.Is(err, ErrModelNotAllowed):
+		return http.StatusForbidden, "Requested model is not allowed for this API key"
+	case errors.Is(err, ErrQuotaExceeded):
+		return http.StatusTooManyRequests, err.Error()
 	case errors.Is(err, ErrNoProviderAccount):
 		return http.StatusBadRequest, "No accounts configured for requested provider"
 	case errors.Is(err, ErrNoAccount), errors.Is(err, ErrAllAccountsBusy):
@@ -44,16 +51,17 @@ func MapAuthStatus(err error) (int, string) {
 }
 
 type RequestAuth struct {
-	UseConfigToken bool
-	Provider       string
-	DeepSeekToken  string
-	CallerID       string
-	AccountID      string
-	TargetAccount  string
-	Account        config.Account
-	TriedAccounts  map[string]bool
-	ToolsEnabled   bool
-	resolver       *Resolver
+	UseConfigToken  bool
+	Provider        string
+	DeepSeekToken   string
+	CallerID        string
+	AccountID       string
+	TargetAccount   string
+	Account         config.Account
+	TriedAccounts   map[string]bool
+	ToolsEnabled    bool
+	AllowedAccounts map[string]struct{}
+	resolver        *Resolver
 }
 
 type LoginFunc func(ctx context.Context, acc config.Account) (string, error)
@@ -76,6 +84,37 @@ func NewResolver(store *config.Store, pool *account.Pool, login LoginFunc) *Reso
 		Login:            login,
 		tokenRefreshedAt: map[string]time.Time{},
 	}
+}
+
+func accountAllowed(allowed map[string]struct{}, acc config.Account) bool {
+	if len(allowed) == 0 {
+		return true
+	}
+	if id := acc.Identifier(); id != "" {
+		if _, ok := allowed[id]; ok {
+			return true
+		}
+	}
+	if email := acc.Email; email != "" {
+		if _, ok := allowed[email]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func countAllowedAccountsForProvider(accounts []config.Account, provider string, allowed map[string]struct{}) int {
+	p := strings.ToLower(strings.TrimSpace(provider))
+	if p == "" {
+		p = "deepseek"
+	}
+	count := 0
+	for _, acc := range accounts {
+		if acc.AccountProvider() == p && accountAllowed(allowed, acc) {
+			count++
+		}
+	}
+	return count
 }
 
 func countConfiguredAccountsForProvider(accounts []config.Account, provider string) int {
@@ -123,17 +162,30 @@ func (r *Resolver) DetermineForProvider(req *http.Request, provider string) (*Re
 	}
 	target := strings.TrimSpace(req.Header.Get("X-Ds2-Target-Account"))
 	toolsEnabled := r.Store.APIKeyToolsEnabled(callerKey)
-	a, err := r.acquireManagedRequestAuthByProvider(ctx, callerID, target, effectiveProvider, toolsEnabled)
+	policy := r.Store.APIKeyPolicy(callerKey)
+	a, err := r.acquireManagedRequestAuthByProvider(ctx, callerID, target, effectiveProvider, toolsEnabled, policy)
 	if err != nil {
 		return nil, err
 	}
 	return a, nil
 }
 
-func (r *Resolver) acquireManagedRequestAuthByProvider(ctx context.Context, callerID, target, provider string, toolsEnabled bool) (*RequestAuth, error) {
+func (r *Resolver) acquireManagedRequestAuthByProvider(ctx context.Context, callerID, target, provider string, toolsEnabled bool, policy config.KeyPolicy) (*RequestAuth, error) {
 	effectiveProvider := strings.ToLower(strings.TrimSpace(provider))
 	if effectiveProvider == "" {
 		effectiveProvider = "deepseek"
+	}
+
+	if target != "" && len(policy.Accounts) > 0 {
+		if acc, ok := r.Store.FindAccount(target); ok {
+			if !accountAllowed(policy.Accounts, acc) {
+				return nil, ErrAccountNotAllowed
+			}
+		} else {
+			if _, ok := policy.Accounts[target]; !ok {
+				return nil, ErrAccountNotAllowed
+			}
+		}
 	}
 
 	if effectiveProvider == "gemini" {
@@ -149,9 +201,11 @@ func (r *Resolver) acquireManagedRequestAuthByProvider(ctx context.Context, call
 	tried := map[string]bool{}
 	var lastEnsureErr error
 	filter := account.AccountFilter(func(acc config.Account) bool {
-		return acc.MatchesPoolType(toolsEnabled) && acc.AccountProvider() == effectiveProvider
+		return acc.MatchesPoolType(toolsEnabled) &&
+			acc.AccountProvider() == effectiveProvider &&
+			accountAllowed(policy.Accounts, acc)
 	})
-	totalAccounts := countConfiguredAccountsForProvider(r.Store.Accounts(), effectiveProvider)
+	totalAccounts := countAllowedAccountsForProvider(r.Store.Accounts(), effectiveProvider, policy.Accounts)
 
 	for {
 		if target == "" && len(tried) >= totalAccounts {
@@ -181,15 +235,16 @@ func (r *Resolver) acquireManagedRequestAuthByProvider(ctx context.Context, call
 		}
 
 		a := &RequestAuth{
-			UseConfigToken: true,
-			Provider:       effectiveProvider,
-			CallerID:       callerID,
-			AccountID:      acc.Identifier(),
-			TargetAccount:  target,
-			Account:        acc,
-			TriedAccounts:  tried,
-			ToolsEnabled:   toolsEnabled,
-			resolver:       r,
+			UseConfigToken:  true,
+			Provider:        effectiveProvider,
+			CallerID:        callerID,
+			AccountID:       acc.Identifier(),
+			TargetAccount:   target,
+			Account:         acc,
+			TriedAccounts:   tried,
+			ToolsEnabled:    toolsEnabled,
+			AllowedAccounts: policy.Accounts,
+			resolver:        r,
 		}
 
 		if err := r.ensureManagedToken(ctx, a); err != nil {
@@ -392,7 +447,9 @@ func (r *Resolver) SwitchAccount(ctx context.Context, a *RequestAuth) bool {
 		effectiveProvider = a.Account.AccountProvider()
 	}
 	filter := account.AccountFilter(func(acc config.Account) bool {
-		return acc.MatchesPoolType(a.ToolsEnabled) && acc.AccountProvider() == effectiveProvider
+		return acc.MatchesPoolType(a.ToolsEnabled) &&
+			acc.AccountProvider() == effectiveProvider &&
+			accountAllowed(a.AllowedAccounts, acc)
 	})
 	for {
 		acc, ok := r.Pool.Acquire("", a.TriedAccounts, filter)
@@ -447,13 +504,17 @@ func extractCallerToken(req *http.Request) string {
 	return strings.TrimSpace(req.URL.Query().Get("api_key"))
 }
 
-func callerTokenID(token string) string {
+func CallerTokenID(token string) string {
 	token = strings.TrimSpace(token)
 	if token == "" {
 		return ""
 	}
 	sum := sha256.Sum256([]byte(token))
 	return "caller:" + hex.EncodeToString(sum[:8])
+}
+
+func callerTokenID(token string) string {
+	return CallerTokenID(token)
 }
 
 func (r *Resolver) ensureManagedToken(ctx context.Context, a *RequestAuth) error {

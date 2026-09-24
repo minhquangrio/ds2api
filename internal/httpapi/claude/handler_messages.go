@@ -97,6 +97,11 @@ func (h *Handler) handleClaudeDirect(w http.ResponseWriter, r *http.Request) boo
 		return true
 	}
 	defer h.Auth.Release(a)
+	if err := h.Auth.EnforceKeyModelQuota(r, h.UsageLedger, norm.Standard.ResolvedModel); err != nil {
+		status, msg := auth.MapAuthStatus(err)
+		writeClaudeError(w, status, msg)
+		return true
+	}
 	stdReq, err := h.applyCurrentInputFile(r.Context(), a, norm.Standard)
 	if err != nil {
 		status, message := mapCurrentInputFileError(err)

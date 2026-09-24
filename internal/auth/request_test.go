@@ -465,3 +465,258 @@ func TestDetermineForProviderGeminiFallbackToDeepSeek(t *testing.T) {
 		t.Fatalf("expected account ds@example.com, got %s", authCtx.AccountID)
 	}
 }
+
+func TestDetermineRespectsAccountAllowlist(t *testing.T) {
+	t.Setenv("DS2API_CONFIG_JSON", `{
+		"api_keys": [
+			{"key": "key-assigned", "accounts": ["acc2@example.com"]},
+			{"key": "key-all"}
+		],
+		"accounts": [
+			{"email": "acc1@example.com", "token": "token-1"},
+			{"email": "acc2@example.com", "token": "token-2"}
+		]
+	}`)
+	store := config.LoadStore()
+	pool := account.NewPool(store)
+	resolver := NewResolver(store, pool, func(_ context.Context, _ config.Account) (string, error) {
+		return "token", nil
+	})
+
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	req.Header.Set("Authorization", "Bearer key-assigned")
+
+	authCtx, err := resolver.Determine(req)
+	if err != nil {
+		t.Fatalf("unexpected determine error: %v", err)
+	}
+	defer resolver.Release(authCtx)
+	if authCtx.AccountID != "acc2@example.com" {
+		t.Errorf("expected acc2@example.com, got %s", authCtx.AccountID)
+	}
+}
+
+func TestDetermineTargetAccountConflict(t *testing.T) {
+	t.Setenv("DS2API_CONFIG_JSON", `{
+		"api_keys": [
+			{"key": "key-assigned", "accounts": ["acc1@example.com"]}
+		],
+		"accounts": [
+			{"email": "acc1@example.com", "token": "token-1"},
+			{"email": "acc2@example.com", "token": "token-2"}
+		]
+	}`)
+	store := config.LoadStore()
+	pool := account.NewPool(store)
+	resolver := NewResolver(store, pool, nil)
+
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	req.Header.Set("Authorization", "Bearer key-assigned")
+	req.Header.Set("X-Ds2-Target-Account", "acc2@example.com")
+
+	_, err := resolver.Determine(req)
+	if !errors.Is(err, ErrAccountNotAllowed) {
+		t.Fatalf("expected ErrAccountNotAllowed, got %v", err)
+	}
+	code, msg := MapAuthStatus(err)
+	if code != http.StatusForbidden {
+		t.Errorf("expected 403, got %d (msg: %s)", code, msg)
+	}
+}
+
+func TestDetermineAllowlistExhaustionNoInfiniteLoop(t *testing.T) {
+	t.Setenv("DS2API_CONFIG_JSON", `{
+		"api_keys": [
+			{"key": "key-assigned", "accounts": ["acc1@example.com"]}
+		],
+		"accounts": [
+			{"email": "acc1@example.com", "token": "token-1"},
+			{"email": "acc2@example.com", "token": "token-2"}
+		]
+	}`)
+	store := config.LoadStore()
+	pool := account.NewPool(store)
+	// Refresh fails for acc1
+	resolver := NewResolver(store, pool, func(_ context.Context, _ config.Account) (string, error) {
+		return "", errors.New("refresh failed")
+	})
+
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	req.Header.Set("Authorization", "Bearer key-assigned")
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := resolver.Determine(req)
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatalf("expected error on failed refresh, got nil")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Determine hung in infinite loop when allowlist exhausted")
+	}
+}
+
+func TestSwitchAccountRespectsAllowlist(t *testing.T) {
+	t.Setenv("DS2API_CONFIG_JSON", `{
+		"api_keys": [
+			{"key": "key-assigned", "accounts": ["acc1@example.com", "acc2@example.com"]}
+		],
+		"accounts": [
+			{"email": "acc1@example.com", "token": "token-1"},
+			{"email": "acc2@example.com", "token": "token-2"},
+			{"email": "acc3@example.com", "token": "token-3"}
+		]
+	}`)
+	store := config.LoadStore()
+	pool := account.NewPool(store)
+	resolver := NewResolver(store, pool, func(_ context.Context, _ config.Account) (string, error) {
+		return "valid-token", nil
+	})
+
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	req.Header.Set("Authorization", "Bearer key-assigned")
+
+	authCtx, err := resolver.Determine(req)
+	if err != nil {
+		t.Fatalf("determine failed: %v", err)
+	}
+	defer resolver.Release(authCtx)
+
+	// First account should be acc1 or acc2
+	firstID := authCtx.AccountID
+	if firstID != "acc1@example.com" && firstID != "acc2@example.com" {
+		t.Fatalf("unexpected first account: %s", firstID)
+	}
+
+	// Switch account
+	switched := resolver.SwitchAccount(context.Background(), authCtx)
+	if !switched {
+		t.Fatalf("expected SwitchAccount to succeed")
+	}
+	secondID := authCtx.AccountID
+	if secondID != "acc1@example.com" && secondID != "acc2@example.com" {
+		t.Fatalf("SwitchAccount acquired unassigned account: %s", secondID)
+	}
+	if secondID == firstID {
+		t.Fatalf("SwitchAccount returned the same account: %s", secondID)
+	}
+
+	// Third switch should fail because allowlist (size 2) is exhausted
+	switchedAgain := resolver.SwitchAccount(context.Background(), authCtx)
+	if switchedAgain {
+		t.Fatalf("expected SwitchAccount to fail after allowlist exhausted, but acquired: %s", authCtx.AccountID)
+	}
+}
+
+type stubCallerTokenReader struct {
+	tokens map[string]int64
+}
+
+func (s *stubCallerTokenReader) CallerTotalTokens(callerID string) int64 {
+	if s == nil || s.tokens == nil {
+		return 0
+	}
+	return s.tokens[callerID]
+}
+
+func TestEnforceKeyModelQuota(t *testing.T) {
+	t.Setenv("DS2API_CONFIG_JSON", `{
+		"api_keys": [
+			{
+				"key": "key-restricted",
+				"models": ["deepseek-v4-flash"],
+				"quota_tokens": 1000
+			},
+			{
+				"key": "key-unlimited",
+				"quota_tokens": 0
+			}
+		],
+		"accounts": [
+			{"email": "acc@test.com", "token": "tok"}
+		]
+	}`)
+	store := config.LoadStore()
+	pool := account.NewPool(store)
+	resolver := NewResolver(store, pool, nil)
+
+	callerID := callerTokenID("key-restricted")
+	ledger := &stubCallerTokenReader{
+		tokens: map[string]int64{
+			callerID: 500,
+		},
+	}
+
+	// 1. Allowed model, quota not exceeded
+	{
+		req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+		req.Header.Set("Authorization", "Bearer key-restricted")
+		err := resolver.EnforceKeyModelQuota(req, ledger, "deepseek-v4-flash")
+		if err != nil {
+			t.Errorf("expected nil error, got %v", err)
+		}
+	}
+
+	// 2. Blocked model -> ErrModelNotAllowed (403)
+	{
+		req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+		req.Header.Set("Authorization", "Bearer key-restricted")
+		err := resolver.EnforceKeyModelQuota(req, ledger, "deepseek-v4-pro")
+		if !errors.Is(err, ErrModelNotAllowed) {
+			t.Errorf("expected ErrModelNotAllowed, got %v", err)
+		}
+		status, _ := MapAuthStatus(err)
+		if status != http.StatusForbidden {
+			t.Errorf("expected 403, got %d", status)
+		}
+	}
+
+	// 3. Quota exceeded -> ErrQuotaExceeded (429)
+	{
+		ledger.tokens[callerID] = 1000
+		req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+		req.Header.Set("Authorization", "Bearer key-restricted")
+		err := resolver.EnforceKeyModelQuota(req, ledger, "deepseek-v4-flash")
+		if !errors.Is(err, ErrQuotaExceeded) {
+			t.Errorf("expected ErrQuotaExceeded, got %v", err)
+		}
+		status, msg := MapAuthStatus(err)
+		if status != http.StatusTooManyRequests {
+			t.Errorf("expected 429, got %d (msg: %s)", status, msg)
+		}
+	}
+
+	// 4. Quota 0 (unlimited)
+	{
+		req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+		req.Header.Set("Authorization", "Bearer key-unlimited")
+		err := resolver.EnforceKeyModelQuota(req, ledger, "any-model")
+		if err != nil {
+			t.Errorf("expected nil for unlimited key, got %v", err)
+		}
+	}
+
+	// 5. Unknown key / direct token -> nil
+	{
+		req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+		req.Header.Set("Authorization", "Bearer sk-direct-token-unknown")
+		err := resolver.EnforceKeyModelQuota(req, ledger, "any-model")
+		if err != nil {
+			t.Errorf("expected nil for direct token, got %v", err)
+		}
+	}
+
+	// 6. Nil ledger -> nil (graceful)
+	{
+		req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+		req.Header.Set("Authorization", "Bearer key-restricted")
+		err := resolver.EnforceKeyModelQuota(req, nil, "deepseek-v4-flash")
+		if err != nil {
+			t.Errorf("expected nil when ledger is nil, got %v", err)
+		}
+	}
+}

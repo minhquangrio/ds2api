@@ -66,10 +66,15 @@ func (h *Handler) updateConfig(w http.ResponseWriter, r *http.Request) {
 			}
 			c.ModelAliases = aliases
 		}
+		for i := range c.APIKeys {
+			if err := config.NormalizeAPIKeyAssignments(c, &c.APIKeys[i]); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]any{"detail": err.Error()})
+		writeJSON(w, http.StatusBadRequest, map[string]any{"detail": err.Error()})
 		return
 	}
 	h.Pool.Reset()
@@ -84,6 +89,13 @@ func (h *Handler) addKey(w http.ResponseWriter, r *http.Request) {
 	name := fieldString(req, "name")
 	remark := fieldString(req, "remark")
 	toolsEnabled := util.ToBool(req["tools_enabled"])
+	accounts, _ := fieldStringSlice(req, "accounts")
+	models, _ := fieldStringSlice(req, "models")
+	quotaTokens, quotaOK := fieldInt64Optional(req, "quota_tokens")
+	if quotaOK && quotaTokens < 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"detail": "quota_tokens cannot be negative"})
+		return
+	}
 	if key == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"detail": "Key 不能为空"})
 		return
@@ -94,7 +106,19 @@ func (h *Handler) addKey(w http.ResponseWriter, r *http.Request) {
 				return fmt.Errorf("key 已存在")
 			}
 		}
-		c.APIKeys = append(c.APIKeys, config.APIKey{Key: key, Name: name, Remark: remark, ToolsEnabled: toolsEnabled})
+		newKey := config.APIKey{
+			Key:          key,
+			Name:         name,
+			Remark:       remark,
+			ToolsEnabled: toolsEnabled,
+			Accounts:     accounts,
+			Models:       models,
+			QuotaTokens:  quotaTokens,
+		}
+		if err := config.NormalizeAPIKeyAssignments(c, &newKey); err != nil {
+			return err
+		}
+		c.APIKeys = append(c.APIKeys, newKey)
 		return nil
 	})
 	if err != nil {
@@ -119,6 +143,13 @@ func (h *Handler) updateKey(w http.ResponseWriter, r *http.Request) {
 	name, nameOK := fieldStringOptional(req, "name")
 	remark, remarkOK := fieldStringOptional(req, "remark")
 	toolsEnabled, toolsEnabledOK := fieldBoolOptional(req, "tools_enabled")
+	accounts, accountsOK := fieldStringSlice(req, "accounts")
+	models, modelsOK := fieldStringSlice(req, "models")
+	quotaTokens, quotaOK := fieldInt64Optional(req, "quota_tokens")
+	if quotaOK && quotaTokens < 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"detail": "quota_tokens cannot be negative"})
+		return
+	}
 
 	err := h.Store.Update(func(c *config.Config) error {
 		idx := -1
@@ -140,10 +171,26 @@ func (h *Handler) updateKey(w http.ResponseWriter, r *http.Request) {
 		if toolsEnabledOK {
 			c.APIKeys[idx].ToolsEnabled = toolsEnabled
 		}
+		if accountsOK {
+			c.APIKeys[idx].Accounts = accounts
+		}
+		if modelsOK {
+			c.APIKeys[idx].Models = models
+		}
+		if quotaOK {
+			c.APIKeys[idx].QuotaTokens = quotaTokens
+		}
+		if err := config.NormalizeAPIKeyAssignments(c, &c.APIKeys[idx]); err != nil {
+			return err
+		}
 		return nil
 	})
 	if err != nil {
-		writeJSON(w, http.StatusNotFound, map[string]any{"detail": err.Error()})
+		status := http.StatusBadRequest
+		if strings.Contains(err.Error(), "不存在") {
+			status = http.StatusNotFound
+		}
+		writeJSON(w, status, map[string]any{"detail": err.Error()})
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "total_keys": len(h.Store.Snapshot().Keys)})

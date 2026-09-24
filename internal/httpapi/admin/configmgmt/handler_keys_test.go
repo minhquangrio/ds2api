@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -126,5 +127,288 @@ func TestKeyEndpointsPersistToolsEnabled(t *testing.T) {
 	}
 	if !h.Store.APIKeyToolsEnabled("k1") {
 		t.Fatalf("APIKeyToolsEnabled should return true for k1 after update")
+	}
+}
+
+func TestAddKeyWithPolicyAssignments(t *testing.T) {
+	h := newAdminTestHandler(t, `{
+		"accounts":[{"email":"user1@example.com"}],
+		"api_keys":[]
+	}`)
+
+	r := chi.NewRouter()
+	r.Post("/admin/keys", h.addKey)
+
+	body := []byte(`{
+		"key":"sk-test",
+		"name":"my-key",
+		"accounts":["user1@example.com"],
+		"models":["deepseek-v4-flash"],
+		"quota_tokens":50000
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/admin/keys", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	snap := h.Store.Snapshot()
+	if len(snap.APIKeys) != 1 {
+		t.Fatalf("expected 1 key, got %d", len(snap.APIKeys))
+	}
+	k := snap.APIKeys[0]
+	if !slices.Equal(k.Accounts, []string{"user1@example.com"}) {
+		t.Errorf("unexpected accounts: %#v", k.Accounts)
+	}
+	if !slices.Equal(k.Models, []string{"deepseek-v4-flash"}) {
+		t.Errorf("unexpected models: %#v", k.Models)
+	}
+	if k.QuotaTokens != 50000 {
+		t.Errorf("unexpected quota: %d", k.QuotaTokens)
+	}
+}
+
+func TestAddKeyPolicyValidationErrors(t *testing.T) {
+	h := newAdminTestHandler(t, `{
+		"accounts":[{"email":"user1@example.com"}],
+		"api_keys":[]
+	}`)
+
+	r := chi.NewRouter()
+	r.Post("/admin/keys", h.addKey)
+
+	// 1. Unknown account -> 400
+	{
+		body := []byte(`{"key":"k1","accounts":["unknown@example.com"]}`)
+		req := httptest.NewRequest(http.MethodPost, "/admin/keys", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for unknown account, got %d", rec.Code)
+		}
+	}
+
+	// 2. Unknown model -> 400
+	{
+		body := []byte(`{"key":"k2","models":["non-existent-model"]}`)
+		req := httptest.NewRequest(http.MethodPost, "/admin/keys", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for unknown model, got %d", rec.Code)
+		}
+	}
+
+	// 3. Negative quota -> 400
+	{
+		body := []byte(`{"key":"k3","quota_tokens":-100}`)
+		req := httptest.NewRequest(http.MethodPost, "/admin/keys", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for negative quota, got %d", rec.Code)
+		}
+	}
+}
+
+func TestUpdateKeyReplaceAndClearPolicy(t *testing.T) {
+	h := newAdminTestHandler(t, `{
+		"accounts":[{"email":"acc1@test.com"},{"email":"acc2@test.com"}],
+		"api_keys":[{
+			"key":"k1",
+			"accounts":["acc1@test.com"],
+			"models":["deepseek-v4-flash"],
+			"quota_tokens":1000
+		}]
+	}`)
+
+	r := chi.NewRouter()
+	r.Put("/admin/keys/{key}", h.updateKey)
+
+	// 1. Replace with acc2, pro model, 2000 quota
+	{
+		body := []byte(`{
+			"accounts":["acc2@test.com"],
+			"models":["deepseek-v4-pro"],
+			"quota_tokens":2000
+		}`)
+		req := httptest.NewRequest(http.MethodPut, "/admin/keys/k1", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+		}
+		snap := h.Store.Snapshot()
+		if !slices.Equal(snap.APIKeys[0].Accounts, []string{"acc2@test.com"}) {
+			t.Errorf("accounts not replaced: %#v", snap.APIKeys[0].Accounts)
+		}
+		if !slices.Equal(snap.APIKeys[0].Models, []string{"deepseek-v4-pro"}) {
+			t.Errorf("models not replaced: %#v", snap.APIKeys[0].Models)
+		}
+		if snap.APIKeys[0].QuotaTokens != 2000 {
+			t.Errorf("quota not replaced: %d", snap.APIKeys[0].QuotaTokens)
+		}
+	}
+
+	// 2. Clear policy (empty arrays, quota 0)
+	{
+		body := []byte(`{
+			"accounts":[],
+			"models":[],
+			"quota_tokens":0
+		}`)
+		req := httptest.NewRequest(http.MethodPut, "/admin/keys/k1", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+		}
+		snap := h.Store.Snapshot()
+		if len(snap.APIKeys[0].Accounts) != 0 {
+			t.Errorf("expected empty accounts, got %#v", snap.APIKeys[0].Accounts)
+		}
+		if len(snap.APIKeys[0].Models) != 0 {
+			t.Errorf("expected empty models, got %#v", snap.APIKeys[0].Models)
+		}
+		if snap.APIKeys[0].QuotaTokens != 0 {
+			t.Errorf("expected quota 0, got %d", snap.APIKeys[0].QuotaTokens)
+		}
+	}
+
+	// 3. Negative quota -> 400
+	{
+		body := []byte(`{"quota_tokens":-50}`)
+		req := httptest.NewRequest(http.MethodPut, "/admin/keys/k1", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 for negative quota, got %d", rec.Code)
+		}
+	}
+}
+
+func TestUpdateConfigStrictPolicyValidation(t *testing.T) {
+	h := newAdminTestHandler(t, `{
+		"accounts":[{"email":"user1@test.com"}],
+		"api_keys":[]
+	}`)
+
+	r := chi.NewRouter()
+	r.Post("/admin/config", h.updateConfig)
+
+	// Invalid model in api_keys -> 400
+	{
+		payload := map[string]any{
+			"api_keys": []any{
+				map[string]any{
+					"key":    "k1",
+					"models": []any{"invalid-model"},
+				},
+			},
+		}
+		b, _ := json.Marshal(payload)
+		req := httptest.NewRequest(http.MethodPost, "/admin/config", bytes.NewReader(b))
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("expected 400 on invalid model in updateConfig, got %d", rec.Code)
+		}
+	}
+
+	// Valid policy in updateConfig -> 200
+	{
+		payload := map[string]any{
+			"api_keys": []any{
+				map[string]any{
+					"key":          "k1",
+					"accounts":     []any{"user1@test.com"},
+					"models":       []any{"deepseek-v4-flash"},
+					"quota_tokens": 10000,
+				},
+			},
+		}
+		b, _ := json.Marshal(payload)
+		req := httptest.NewRequest(http.MethodPost, "/admin/config", bytes.NewReader(b))
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 on valid updateConfig, got %d body=%s", rec.Code, rec.Body.String())
+		}
+		snap := h.Store.Snapshot()
+		if len(snap.APIKeys) != 1 || snap.APIKeys[0].QuotaTokens != 10000 {
+			t.Errorf("unexpected snap after updateConfig: %+v", snap.APIKeys)
+		}
+	}
+}
+
+func TestBatchImportMergePrecedence(t *testing.T) {
+	h := newAdminTestHandler(t, `{
+		"api_keys":[{
+			"key":"k1",
+			"name":"local-name",
+			"accounts":["local-acc"],
+			"models":["deepseek-v4-flash"],
+			"quota_tokens":5000
+		}]
+	}`)
+
+	r := chi.NewRouter()
+	r.Post("/admin/batch-import", h.batchImport)
+
+	// Incoming key k1 has different accounts, models, quota, and k2 is new
+	payload := map[string]any{
+		"api_keys": []any{
+			map[string]any{
+				"key":          "k1",
+				"name":         "incoming-name",
+				"accounts":     []any{"incoming-acc"},
+				"models":       []any{"incoming-model"},
+				"quota_tokens": 99999,
+			},
+			map[string]any{
+				"key":          "k2",
+				"accounts":     []any{"k2-acc"},
+				"models":       []any{"k2-model"},
+				"quota_tokens": 12345,
+			},
+		},
+	}
+	b, _ := json.Marshal(payload)
+	req := httptest.NewRequest(http.MethodPost, "/admin/batch-import", bytes.NewReader(b))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("batch-import status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	snap := h.Store.Snapshot()
+	if len(snap.APIKeys) != 2 {
+		t.Fatalf("expected 2 keys, got %d", len(snap.APIKeys))
+	}
+
+	// k1: local policy takes precedence
+	k1 := snap.APIKeys[0]
+	if !slices.Equal(k1.Accounts, []string{"local-acc"}) {
+		t.Errorf("expected local accounts preserved, got %#v", k1.Accounts)
+	}
+	if !slices.Equal(k1.Models, []string{"deepseek-v4-flash"}) {
+		t.Errorf("expected local models preserved, got %#v", k1.Models)
+	}
+	if k1.QuotaTokens != 5000 {
+		t.Errorf("expected local quota preserved, got %d", k1.QuotaTokens)
+	}
+
+	// k2: new key gets incoming policy
+	k2 := snap.APIKeys[1]
+	if !slices.Equal(k2.Accounts, []string{"k2-acc"}) {
+		t.Errorf("expected imported accounts for k2, got %#v", k2.Accounts)
+	}
+	if !slices.Equal(k2.Models, []string{"k2-model"}) {
+		t.Errorf("expected imported models for k2, got %#v", k2.Models)
+	}
+	if k2.QuotaTokens != 12345 {
+		t.Errorf("expected imported quota for k2, got %d", k2.QuotaTokens)
 	}
 }

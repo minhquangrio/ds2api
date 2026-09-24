@@ -189,7 +189,7 @@ func (c *Config) UnmarshalJSON(b []byte) error {
 func (c Config) Clone() Config {
 	clone := Config{
 		Keys:                    slices.Clone(c.Keys),
-		APIKeys:                 slices.Clone(c.APIKeys),
+		APIKeys:                 cloneAPIKeys(c.APIKeys),
 		Accounts:                slices.Clone(c.Accounts),
 		Proxies:                 slices.Clone(c.Proxies),
 		ModelAliases:            cloneStringMap(c.ModelAliases),
@@ -248,6 +248,19 @@ func cloneBoolPtr(in *bool) *bool {
 	}
 	v := *in
 	return &v
+}
+
+func cloneAPIKeys(keys []APIKey) []APIKey {
+	if keys == nil {
+		return nil
+	}
+	out := make([]APIKey, len(keys))
+	for i, k := range keys {
+		out[i] = k
+		out[i].Accounts = slices.Clone(k.Accounts)
+		out[i].Models = slices.Clone(k.Models)
+	}
+	return out
 }
 
 func parseConfigString(raw string) (Config, error) {

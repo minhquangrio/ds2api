@@ -586,3 +586,27 @@ expert（pro）模型本身不会收到任何 `ref_file_ids` 或 inline 文件�
 
 - 内部主链路变化，至少更新本文档
 - 外部可见契约变化，再同步更新 API 文档
+
+## 15. API Key 粒度访问控制策略 (Accounts / Models / Quota)
+
+为保证多租户及多场景下的权限与配额隔离，系统在鉴权与请求进入主链路前提供了 API Key 维度的策略约束：
+
+1. **`accounts` 账号白名单约束**：
+   - 每个 API Key 可配置允许使用的上游账号标识列表（`accounts`）。
+   - 在 `auth.Resolver` 分配或轮换账号时，仅从该 Key 的白名单子集中选取。若白名单中所有账号皆不可用，返回失败且绝不会穿透至白名单外的账号。
+   - 若请求显式携带 `X-DS2API-Target-Account` 但目标账号不属于该 Key 的白名单，立即返回 `403 Forbidden` (`ErrAccountNotAllowed`)。
+
+2. **`models` 模型白名单约束**：
+   - 每个 API Key 可配置允许调用的模型列表（`models`）。支持直接指定别名（如 `gpt-4o`）或归一化名（如 `deepseek-v4-flash`）。
+   - 在协议适配层完成请求解析后，各入口统一通过 `h.Auth.EnforceKeyModelQuota(r, h.UsageLedger, stdReq.ResolvedModel)` 执行校验。
+   - 若请求的模型不在白名单中，返回 `403 Forbidden` (`ErrModelNotAllowed`)。
+
+3. **`quota_tokens` Token 永久配额上限**：
+   - 每个 API Key 可配置累计允许消耗的最大 Token 数（`quota_tokens`）。
+   - 由 `usageledger` 实时记录并持久化调用方的 Token 用量（`callerID` 维度）。
+   - 在请求派发前，若当前累积消耗已达上限，立即返回 `429 Too Many Requests` (`ErrQuotaExceeded`)。
+
+4. **跨协议适配层一致性**：
+   - OpenAI Chat、OpenAI Responses、Vercel Stream Prepare、Claude Messages、Gemini Generate 以及 Embeddings 各入口均接入统一的 `EnforceKeyModelQuota`。
+   - 特别针对 Vercel 链路：在 `handleVercelStreamPrepare` 阶段即完成校验，杜绝在越权或超额情况下预先签发 Lease Token。
+

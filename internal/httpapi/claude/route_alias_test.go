@@ -23,6 +23,9 @@ func (routeAliasAuthStub) ToolsEnabledForRequest(_ *http.Request) bool { return 
 func (routeAliasAuthStub) SetAccountMutedUntil(_ *auth.RequestAuth, _ float64) {}
 
 func (routeAliasAuthStub) SetAccountBanned(_ *auth.RequestAuth, _ string) {}
+func (routeAliasAuthStub) EnforceKeyModelQuota(_ *http.Request, _ auth.CallerTokenReader, _ string) error {
+	return nil
+}
 
 func TestClaudeRouteAliasesDoNot404(t *testing.T) {
 	h := &Handler{

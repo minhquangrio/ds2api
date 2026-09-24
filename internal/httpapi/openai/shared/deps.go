@@ -25,6 +25,7 @@ type AuthResolver interface {
 	ToolsEnabledForRequest(req *http.Request) bool
 	SetAccountMutedUntil(a *auth.RequestAuth, muteUntil float64)
 	SetAccountBanned(a *auth.RequestAuth, reason string)
+	EnforceKeyModelQuota(req *http.Request, ledger auth.CallerTokenReader, canonicalModel string) error
 }
 
 type DeepSeekCaller interface {

@@ -1,16 +1,44 @@
 package config
 
+import "strings"
+
 // rebuildIndexes must be called with the lock already held (or during init).
 func (s *Store) rebuildIndexes() {
 	prevStatus := s.accTest
 	s.keyMap = make(map[string]struct{}, len(s.cfg.Keys))
 	s.keyToolsMap = make(map[string]bool, len(s.cfg.APIKeys))
+	s.keyPolicyMap = make(map[string]KeyPolicy, len(s.cfg.APIKeys))
 	for _, k := range s.cfg.Keys {
 		s.keyMap[k] = struct{}{}
 	}
 	for _, item := range s.cfg.APIKeys {
 		if item.Key != "" {
 			s.keyToolsMap[item.Key] = item.ToolsEnabled
+			pol := KeyPolicy{
+				QuotaTokens: item.QuotaTokens,
+			}
+			if len(item.Accounts) > 0 {
+				pol.Accounts = make(map[string]struct{}, len(item.Accounts))
+				for _, acc := range item.Accounts {
+					acc = strings.TrimSpace(acc)
+					if acc != "" {
+						pol.Accounts[acc] = struct{}{}
+					}
+				}
+			}
+			if len(item.Models) > 0 {
+				pol.Models = make(map[string]struct{}, len(item.Models)*2)
+				for _, m := range item.Models {
+					m = strings.ToLower(strings.TrimSpace(m))
+					if m != "" {
+						pol.Models[m] = struct{}{}
+						if target, ok := ResolveModelTarget(modelAliasesMap(s.cfg.ModelAliases), m); ok && target.Canonical != "" {
+							pol.Models[strings.ToLower(target.Canonical)] = struct{}{}
+						}
+					}
+				}
+			}
+			s.keyPolicyMap[item.Key] = pol
 		}
 	}
 	s.accMap = make(map[string]int, len(s.cfg.Accounts))

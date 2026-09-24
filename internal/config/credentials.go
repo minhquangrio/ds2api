@@ -68,6 +68,9 @@ func normalizeAPIKeys(items []APIKey) []APIKey {
 			Name:         strings.TrimSpace(item.Name),
 			Remark:       strings.TrimSpace(item.Remark),
 			ToolsEnabled: item.ToolsEnabled,
+			Accounts:     normalizeStringSlice(item.Accounts),
+			Models:       normalizeStringSlice(item.Models),
+			QuotaTokens:  item.QuotaTokens,
 		})
 	}
 	if len(out) == 0 {
@@ -97,6 +100,9 @@ func apiKeysFromStrings(keys []string, meta map[string]APIKey) []APIKey {
 				Name:         strings.TrimSpace(item.Name),
 				Remark:       strings.TrimSpace(item.Remark),
 				ToolsEnabled: item.ToolsEnabled,
+				Accounts:     normalizeStringSlice(item.Accounts),
+				Models:       normalizeStringSlice(item.Models),
+				QuotaTokens:  item.QuotaTokens,
 			})
 			continue
 		}
@@ -144,6 +150,9 @@ func apiKeyMap(items []APIKey) map[string]APIKey {
 			Name:         strings.TrimSpace(item.Name),
 			Remark:       strings.TrimSpace(item.Remark),
 			ToolsEnabled: item.ToolsEnabled,
+			Accounts:     normalizeStringSlice(item.Accounts),
+			Models:       normalizeStringSlice(item.Models),
+			QuotaTokens:  item.QuotaTokens,
 		}
 	}
 	return out
@@ -157,6 +166,32 @@ func equalAPIKeys(a, b []APIKey) bool {
 		return strings.TrimSpace(x.Key) == strings.TrimSpace(y.Key) &&
 			strings.TrimSpace(x.Name) == strings.TrimSpace(y.Name) &&
 			strings.TrimSpace(x.Remark) == strings.TrimSpace(y.Remark) &&
-			x.ToolsEnabled == y.ToolsEnabled
+			x.ToolsEnabled == y.ToolsEnabled &&
+			slices.Equal(x.Accounts, y.Accounts) &&
+			slices.Equal(x.Models, y.Models) &&
+			x.QuotaTokens == y.QuotaTokens
 	})
+}
+
+func normalizeStringSlice(items []string) []string {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(items))
+	seen := make(map[string]struct{}, len(items))
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if _, ok := seen[item]; ok {
+			continue
+		}
+		seen[item] = struct{}{}
+		out = append(out, item)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }

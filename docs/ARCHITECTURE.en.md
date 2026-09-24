@@ -203,7 +203,9 @@ flowchart LR
 - `internal/httpapi/admin/*`: Admin API root assembly plus auth/accounts/config/settings/proxies/rawsamples/vercel/history/devcapture/version resource packages.
 - `internal/chathistory`: server-side conversation history persistence, pagination, detail lookup, and retention policy.
 - `internal/responsehistory`: DeepSeek upstream response archive, saving assistant text, thinking, raw tool-call fragments, and streaming detail before protocol rendering/trimming.
-- `internal/config`: config loading/validation + runtime settings hot-reload.
+- `internal/config`: config loading/validation + runtime settings hot-reload, and API Key Policy (accounts/models/quota) normalization.
+- `internal/usageledger`: token usage ledger core, tracking and persisting account- and caller-level token consumption to back API Key quota enforcement.
+- `internal/auth`: authentication, JWT/credential resolution, upstream account allocation, and per-key policy enforcement (account allowlist, model allowlist, and quota checks).
 - `internal/account`: managed account pool, inflight slots, waiting queue.
 - `internal/textclean`: text cleanup helpers, e.g. stripping `[reference: N]` markers.
 - `internal/claudeconv`: Claude API request to DeepSeek format conversion.

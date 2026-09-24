@@ -183,6 +183,7 @@ export default function AccountManagerContainer({ config, onRefresh, onMessage, 
                 loading={loading}
                 onClose={closeKeyModal}
                 onAdd={addKey}
+                accounts={config?.accounts || []}
             />
 
             <AddAccountModal

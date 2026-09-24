@@ -35,11 +35,8 @@ func (h *Handler) handleVercelStreamPrepare(w http.ResponseWriter, r *http.Reque
 
 	a, err := h.Auth.Determine(r)
 	if err != nil {
-		status := http.StatusUnauthorized
-		if err == auth.ErrNoAccount {
-			status = http.StatusTooManyRequests
-		}
-		writeOpenAIError(w, status, err.Error())
+		status, detail := auth.MapAuthStatus(err)
+		writeOpenAIError(w, status, detail)
 		return
 	}
 	leased := false
@@ -77,6 +74,11 @@ func (h *Handler) handleVercelStreamPrepare(w http.ResponseWriter, r *http.Reque
 	stdReq, err := promptcompat.NormalizeOpenAIChatRequest(h.Store, req, requestTraceID(r))
 	if err != nil {
 		writeOpenAIError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := h.Auth.EnforceKeyModelQuota(r, h.UsageLedger, stdReq.ResolvedModel); err != nil {
+		status, detail := auth.MapAuthStatus(err)
+		writeOpenAIError(w, status, detail)
 		return
 	}
 	if rerouted && originalModel != "" {

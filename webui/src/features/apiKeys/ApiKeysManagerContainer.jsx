@@ -33,11 +33,13 @@ export default function ApiKeysManagerContainer({ config, onRefresh, onMessage, 
     // Modal state
     const [showModal, setShowModal] = useState(false)
     const [editingKey, setEditingKey] = useState(null)
-    const [keyForm, setKeyForm] = useState({ key: '', name: '', remark: '', tools_enabled: false })
+    const [keyForm, setKeyForm] = useState({ key: '', name: '', remark: '', tools_enabled: false, accounts: [], models: [], quota_tokens: '' })
 
     // Normalize keys from config
     const normalizedKeys = useMemo(() => {
-        const raw = config?.keys || []
+        const raw = Array.isArray(config?.api_keys) && config.api_keys.length > 0
+            ? config.api_keys
+            : (config?.keys || [])
         return raw.map((item, index) => {
             if (typeof item === 'string') {
                 return {
@@ -46,6 +48,9 @@ export default function ApiKeysManagerContainer({ config, onRefresh, onMessage, 
                     name: '',
                     remark: '',
                     tools_enabled: false,
+                    accounts: [],
+                    models: [],
+                    quota_tokens: 0,
                     isDefault: index === 0,
                 }
             }
@@ -55,10 +60,13 @@ export default function ApiKeysManagerContainer({ config, onRefresh, onMessage, 
                 name: item.name || '',
                 remark: item.remark || '',
                 tools_enabled: Boolean(item.tools_enabled),
+                accounts: Array.isArray(item.accounts) ? item.accounts : [],
+                models: Array.isArray(item.models) ? item.models : [],
+                quota_tokens: item.quota_tokens || 0,
                 isDefault: index === 0,
             }
         }).filter((k) => Boolean(k.key))
-    }, [config?.keys])
+    }, [config?.api_keys, config?.keys])
 
     const filteredKeys = useMemo(() => {
         if (!searchQuery.trim()) return normalizedKeys
@@ -86,7 +94,7 @@ export default function ApiKeysManagerContainer({ config, onRefresh, onMessage, 
 
     const openAddModal = () => {
         setEditingKey(null)
-        setKeyForm({ key: '', name: '', remark: '', tools_enabled: false })
+        setKeyForm({ key: '', name: '', remark: '', tools_enabled: false, accounts: [], models: [], quota_tokens: '' })
         setShowModal(true)
     }
 
@@ -97,6 +105,9 @@ export default function ApiKeysManagerContainer({ config, onRefresh, onMessage, 
             name: item.name,
             remark: item.remark,
             tools_enabled: item.tools_enabled,
+            accounts: Array.isArray(item.accounts) ? [...item.accounts] : [],
+            models: Array.isArray(item.models) ? [...item.models] : [],
+            quota_tokens: item.quota_tokens > 0 ? String(item.quota_tokens) : '',
         })
         setShowModal(true)
     }
@@ -116,9 +127,18 @@ export default function ApiKeysManagerContainer({ config, onRefresh, onMessage, 
                 ? `/admin/keys/${encodeURIComponent(editingKey.key)}`
                 : '/admin/keys'
             const method = isEditing ? 'PUT' : 'POST'
-            const payload = isEditing
-                ? { name: keyForm.name, remark: keyForm.remark, tools_enabled: keyForm.tools_enabled }
-                : { key: keyForm.key.trim(), name: keyForm.name, remark: keyForm.remark, tools_enabled: keyForm.tools_enabled }
+            const payload = {
+                name: keyForm.name,
+                remark: keyForm.remark,
+                tools_enabled: Boolean(keyForm.tools_enabled),
+                accounts: Array.isArray(keyForm.accounts) ? keyForm.accounts : [],
+                models: Array.isArray(keyForm.models) ? keyForm.models : [],
+                quota_tokens: keyForm.quota_tokens ? parseInt(keyForm.quota_tokens, 10) || 0 : 0,
+            }
+            if (!isEditing) {
+                payload.key = keyForm.key.trim()
+                if (!payload.key) return
+            }
 
             const res = await apiFetch(endpoint, {
                 method,
@@ -228,6 +248,7 @@ export default function ApiKeysManagerContainer({ config, onRefresh, onMessage, 
                                     <th className="px-4 py-3.5">Name / Label</th>
                                     <th className="px-4 py-3.5">Remark</th>
                                     <th className="px-4 py-3.5">Tools</th>
+                                    <th className="px-4 py-3.5">Policy / Quota</th>
                                     <th className="px-4 py-3.5 text-right">Actions</th>
                                 </tr>
                             </thead>
@@ -291,6 +312,41 @@ export default function ApiKeysManagerContainer({ config, onRefresh, onMessage, 
                                                         Default
                                                     </span>
                                                 )}
+                                            </td>
+
+                                            {/* Policy / Quota */}
+                                            <td className="px-4 py-4">
+                                                <div className="flex flex-col gap-1">
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                        <span className={clsx(
+                                                            "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border",
+                                                            Array.isArray(item.accounts) && item.accounts.length > 0
+                                                                ? "bg-blue-500/10 text-blue-500 border-blue-500/20"
+                                                                : "bg-muted/40 text-muted-foreground border-border/60"
+                                                        )} title={Array.isArray(item.accounts) && item.accounts.length > 0 ? item.accounts.join(', ') : t('accountManager.allAccounts')}>
+                                                            {Array.isArray(item.accounts) && item.accounts.length > 0
+                                                                ? `${item.accounts.length} accts`
+                                                                : t('accountManager.allAccounts')}
+                                                        </span>
+                                                        <span className={clsx(
+                                                            "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-medium border",
+                                                            Array.isArray(item.models) && item.models.length > 0
+                                                                ? "bg-purple-500/10 text-purple-400 border-purple-500/20"
+                                                                : "bg-muted/40 text-muted-foreground border-border/60 font-sans"
+                                                        )} title={Array.isArray(item.models) && item.models.length > 0 ? item.models.join(', ') : t('accountManager.allModels')}>
+                                                            {Array.isArray(item.models) && item.models.length > 0
+                                                                ? `${item.models.length} models`
+                                                                : t('accountManager.allModels')}
+                                                        </span>
+                                                    </div>
+                                                    <div className="text-[11px] text-muted-foreground font-medium">
+                                                        {item.quota_tokens > 0 ? (
+                                                            <span className="text-emerald-500 font-semibold">{Number(item.quota_tokens).toLocaleString()} tokens</span>
+                                                        ) : (
+                                                            <span>{t('accountManager.unlimitedQuota')}</span>
+                                                        )}
+                                                    </div>
+                                                </div>
                                             </td>
 
                                             {/* Actions */}
@@ -370,6 +426,7 @@ export default function ApiKeysManagerContainer({ config, onRefresh, onMessage, 
                 loading={loading}
                 onClose={closeModal}
                 onAdd={handleSaveKey}
+                accounts={config?.accounts || []}
             />
         </div>
     )

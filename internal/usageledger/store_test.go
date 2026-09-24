@@ -204,3 +204,118 @@ func TestPruneRemovesOldBucketsAndDeletesEmptyShardFile(t *testing.T) {
 		t.Fatalf("expected empty hour shard file to be deleted, got err: %v", err)
 	}
 }
+
+func TestStoreCallersTrackingAndCallerTotalTokens(t *testing.T) {
+	dir := t.TempDir()
+	storePath := filepath.Join(dir, "usage_ledger.json")
+	store := New(storePath)
+	defer func() { _ = store.Close() }()
+
+	store.mu.Lock()
+	store.recordLocked(Record{
+		CallerID:    "caller_1",
+		TotalTokens: 150,
+		Status:      "success",
+	})
+	store.recordLocked(Record{
+		CallerID:    "caller_1",
+		TotalTokens: 250,
+		Status:      "success",
+	})
+	store.recordLocked(Record{
+		CallerID:    "caller_2",
+		TotalTokens: 100,
+		Status:      "success",
+	})
+	store.recordLocked(Record{
+		CallerID:    "", // anonymous
+		TotalTokens: 50,
+		Status:      "success",
+	})
+	store.mu.Unlock()
+
+	if tokens := store.CallerTotalTokens("caller_1"); tokens != 400 {
+		t.Errorf("expected 400 tokens for caller_1, got %d", tokens)
+	}
+	if tokens := store.CallerTotalTokens("caller_2"); tokens != 100 {
+		t.Errorf("expected 100 tokens for caller_2, got %d", tokens)
+	}
+	if tokens := store.CallerTotalTokens("unknown_caller"); tokens != 0 {
+		t.Errorf("expected 0 tokens for unknown caller, got %d", tokens)
+	}
+	if tokens := store.CallerTotalTokens(""); tokens != 0 {
+		t.Errorf("expected 0 tokens for empty caller ID, got %d", tokens)
+	}
+
+	var nilStore *Store
+	if tokens := nilStore.CallerTotalTokens("caller_1"); tokens != 0 {
+		t.Errorf("expected 0 tokens on nil store, got %d", tokens)
+	}
+}
+
+func TestStoreCallersPersistAndLoadRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	storePath := filepath.Join(dir, "usage_ledger.json")
+	store1 := New(storePath)
+
+	store1.mu.Lock()
+	store1.recordLocked(Record{
+		CallerID:    "user_abc",
+		TotalTokens: 1234,
+		Status:      "success",
+	})
+	if err := store1.flushLocked(); err != nil {
+		store1.mu.Unlock()
+		t.Fatalf("flush failed: %v", err)
+	}
+	store1.mu.Unlock()
+	_ = store1.Close()
+
+	// Load in a fresh store instance
+	store2 := New(storePath)
+	defer func() { _ = store2.Close() }()
+
+	store2.mu.Lock()
+	if err := store2.loadLocked(); err != nil {
+		store2.mu.Unlock()
+		t.Fatalf("load failed: %v", err)
+	}
+	store2.mu.Unlock()
+
+	if tokens := store2.CallerTotalTokens("user_abc"); tokens != 1234 {
+		t.Errorf("expected 1234 tokens after reload, got %d", tokens)
+	}
+}
+
+func TestStoreLoadLegacyFileWithoutCallers(t *testing.T) {
+	dir := t.TempDir()
+	storePath := filepath.Join(dir, "usage_ledger.json")
+
+	// Write old payload without callers field
+	legacyJSON := `{
+		"version": 1,
+		"revision": 5,
+		"flushed_at": 1715635200000,
+		"totals": {"requests": 10, "total_tokens": 5000}
+	}`
+	if err := os.WriteFile(storePath, []byte(legacyJSON), 0644); err != nil {
+		t.Fatalf("failed to write legacy ledger: %v", err)
+	}
+
+	store := New(storePath)
+	defer func() { _ = store.Close() }()
+
+	store.mu.Lock()
+	if err := store.loadLocked(); err != nil {
+		store.mu.Unlock()
+		t.Fatalf("loadLocked failed on legacy json: %v", err)
+	}
+	store.mu.Unlock()
+
+	if store.totals.TotalTokens != 5000 {
+		t.Errorf("expected totals.TotalTokens=5000, got %d", store.totals.TotalTokens)
+	}
+	if tokens := store.CallerTotalTokens("any_user"); tokens != 0 {
+		t.Errorf("expected 0 tokens on legacy ledger, got %d", tokens)
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -53,6 +54,12 @@ func FieldStringOptional(m map[string]any, key string) (string, bool) {
 }
 func FieldBoolOptional(m map[string]any, key string) (bool, bool) {
 	return fieldBoolOptional(m, key)
+}
+func FieldStringSlice(m map[string]any, key string) ([]string, bool) {
+	return fieldStringSlice(m, key)
+}
+func FieldInt64Optional(m map[string]any, key string) (int64, bool) {
+	return fieldInt64Optional(m, key)
 }
 func StatusOr(v int, d int) int { return statusOr(v, d) }
 func AccountMatchesIdentifier(acc config.Account, identifier string) bool {
@@ -199,11 +206,17 @@ func toAPIKeys(v any) ([]config.APIKey, bool) {
 				continue
 			}
 			seen[key] = struct{}{}
+			accs, _ := fieldStringSlice(x, "accounts")
+			mods, _ := fieldStringSlice(x, "models")
+			quota, _ := fieldInt64Optional(x, "quota_tokens")
 			out = append(out, config.APIKey{
 				Key:          key,
 				Name:         fieldString(x, "name"),
 				Remark:       fieldString(x, "remark"),
 				ToolsEnabled: util.ToBool(x["tools_enabled"]),
+				Accounts:     accs,
+				Models:       mods,
+				QuotaTokens:  quota,
 			})
 		default:
 			key := strings.TrimSpace(fmt.Sprintf("%v", item))
@@ -221,11 +234,42 @@ func toAPIKeys(v any) ([]config.APIKey, bool) {
 }
 
 func normalizeAPIKeyForStorage(item config.APIKey) config.APIKey {
+	var accounts []string
+	if len(item.Accounts) > 0 {
+		seen := make(map[string]struct{}, len(item.Accounts))
+		for _, a := range item.Accounts {
+			a = strings.TrimSpace(a)
+			if a == "" {
+				continue
+			}
+			if _, ok := seen[a]; !ok {
+				seen[a] = struct{}{}
+				accounts = append(accounts, a)
+			}
+		}
+	}
+	var models []string
+	if len(item.Models) > 0 {
+		seen := make(map[string]struct{}, len(item.Models))
+		for _, m := range item.Models {
+			m = strings.TrimSpace(m)
+			if m == "" {
+				continue
+			}
+			if _, ok := seen[m]; !ok {
+				seen[m] = struct{}{}
+				models = append(models, m)
+			}
+		}
+	}
 	return config.APIKey{
 		Key:          strings.TrimSpace(item.Key),
 		Name:         strings.TrimSpace(item.Name),
 		Remark:       strings.TrimSpace(item.Remark),
 		ToolsEnabled: item.ToolsEnabled,
+		Accounts:     accounts,
+		Models:       models,
+		QuotaTokens:  item.QuotaTokens,
 	}
 }
 
@@ -261,7 +305,7 @@ func mergeAPIKeysPreferStructured(existing, incoming []config.APIKey) ([]config.
 		if idx, ok := index[item.Key]; ok {
 			keep := merged[idx]
 			next := mergeAPIKeyRecord(keep, item)
-			if next != keep {
+			if !equalAPIKey(next, keep) {
 				merged[idx] = next
 				imported++
 			}
@@ -276,6 +320,16 @@ func mergeAPIKeysPreferStructured(existing, incoming []config.APIKey) ([]config.
 		return nil, imported
 	}
 	return merged, imported
+}
+
+func equalAPIKey(a, b config.APIKey) bool {
+	return strings.TrimSpace(a.Key) == strings.TrimSpace(b.Key) &&
+		strings.TrimSpace(a.Name) == strings.TrimSpace(b.Name) &&
+		strings.TrimSpace(a.Remark) == strings.TrimSpace(b.Remark) &&
+		a.ToolsEnabled == b.ToolsEnabled &&
+		slices.Equal(a.Accounts, b.Accounts) &&
+		slices.Equal(a.Models, b.Models) &&
+		a.QuotaTokens == b.QuotaTokens
 }
 
 func mergeAPIKeyRecord(existing, incoming config.APIKey) config.APIKey {
@@ -293,6 +347,24 @@ func mergeAPIKeyRecord(existing, incoming config.APIKey) config.APIKey {
 		keep = existing
 	}
 	keep.ToolsEnabled = existing.ToolsEnabled || incoming.ToolsEnabled
+
+	// Policy merge precedence: local (existing) policy takes precedence over imported (incoming) policy
+	if len(existing.Accounts) > 0 {
+		keep.Accounts = existing.Accounts
+	} else {
+		keep.Accounts = incoming.Accounts
+	}
+	if len(existing.Models) > 0 {
+		keep.Models = existing.Models
+	} else {
+		keep.Models = incoming.Models
+	}
+	if existing.QuotaTokens > 0 {
+		keep.QuotaTokens = existing.QuotaTokens
+	} else {
+		keep.QuotaTokens = incoming.QuotaTokens
+	}
+
 	return keep
 }
 
@@ -318,6 +390,83 @@ func fieldBoolOptional(m map[string]any, key string) (bool, bool) {
 		return false, false
 	}
 	return util.ToBool(v), true
+}
+
+func fieldStringSlice(m map[string]any, key string) ([]string, bool) {
+	v, ok := m[key]
+	if !ok {
+		return nil, false
+	}
+	if v == nil {
+		return []string{}, true
+	}
+	switch raw := v.(type) {
+	case []string:
+		out := make([]string, 0, len(raw))
+		for _, s := range raw {
+			s = strings.TrimSpace(s)
+			if s != "" {
+				out = append(out, s)
+			}
+		}
+		return out, true
+	case []any:
+		out := make([]string, 0, len(raw))
+		for _, item := range raw {
+			if s := strings.TrimSpace(fmt.Sprintf("%v", item)); s != "" && s != "<nil>" {
+				out = append(out, s)
+			}
+		}
+		return out, true
+	case string:
+		s := strings.TrimSpace(raw)
+		if s == "" {
+			return []string{}, true
+		}
+		return []string{s}, true
+	default:
+		return nil, false
+	}
+}
+
+func fieldInt64Optional(m map[string]any, key string) (int64, bool) {
+	v, ok := m[key]
+	if !ok {
+		return 0, false
+	}
+	if v == nil {
+		return 0, true
+	}
+	switch n := v.(type) {
+	case int64:
+		return n, true
+	case int:
+		return int64(n), true
+	case int32:
+		return int64(n), true
+	case float64:
+		return int64(n), true
+	case float32:
+		return int64(n), true
+	case json.Number:
+		val, err := n.Int64()
+		if err != nil {
+			return 0, false
+		}
+		return val, true
+	case string:
+		n = strings.TrimSpace(n)
+		if n == "" {
+			return 0, true
+		}
+		val, err := strconv.ParseInt(n, 10, 64)
+		if err != nil {
+			return 0, false
+		}
+		return val, true
+	default:
+		return 0, false
+	}
 }
 
 func statusOr(v int, d int) int {

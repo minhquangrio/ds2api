@@ -287,6 +287,9 @@ func (a *vercelReleaseAuthStub) ToolsEnabledForRequest(_ *http.Request) bool { r
 func (a *vercelReleaseAuthStub) SetAccountMutedUntil(_ *auth.RequestAuth, _ float64) {}
 
 func (a *vercelReleaseAuthStub) SetAccountBanned(_ *auth.RequestAuth, _ string) {}
+func (a *vercelReleaseAuthStub) EnforceKeyModelQuota(_ *http.Request, _ auth.CallerTokenReader, _ string) error {
+	return nil
+}
 
 func TestHandleVercelStreamReleaseTriggersAutoDelete(t *testing.T) {
 	t.Setenv("VERCEL", "1")

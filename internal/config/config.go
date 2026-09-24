@@ -56,10 +56,13 @@ type Account struct {
 }
 
 type APIKey struct {
-	Key          string `json:"key"`
-	Name         string `json:"name,omitempty"`
-	Remark       string `json:"remark,omitempty"`
-	ToolsEnabled bool   `json:"tools_enabled,omitempty"`
+	Key          string   `json:"key"`
+	Name         string   `json:"name,omitempty"`
+	Remark       string   `json:"remark,omitempty"`
+	ToolsEnabled bool     `json:"tools_enabled,omitempty"`
+	Accounts     []string `json:"accounts,omitempty"`     // identifier; empty = all
+	Models       []string `json:"models,omitempty"`       // canonical names; empty = all
+	QuotaTokens  int64    `json:"quota_tokens,omitempty"` // 0 = unlimited
 }
 
 type Proxy struct {

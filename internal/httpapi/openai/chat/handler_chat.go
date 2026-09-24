@@ -88,6 +88,11 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 		writeOpenAIError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if err := h.Auth.EnforceKeyModelQuota(r, h.UsageLedger, stdReq.ResolvedModel); err != nil {
+		status, detail := auth.MapAuthStatus(err)
+		writeOpenAIError(w, status, detail)
+		return
+	}
 	if rerouted && originalModel != "" {
 		stdReq.RequestedModel = originalModel
 		stdReq.ResponseModel = originalModel

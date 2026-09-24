@@ -203,7 +203,9 @@ flowchart LR
 - `internal/httpapi/admin/*`：Admin API 根装配与 auth/accounts/config/settings/proxies/rawsamples/vercel/history/devcapture/version 等资源子包。
 - `internal/chathistory`：服务器端对话记录持久化、分页、单条详情和保留策略。
 - `internal/responsehistory`：DeepSeek 上游响应归档，会在协议回译/裁剪前保存 assistant text、thinking、tool-call 原始片段和流式详情。
-- `internal/config`：配置加载、校验、运行时 settings 热更新。
+- `internal/config`：配置加载、校验、运行时 settings 热更新，以及 API Key 策略（accounts/models/quota）归一化。
+- `internal/usageledger`：Token 用量台账核心，跟踪并持久化账号与调用方维度的 Token 消费，为 API Key 配额（quota_tokens）控制提供支持。
+- `internal/auth`：鉴权、JWT/凭证解析、上游账号获取，以及 API Key 级别策略拦截（账号白名单、模型白名单与用量配额检查）。
 - `internal/account`：托管账号池、并发槽位、等待队列。
 - `internal/textclean`：文本清洗，移除 `[reference: N]` 标记等噪声。
 - `internal/claudeconv`：Claude API 请求到 DeepSeek 格式的协议转换。

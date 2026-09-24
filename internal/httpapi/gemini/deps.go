@@ -13,6 +13,7 @@ type AuthResolver interface {
 	Determine(req *http.Request) (*auth.RequestAuth, error)
 	Release(a *auth.RequestAuth)
 	ToolsEnabledForRequest(req *http.Request) bool
+	EnforceKeyModelQuota(req *http.Request, ledger auth.CallerTokenReader, canonicalModel string) error
 }
 
 type DeepSeekCaller interface {

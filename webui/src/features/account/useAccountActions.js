@@ -6,7 +6,7 @@ export function useAccountActions({ apiFetch, t, onMessage, onRefresh, config, f
     const [showAddAccount, setShowAddAccount] = useState(false)
     const [showEditAccount, setShowEditAccount] = useState(false)
     const [editingAccount, setEditingAccount] = useState(null)
-    const [newKey, setNewKey] = useState({ key: '', name: '', remark: '', tools_enabled: false })
+    const [newKey, setNewKey] = useState({ key: '', name: '', remark: '', tools_enabled: false, accounts: [], models: [], quota_tokens: '' })
     const [copiedKey, setCopiedKey] = useState(null)
     const [newAccount, setNewAccount] = useState({ provider: 'deepseek', name: '', remark: '', email: '', mobile: '', password: '', cookies: '', pool_type: 'default' })
     const [editAccount, setEditAccount] = useState({ name: '', remark: '', cookies: '', pool_type: 'default' })
@@ -25,7 +25,7 @@ export function useAccountActions({ apiFetch, t, onMessage, onRefresh, config, f
 
     const openAddKey = () => {
         setEditingKey(null)
-        setNewKey({ key: '', name: '', remark: '', tools_enabled: false })
+        setNewKey({ key: '', name: '', remark: '', tools_enabled: false, accounts: [], models: [], quota_tokens: '' })
         setShowAddKey(true)
     }
 
@@ -36,7 +36,10 @@ export function useAccountActions({ apiFetch, t, onMessage, onRefresh, config, f
             key: item.key || '',
             name: item.name || '',
             remark: item.remark || '',
-            tools_enabled: item.tools_enabled || false,
+            tools_enabled: Boolean(item.tools_enabled),
+            accounts: Array.isArray(item.accounts) ? [...item.accounts] : [],
+            models: Array.isArray(item.models) ? [...item.models] : [],
+            quota_tokens: item.quota_tokens > 0 ? String(item.quota_tokens) : '',
         })
         setShowAddKey(true)
     }
@@ -44,7 +47,7 @@ export function useAccountActions({ apiFetch, t, onMessage, onRefresh, config, f
     const closeKeyModal = () => {
         setShowAddKey(false)
         setEditingKey(null)
-        setNewKey({ key: '', name: '', remark: '', tools_enabled: false })
+        setNewKey({ key: '', name: '', remark: '', tools_enabled: false, accounts: [], models: [], quota_tokens: '' })
     }
 
     const openAddAccount = () => {
@@ -98,11 +101,17 @@ export function useAccountActions({ apiFetch, t, onMessage, onRefresh, config, f
                 ? `/admin/keys/${encodeURIComponent(editingKey.key)}`
                 : '/admin/keys'
             const method = isEditing ? 'PUT' : 'POST'
-            const payload = isEditing
-                ? { name: newKey.name, remark: newKey.remark, tools_enabled: newKey.tools_enabled }
-                : { key: newKey.key.trim(), name: newKey.name, remark: newKey.remark, tools_enabled: newKey.tools_enabled }
-            if (!isEditing && !payload.key) {
-                return
+            const payload = {
+                name: newKey.name,
+                remark: newKey.remark,
+                tools_enabled: Boolean(newKey.tools_enabled),
+                accounts: Array.isArray(newKey.accounts) ? newKey.accounts : [],
+                models: Array.isArray(newKey.models) ? newKey.models : [],
+                quota_tokens: newKey.quota_tokens ? parseInt(newKey.quota_tokens, 10) || 0 : 0,
+            }
+            if (!isEditing) {
+                payload.key = newKey.key.trim()
+                if (!payload.key) return
             }
             const res = await apiFetch(endpoint, {
                 method,

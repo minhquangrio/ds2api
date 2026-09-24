@@ -25,6 +25,7 @@ type openAITestSurface struct {
 	Auth        shared.AuthResolver
 	DS          shared.DeepSeekCaller
 	ChatHistory *chathistory.Store
+	UsageLedger auth.CallerTokenReader
 
 	chat       *chat.Handler
 	responses  *responses.Handler
@@ -67,7 +68,7 @@ func (h *openAITestSurface) filesHandler() *files.Handler {
 func (h *openAITestSurface) embeddingsHandler() *embeddings.Handler {
 	if h.embeddings == nil {
 		deps := h.deps()
-		h.embeddings = &embeddings.Handler{Store: deps.Store, Auth: deps.Auth, DS: deps.DS, ChatHistory: deps.ChatHistory}
+		h.embeddings = &embeddings.Handler{Store: deps.Store, Auth: deps.Auth, DS: deps.DS, ChatHistory: deps.ChatHistory, UsageLedger: h.UsageLedger}
 	}
 	return h.embeddings
 }

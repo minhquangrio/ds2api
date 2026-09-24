@@ -52,11 +52,7 @@ func (h *Handler) GetResponseByID(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Responses(w http.ResponseWriter, r *http.Request) {
 	a, err := h.Auth.Determine(r)
 	if err != nil {
-		status := http.StatusUnauthorized
-		detail := err.Error()
-		if err == auth.ErrNoAccount {
-			status = http.StatusTooManyRequests
-		}
+		status, detail := auth.MapAuthStatus(err)
 		writeOpenAIError(w, status, detail)
 		return
 	}
@@ -98,6 +94,11 @@ func (h *Handler) Responses(w http.ResponseWriter, r *http.Request) {
 	stdReq, err := promptcompat.NormalizeOpenAIResponsesRequest(h.Store, req, traceID)
 	if err != nil {
 		writeOpenAIError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := h.Auth.EnforceKeyModelQuota(r, h.UsageLedger, stdReq.ResolvedModel); err != nil {
+		status, detail := auth.MapAuthStatus(err)
+		writeOpenAIError(w, status, detail)
 		return
 	}
 	if rerouted && originalModel != "" {

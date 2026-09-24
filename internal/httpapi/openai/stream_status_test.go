@@ -43,6 +43,9 @@ func (streamStatusAuthStub) ToolsEnabledForRequest(_ *http.Request) bool { retur
 func (streamStatusAuthStub) SetAccountMutedUntil(_ *auth.RequestAuth, _ float64) {}
 
 func (streamStatusAuthStub) SetAccountBanned(_ *auth.RequestAuth, _ string) {}
+func (streamStatusAuthStub) EnforceKeyModelQuota(_ *http.Request, _ auth.CallerTokenReader, _ string) error {
+	return nil
+}
 
 type streamStatusDSStub struct {
 	resp *http.Response

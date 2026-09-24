@@ -94,3 +94,53 @@ func TestEmbeddingsRouteProviderMissing(t *testing.T) {
 		t.Fatalf("expected error.param in response: %#v", out)
 	}
 }
+
+type mockEmbeddingsCallerReader struct {
+	tokens int64
+}
+
+func (m mockEmbeddingsCallerReader) CallerTotalTokens(_ string) int64 {
+	return m.tokens
+}
+
+func TestEmbeddingsEnforcesModelAllowlistAndQuota(t *testing.T) {
+	cfgJSON := `{
+		"embeddings": {"provider": "deterministic"},
+		"api_keys": [
+			{"key": "sk-embed-test", "models": ["gpt-4o"], "quota_tokens": 100}
+		],
+		"accounts": [
+			{"email": "test@example.com", "password": "pwd", "token": "tok1"}
+		]
+	}`
+	store, resolver := newResolverWithConfigJSON(t, cfgJSON)
+	reader := &mockEmbeddingsCallerReader{tokens: 0}
+	h := &openAITestSurface{Store: store, Auth: resolver, UsageLedger: reader}
+	r := chi.NewRouter()
+	registerOpenAITestRoutes(r, h)
+
+	t.Run("disallowed model returns 403", func(t *testing.T) {
+		body := bytes.NewBufferString(`{"model":"deepseek-v4-pro","input":"hello"}`)
+		req := httptest.NewRequest(http.MethodPost, "/v1/embeddings", body)
+		req.Header.Set("Authorization", "Bearer sk-embed-test")
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("expected 403, got %d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("quota exceeded returns 429", func(t *testing.T) {
+		reader.tokens = 150
+		body := bytes.NewBufferString(`{"model":"gpt-4o","input":"hello"}`)
+		req := httptest.NewRequest(http.MethodPost, "/v1/embeddings", body)
+		req.Header.Set("Authorization", "Bearer sk-embed-test")
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		if rec.Code != http.StatusTooManyRequests {
+			t.Fatalf("expected 429, got %d body=%s", rec.Code, rec.Body.String())
+		}
+	})
+}

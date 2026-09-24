@@ -115,6 +115,7 @@ type Store struct {
 	revision      int64
 	flushedAt     int64
 	totals        Counters
+	callers       map[string]*Counters
 	minutes       []*Bucket
 	recent        []*Record
 	hours         map[string][]*Bucket
@@ -140,6 +141,7 @@ func New(path string) *Store {
 	}
 	s := &Store{
 		path:          cleanPath,
+		callers:       make(map[string]*Counters),
 		hours:         make(map[string][]*Bucket),
 		days:          make(map[string][]*Bucket),
 		dirtyHours:    make(map[string]bool),
@@ -190,6 +192,23 @@ func (s *Store) Revision() int64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.revision
+}
+
+func (s *Store) CallerTotalTokens(callerID string) int64 {
+	callerID = strings.TrimSpace(callerID)
+	if s == nil || callerID == "" {
+		return 0
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.callers == nil {
+		return 0
+	}
+	c, ok := s.callers[callerID]
+	if !ok || c == nil {
+		return 0
+	}
+	return c.TotalTokens
 }
 
 func (s *Store) Close() error {
@@ -254,6 +273,14 @@ func (s *Store) recordLocked(rec Record) {
 
 	// 1. Totals
 	s.totals.Add(rec)
+	if rec.CallerID != "" {
+		c, ok := s.callers[rec.CallerID]
+		if !ok {
+			c = &Counters{}
+			s.callers[rec.CallerID] = c
+		}
+		c.Add(rec)
+	}
 
 	// 2. Minute bucket (60s)
 	minStart := (rec.At / 60000) * 60000

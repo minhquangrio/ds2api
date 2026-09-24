@@ -13,13 +13,14 @@ import (
 )
 
 type mainFilePayload struct {
-	Version   int            `json:"version"`
-	Revision  int64          `json:"revision"`
-	FlushedAt int64          `json:"flushed_at"`
-	Totals    Counters       `json:"totals"`
-	Minutes   []*Bucket      `json:"minutes"`
-	Recent    []*Record      `json:"recent"`
-	Backfill  BackfillMarker `json:"backfill"`
+	Version   int                  `json:"version"`
+	Revision  int64                `json:"revision"`
+	FlushedAt int64                `json:"flushed_at"`
+	Totals    Counters             `json:"totals"`
+	Callers   map[string]*Counters `json:"callers,omitempty"`
+	Minutes   []*Bucket            `json:"minutes"`
+	Recent    []*Record            `json:"recent"`
+	Backfill  BackfillMarker       `json:"backfill"`
 }
 
 type shardFilePayload struct {
@@ -142,6 +143,7 @@ func (s *Store) flushLocked() error {
 		Revision:  s.revision,
 		FlushedAt: s.flushedAt,
 		Totals:    s.totals,
+		Callers:   s.callers,
 		Minutes:   s.minutes,
 		Recent:    s.recent,
 		Backfill:  s.backfill,
@@ -178,6 +180,11 @@ func (s *Store) loadLocked() error {
 	s.revision = payload.Revision
 	s.flushedAt = payload.FlushedAt
 	s.totals = payload.Totals
+	if payload.Callers != nil {
+		s.callers = payload.Callers
+	} else {
+		s.callers = make(map[string]*Counters)
+	}
 	s.minutes = payload.Minutes
 	s.recent = payload.Recent
 	s.backfill = payload.Backfill
