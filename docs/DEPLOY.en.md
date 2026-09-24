@@ -414,6 +414,19 @@ DS2API_CHAT_HISTORY_PATH=/tmp/chat_history.json
 
 `/tmp` is the only writable directory in Vercel Serverless. Data is ephemeral (not persisted across cold starts), but the feature works within a single instance lifetime.
 
+#### Token Usage Ledger Configuration
+
+The service introduces an independent token usage ledger (`internal/usageledger`) to record token usage metrics durably without depending on chat history retention.
+
+Configurable via environment variables:
+
+- `DS2API_USAGE_LEDGER_PATH`: Ledger storage path. Defaults to `data/usage_ledger.json` locally and on Docker; on Vercel Serverless, it automatically falls back to `/tmp/usage_ledger.json` if unset.
+- `DS2API_USAGE_LEDGER_FLUSH_MS`: Ledger batch flush interval in milliseconds. Default is `5000` (5 seconds).
+- `DS2API_USAGE_LEDGER_BACKFILL`: Whether to perform an idempotent one-time backfill from legacy chat history on startup. Default is `true`.
+
+> **Note (Vercel Serverless)**:
+> Vercel `/tmp` is ephemeral storage; ledger counters reset on cold starts or instance re-creations. For cross-instance durability, deploy via Docker / VPS with a persistent volume mounted to the `data/` directory.
+
 ### 3.6 Build Artifacts Not Committed
 
 - `static/admin` directory is not in Git

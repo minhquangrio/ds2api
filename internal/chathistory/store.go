@@ -734,55 +734,7 @@ func parseLegacy(raw []byte) (legacyFile, bool, error) {
 }
 
 func writeFileAtomic(path string, body []byte) error {
-	dir := filepath.Dir(path)
-	if dir == "" {
-		dir = "."
-	}
-	if dir != "." {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return fmt.Errorf("create chat history dir: %w", err)
-		}
-	}
-	tmpFile, err := os.CreateTemp(dir, ".chat-history-*.tmp")
-	if err != nil {
-		return fmt.Errorf("create temp chat history: %w", err)
-	}
-	tmpPath := tmpFile.Name()
-	cleanup := func() error {
-		if err := os.Remove(tmpPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("remove temp chat history: %w", err)
-		}
-		return nil
-	}
-	withCleanup := func(primary error, closeErr error) error {
-		errs := []error{primary}
-		if closeErr != nil {
-			errs = append(errs, fmt.Errorf("close temp chat history: %w", closeErr))
-		}
-		if cleanupErr := cleanup(); cleanupErr != nil {
-			errs = append(errs, cleanupErr)
-		}
-		return errors.Join(errs...)
-	}
-	if _, err := tmpFile.Write(body); err != nil {
-		return withCleanup(fmt.Errorf("write temp chat history: %w", err), tmpFile.Close())
-	}
-	if err := tmpFile.Sync(); err != nil {
-		return withCleanup(fmt.Errorf("sync temp chat history: %w", err), tmpFile.Close())
-	}
-	if err := tmpFile.Close(); err != nil {
-		if cleanupErr := cleanup(); cleanupErr != nil {
-			return errors.Join(fmt.Errorf("close temp chat history: %w", err), cleanupErr)
-		}
-		return fmt.Errorf("close temp chat history: %w", err)
-	}
-	if err := os.Rename(tmpPath, path); err != nil {
-		if cleanupErr := cleanup(); cleanupErr != nil {
-			return errors.Join(fmt.Errorf("promote temp chat history: %w", err), cleanupErr)
-		}
-		return fmt.Errorf("promote temp chat history: %w", err)
-	}
-	return nil
+	return util.WriteFileAtomic(path, body)
 }
 
 func ListETag(revision int64) string {

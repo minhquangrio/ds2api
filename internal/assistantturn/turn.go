@@ -285,6 +285,15 @@ func OpenAIResponsesUsage(turn Turn) map[string]any {
 	}
 }
 
+func GenericUsage(usage Usage) map[string]any {
+	return map[string]any{
+		"input_tokens":     usage.InputTokens,
+		"output_tokens":    usage.OutputTokens,
+		"reasoning_tokens": usage.ReasoningTokens,
+		"total_tokens":     usage.TotalTokens,
+	}
+}
+
 func FinishReason(turn Turn) string {
 	switch turn.StopReason {
 	case StopReasonToolCalls:

@@ -12,10 +12,12 @@ import (
 	"ds2api/internal/config"
 	"ds2api/internal/prompt"
 	"ds2api/internal/promptcompat"
+	"ds2api/internal/usageledger"
 )
 
 type Session struct {
 	store       *chathistory.Store
+	ledger      *usageledger.Recorder
 	entryID     string
 	startedAt   time.Time
 	lastPersist time.Time
@@ -31,6 +33,7 @@ func progressPersistDue(now, last time.Time) bool {
 
 type StartParams struct {
 	Store    *chathistory.Store
+	Ledger   *usageledger.Store
 	Request  *http.Request
 	Auth     *auth.RequestAuth
 	Surface  string
@@ -38,11 +41,29 @@ type StartParams struct {
 }
 
 func Start(params StartParams) *Session {
-	if params.Store == nil || params.Request == nil || params.Auth == nil {
+	if params.Request == nil || params.Auth == nil {
 		return nil
 	}
-	if !params.Store.Enabled() || !shouldCapture(params.Request) {
+	if !shouldCapture(params.Request) {
 		return nil
+	}
+	var rec *usageledger.Recorder
+	if params.Ledger != nil {
+		rec = usageledger.Begin(params.Ledger, usageledger.Meta{
+			CallerID:      strings.TrimSpace(params.Auth.CallerID),
+			AccountID:     strings.TrimSpace(params.Auth.AccountID),
+			Surface:       strings.TrimSpace(params.Surface),
+			Model:         strings.TrimSpace(params.Standard.ResponseModel),
+			Stream:        params.Standard.Stream,
+			Prompt:        params.Standard.FinalPrompt,
+			RefFileTokens: params.Standard.RefFileTokens,
+		})
+	}
+	if params.Store == nil || !params.Store.Enabled() {
+		return &Session{
+			ledger:    rec,
+			startedAt: time.Now(),
+		}
 	}
 	startParams := chathistory.StartParams{
 		CallerID:    strings.TrimSpace(params.Auth.CallerID),
@@ -58,6 +79,7 @@ func Start(params StartParams) *Session {
 	entry, err := params.Store.Start(startParams)
 	session := &Session{
 		store:       params.Store,
+		ledger:      rec,
 		entryID:     entry.ID,
 		startedAt:   time.Now(),
 		lastPersist: time.Now(),
@@ -66,7 +88,7 @@ func Start(params StartParams) *Session {
 	if err != nil {
 		if entry.ID == "" {
 			config.Logger.Warn("[response_history] start failed", "surface", startParams.Surface, "error", err)
-			return nil
+			return session
 		}
 		config.Logger.Warn("[response_history] start persisted in memory after write failure", "surface", startParams.Surface, "error", err)
 	}
@@ -142,7 +164,20 @@ func (s *Session) Progress(thinking, content string) {
 }
 
 func (s *Session) Success(statusCode int, thinking, content, finishReason string, usage map[string]any) {
-	if s == nil || s.store == nil || s.disabled {
+	if s == nil {
+		return
+	}
+	if s.ledger != nil {
+		s.ledger.Record(usageledger.Outcome{
+			Status:       "success",
+			StatusCode:   statusCode,
+			FinishReason: finishReason,
+			Thinking:     thinking,
+			Content:      content,
+			Usage:        usage,
+		})
+	}
+	if s.store == nil || s.disabled {
 		return
 	}
 	s.persistUpdate(chathistory.UpdateParams{
@@ -158,7 +193,20 @@ func (s *Session) Success(statusCode int, thinking, content, finishReason string
 }
 
 func (s *Session) Error(statusCode int, message, finishReason, thinking, content string) {
-	if s == nil || s.store == nil || s.disabled {
+	if s == nil {
+		return
+	}
+	if s.ledger != nil {
+		s.ledger.Record(usageledger.Outcome{
+			Status:       "error",
+			StatusCode:   statusCode,
+			FinishReason: finishReason,
+			Thinking:     thinking,
+			Content:      content,
+			Usage:        nil,
+		})
+	}
+	if s.store == nil || s.disabled {
 		return
 	}
 	s.persistUpdate(chathistory.UpdateParams{
@@ -223,12 +271,7 @@ func ThinkingForArchive(raw, detection, visible string) string {
 }
 
 func GenericUsage(turn assistantturn.Turn) map[string]any {
-	return map[string]any{
-		"input_tokens":     turn.Usage.InputTokens,
-		"output_tokens":    turn.Usage.OutputTokens,
-		"reasoning_tokens": turn.Usage.ReasoningTokens,
-		"total_tokens":     turn.Usage.TotalTokens,
-	}
+	return assistantturn.GenericUsage(turn.Usage)
 }
 
 func (s *Session) retryMissingEntry() bool {

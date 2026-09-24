@@ -12,10 +12,12 @@ import (
 	openaifmt "ds2api/internal/format/openai"
 	"ds2api/internal/prompt"
 	"ds2api/internal/promptcompat"
+	"ds2api/internal/usageledger"
 )
 
 type chatHistorySession struct {
 	store       *chathistory.Store
+	ledger      *usageledger.Recorder
 	entryID     string
 	startedAt   time.Time
 	lastPersist time.Time
@@ -24,27 +26,32 @@ type chatHistorySession struct {
 	disabled    bool
 }
 
-func startChatHistory(store *chathistory.Store, r *http.Request, a *auth.RequestAuth, stdReq promptcompat.StandardRequest) *chatHistorySession {
-	if store == nil || r == nil || a == nil {
-		return nil
-	}
-	if !store.Enabled() {
+func startChatHistory(store *chathistory.Store, ledger *usageledger.Store, r *http.Request, a *auth.RequestAuth, stdReq promptcompat.StandardRequest) *chatHistorySession {
+	if r == nil || a == nil {
 		return nil
 	}
 	if !shouldCaptureChatHistory(r) {
 		return nil
 	}
-	entry, err := store.Start(chathistory.StartParams{
-		CallerID:    strings.TrimSpace(a.CallerID),
-		AccountID:   strings.TrimSpace(a.AccountID),
-		Surface:     "openai.chat_completions",
-		Model:       strings.TrimSpace(stdReq.ResponseModel),
-		Stream:      stdReq.Stream,
-		UserInput:   extractSingleUserInput(stdReq.Messages),
-		Messages:    extractAllMessages(stdReq.Messages),
-		HistoryText: stdReq.HistoryText,
-		FinalPrompt: stdReq.FinalPrompt,
-	})
+	var rec *usageledger.Recorder
+	if ledger != nil {
+		rec = usageledger.Begin(ledger, usageledger.Meta{
+			CallerID:      strings.TrimSpace(a.CallerID),
+			AccountID:     strings.TrimSpace(a.AccountID),
+			Surface:       "openai.chat_completions",
+			Model:         strings.TrimSpace(stdReq.ResponseModel),
+			Stream:        stdReq.Stream,
+			Prompt:        stdReq.FinalPrompt,
+			RefFileTokens: stdReq.RefFileTokens,
+		})
+	}
+	if store == nil || !store.Enabled() {
+		return &chatHistorySession{
+			ledger:      rec,
+			finalPrompt: stdReq.FinalPrompt,
+			startedAt:   time.Now(),
+		}
+	}
 	startParams := chathistory.StartParams{
 		CallerID:    strings.TrimSpace(a.CallerID),
 		AccountID:   strings.TrimSpace(a.AccountID),
@@ -56,8 +63,10 @@ func startChatHistory(store *chathistory.Store, r *http.Request, a *auth.Request
 		HistoryText: stdReq.HistoryText,
 		FinalPrompt: stdReq.FinalPrompt,
 	}
+	entry, err := store.Start(startParams)
 	session := &chatHistorySession{
 		store:       store,
+		ledger:      rec,
 		entryID:     entry.ID,
 		startedAt:   time.Now(),
 		lastPersist: time.Now(),
@@ -67,7 +76,7 @@ func startChatHistory(store *chathistory.Store, r *http.Request, a *auth.Request
 	if err != nil {
 		if entry.ID == "" {
 			config.Logger.Warn("[chat_history] start failed", "error", err)
-			return nil
+			return session
 		}
 		config.Logger.Warn("[chat_history] start persisted in memory after write failure", "error", err)
 	}
@@ -140,7 +149,20 @@ func (s *chatHistorySession) progress(thinking, content string) {
 }
 
 func (s *chatHistorySession) success(statusCode int, thinking, content, finishReason string, usage map[string]any) {
-	if s == nil || s.store == nil || s.disabled {
+	if s == nil {
+		return
+	}
+	if s.ledger != nil {
+		s.ledger.Record(usageledger.Outcome{
+			Status:       "success",
+			StatusCode:   statusCode,
+			FinishReason: finishReason,
+			Thinking:     thinking,
+			Content:      content,
+			Usage:        usage,
+		})
+	}
+	if s.store == nil || s.disabled {
 		return
 	}
 	s.persistUpdate(chathistory.UpdateParams{
@@ -156,7 +178,20 @@ func (s *chatHistorySession) success(statusCode int, thinking, content, finishRe
 }
 
 func (s *chatHistorySession) error(statusCode int, message, finishReason, thinking, content string) {
-	if s == nil || s.store == nil || s.disabled {
+	if s == nil {
+		return
+	}
+	if s.ledger != nil {
+		s.ledger.Record(usageledger.Outcome{
+			Status:       "error",
+			StatusCode:   statusCode,
+			FinishReason: finishReason,
+			Thinking:     thinking,
+			Content:      content,
+			Usage:        nil,
+		})
+	}
+	if s.store == nil || s.disabled {
 		return
 	}
 	s.persistUpdate(chathistory.UpdateParams{
@@ -172,7 +207,21 @@ func (s *chatHistorySession) error(statusCode int, message, finishReason, thinki
 }
 
 func (s *chatHistorySession) stopped(thinking, content, finishReason string) {
-	if s == nil || s.store == nil || s.disabled {
+	if s == nil {
+		return
+	}
+	usage := openaifmt.BuildChatUsage(s.finalPrompt, thinking, content)
+	if s.ledger != nil {
+		s.ledger.Record(usageledger.Outcome{
+			Status:       "stopped",
+			StatusCode:   http.StatusOK,
+			FinishReason: finishReason,
+			Thinking:     thinking,
+			Content:      content,
+			Usage:        usage,
+		})
+	}
+	if s.store == nil || s.disabled {
 		return
 	}
 	s.persistUpdate(chathistory.UpdateParams{
@@ -182,7 +231,7 @@ func (s *chatHistorySession) stopped(thinking, content, finishReason string) {
 		StatusCode:       http.StatusOK,
 		ElapsedMs:        time.Since(s.startedAt).Milliseconds(),
 		FinishReason:     finishReason,
-		Usage:            openaifmt.BuildChatUsage(s.finalPrompt, thinking, content),
+		Usage:            usage,
 		Completed:        true,
 	})
 }

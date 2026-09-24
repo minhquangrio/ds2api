@@ -691,7 +691,9 @@
         "allTime": "All time",
         "requestsUnit": "requests",
         "filterPresetTooltip": "Filter metrics and chart for {range}",
-        "streamingInFlight": "Streaming"
+        "streamingInFlight": "Streaming",
+        "ledgerLagNote": "Aggregations flushed every 5 seconds",
+        "ledgerTruncated": "Displaying truncated sample"
     },
     "apiKeysManager": {
         "title": "API Keys Management",

@@ -691,7 +691,9 @@
         "allTime": "Toàn thời gian",
         "requestsUnit": "yêu cầu",
         "filterPresetTooltip": "Lọc thống kê và biểu đồ theo {range}",
-        "streamingInFlight": "Đang phát luồng"
+        "streamingInFlight": "Đang phát luồng",
+        "ledgerLagNote": "Tổng hợp được ghi mỗi 5 giây",
+        "ledgerTruncated": "Hiển thị mẫu thu gọn"
     },
     "apiKeysManager": {
         "title": "Quản lý Khoá API",

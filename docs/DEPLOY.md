@@ -424,6 +424,19 @@ DS2API_CHAT_HISTORY_PATH=/tmp/chat_history.json
 
 `/tmp` 是 Vercel Serverless 环境中唯一可写的目录。数据在函数冷启动之间不会持久化（ephemeral），但在单个实例生命周期内功能正常。
 
+#### Token Usage Ledger 持久化账本配置
+
+服务引入了独立的 Token 消耗持久化账本（`internal/usageledger`），用于持久化记录 Token 消耗统计，不受对话历史清理影响。
+
+可通过以下环境变量配置：
+
+- `DS2API_USAGE_LEDGER_PATH`: 账本存储路径。本地及 Docker 默认使用 `data/usage_ledger.json`；在 Vercel Serverless 环境下若未显式指定，会自动回退使用 `/tmp/usage_ledger.json`。
+- `DS2API_USAGE_LEDGER_FLUSH_MS`: 账本批量落盘间隔（毫秒），默认为 `5000`（5 秒）。
+- `DS2API_USAGE_LEDGER_BACKFILL`: 服务启动时是否从旧对话历史一次性回填 Token 记录，默认为 `true`（具备幂等性，不重复计入）。
+
+> **注意（Vercel Serverless）**：
+> Vercel `/tmp` 是无状态/临时存储（ephemeral），在函数冷启动或实例重置时账本数据会重置。若需要跨实例持久化，建议部署在 Docker / VPS 并将 `data/` 目录挂载为持久卷（volume）。
+
 ### 3.6 仓库不提交构建产物
 
 - `static/admin` 目录不在 Git 中

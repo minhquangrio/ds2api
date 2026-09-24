@@ -30,6 +30,7 @@ import (
 	"ds2api/internal/httpapi/openai/responses"
 	"ds2api/internal/httpapi/openai/shared"
 	"ds2api/internal/httpapi/requestbody"
+	"ds2api/internal/usageledger"
 	"ds2api/internal/webui"
 )
 
@@ -39,6 +40,7 @@ type App struct {
 	Resolver *auth.Resolver
 	DS       *dsclient.Client
 	Router   http.Handler
+	Ledger   *usageledger.Store
 }
 
 func NewApp() (*App, error) {
@@ -62,18 +64,25 @@ func NewApp() (*App, error) {
 		config.Logger.Warn("[chat_history] unavailable", "path", chatHistoryStore.Path(), "error", err)
 	}
 
+	usageLedger := usageledger.New(config.UsageLedgerPath())
+	if err := usageLedger.Err(); err != nil {
+		config.Logger.Warn("[usage_ledger] unavailable", "path", usageLedger.Path(), "error", err)
+	} else if err := usageLedger.BackfillFromHistory(chatHistoryStore); err != nil {
+		config.Logger.Warn("[usage_ledger] backfill failed", "error", err)
+	}
+
 	contentStore := files.NewMemoryContentStore(100<<20, 30*time.Minute)
 
 	modelsHandler := &shared.ModelsHandler{Store: store}
-	chatHandler := &chat.Handler{Store: store, Auth: resolver, DS: dsClient, ChatHistory: chatHistoryStore, ContentStore: contentStore}
-	responsesHandler := &responses.Handler{Store: store, Auth: resolver, DS: dsClient, ChatHistory: chatHistoryStore, ContentStore: contentStore}
+	chatHandler := &chat.Handler{Store: store, Auth: resolver, DS: dsClient, ChatHistory: chatHistoryStore, UsageLedger: usageLedger, ContentStore: contentStore}
+	responsesHandler := &responses.Handler{Store: store, Auth: resolver, DS: dsClient, ChatHistory: chatHistoryStore, UsageLedger: usageLedger, ContentStore: contentStore}
 	filesHandler := &files.Handler{Store: store, Auth: resolver, DS: dsClient, ChatHistory: chatHistoryStore, ContentStore: contentStore}
 	embeddingsHandler := &embeddings.Handler{Store: store, Auth: resolver, DS: dsClient, ChatHistory: chatHistoryStore}
-	claudeHandler := &claude.Handler{Store: store, Auth: resolver, DS: dsClient, OpenAI: chatHandler, ChatHistory: chatHistoryStore}
-	geminiHandler := &gemini.Handler{Store: store, Auth: resolver, DS: dsClient, OpenAI: chatHandler, ChatHistory: chatHistoryStore}
+	claudeHandler := &claude.Handler{Store: store, Auth: resolver, DS: dsClient, OpenAI: chatHandler, ChatHistory: chatHistoryStore, UsageLedger: usageLedger}
+	geminiHandler := &gemini.Handler{Store: store, Auth: resolver, DS: dsClient, OpenAI: chatHandler, ChatHistory: chatHistoryStore, UsageLedger: usageLedger}
 	ollamaHandler := &ollama.Handler{Store: store}
 	webuiHandler := webui.NewHandler()
-	adminHandler := &admin.Handler{Store: store, Pool: pool, DS: dsClient, OpenAI: chatHandler, ChatHistory: chatHistoryStore, WebUIFallback: webuiHandler.HandleAdminFallback}
+	adminHandler := &admin.Handler{Store: store, Pool: pool, DS: dsClient, OpenAI: chatHandler, ChatHistory: chatHistoryStore, UsageLedger: usageLedger, WebUIFallback: webuiHandler.HandleAdminFallback}
 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
@@ -129,7 +138,7 @@ func NewApp() (*App, error) {
 		http.NotFound(w, req)
 	})
 
-	return &App{Store: store, Pool: pool, Resolver: resolver, DS: dsClient, Router: r}, nil
+	return &App{Store: store, Pool: pool, Resolver: resolver, DS: dsClient, Router: r, Ledger: usageLedger}, nil
 }
 
 func timeout(d time.Duration) func(http.Handler) http.Handler {

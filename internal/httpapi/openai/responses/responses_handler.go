@@ -114,6 +114,7 @@ func (h *Handler) Responses(w http.ResponseWriter, r *http.Request) {
 	responseID := "resp_" + strings.ReplaceAll(uuid.NewString(), "-", "")
 	historySession := responsehistory.Start(responsehistory.StartParams{
 		Store:    h.ChatHistory,
+		Ledger:   h.UsageLedger,
 		Request:  r,
 		Auth:     a,
 		Surface:  "openai.responses",

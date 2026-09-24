@@ -113,8 +113,9 @@ Mở trình duyệt và truy cập `http://localhost:5001/admin`.
 
 ### 4.3 Dashboard Tổng quan Token (Token Overview)
 - **Chỉ số lưu lượng Token**: Theo dõi tổng số token đã sử dụng, phân rã chi tiết giữa *Prompt Tokens* (đầu vào), *Completion Tokens* (đầu ra) và *Reasoning Tokens* (suy luận R1).
+- **Sổ Token Bền Vững (Persistent Token Ledger)**: Toàn bộ chỉ số tổng hợp và biểu đồ tiêu thụ trên trang Tổng quan được đọc trực tiếp từ Sổ Token Bền Vững ở backend (`GET /admin/usage`). Dữ liệu này được lưu trữ độc lập trên đĩa và duy trì vĩnh viễn, **không bị mất khi xoá nhật ký hội thoại** hay khi cấu hình `chat_history.limit = 0`. Dữ liệu tổng hợp được tự động đồng bộ (flush) xuống đĩa mỗi 5 giây.
 - **Hiệu năng & Độ tin cậy**: Hiển thị tỷ lệ thành công của request (% 200 OK) và độ trễ phản hồi trung bình (`ms`).
-- **Biểu đồ tiêu thụ**: Biểu đồ trực quan hoá lưu lượng token theo thời gian thực.
+- **Biểu đồ tiêu thụ**: Biểu đồ trực quan hoá lưu lượng token theo thời gian thực (hỗ trợ xem theo khoảng thời gian gom nhóm hoặc theo từng yêu cầu).
 - **Tỷ lệ phân bổ Model**: Thống kê mức độ tiêu thụ của từng model (`deepseek-chat`, `deepseek-reasoner`, `gemini-2.5`, v.v.).
 - **Tích hợp nhanh (Quick Integration)**: Xem nhanh Base URL (`http://.../v1`), khoá API mặc định và sao chép mã mẫu gọi API (cURL, Python `OpenAI`, Node.js `OpenAI`).
 

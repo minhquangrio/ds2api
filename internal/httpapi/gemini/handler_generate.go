@@ -101,6 +101,7 @@ func (h *Handler) handleGeminiDirect(w http.ResponseWriter, r *http.Request, str
 	}
 	historySession := responsehistory.Start(responsehistory.StartParams{
 		Store:    h.ChatHistory,
+		Ledger:   h.UsageLedger,
 		Request:  r,
 		Auth:     a,
 		Surface:  "gemini.generate_content",

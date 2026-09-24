@@ -10,6 +10,8 @@ import {
     VIEW_MODE_KEY,
 } from './chatHistoryUtils'
 
+// Retained for Logs/History UI to preview in-flight streaming requests and pruned detail rows.
+// The main overview dashboard no longer relies on character-based estimation; it reads from the usage ledger.
 export function estimateItemTokens(item) {
     if (!item) return { prompt: 0, completion: 0, total: 0 }
     let prompt = Number(item.prompt_tokens) || 0

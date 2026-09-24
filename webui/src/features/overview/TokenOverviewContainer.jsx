@@ -29,6 +29,14 @@ import clsx from 'clsx'
 
 import { useI18n } from '../../i18n'
 import { estimateItemTokens } from '../chatHistory/ChatHistoryContainer'
+import {
+    mapUsageTotals,
+    mapUsageTimeline,
+    mapUsageRecent,
+    isSuccessItem,
+    usageQueryParams,
+    buildUsagePath,
+} from './usageLedgerUtils'
 
 export function parseItemTimestamp(ts) {
     if (!ts) return null
@@ -66,6 +74,7 @@ export default function TokenOverviewContainer({ config, authFetch, onNavigate, 
     const apiFetch = authFetch || fetch
 
     const [historyItems, setHistoryItems] = useState([])
+    const [usageData, setUsageData] = useState(null)
     const [accounts, setAccounts] = useState([])
     const [queueStatus, setQueueStatus] = useState(null)
     const [geminiQuotas, setGeminiQuotas] = useState([])
@@ -101,7 +110,12 @@ export default function TokenOverviewContainer({ config, authFetch, onNavigate, 
     const [dataPulse, setDataPulse] = useState(false)
 
     const historyETagRef = useRef('')
+    const usageETagRef = useRef('')
     const inFlightRef = useRef(false)
+
+    useEffect(() => {
+        usageETagRef.current = ''
+    }, [timeRange, customAppliedStart, customAppliedEnd])
 
     useEffect(() => {
         if (typeof localStorage === 'undefined') return
@@ -138,12 +152,34 @@ export default function TokenOverviewContainer({ config, authFetch, onNavigate, 
                 historyHeaders['If-None-Match'] = historyETagRef.current
             }
 
-            const [historyRes, accountsRes, queueRes, geminiQuotasRes] = await Promise.allSettled([
-                apiFetch('/admin/chat-history?limit=100', { headers: historyHeaders }),
+            const usageHeaders = {}
+            if (isSilent && usageETagRef.current) {
+                usageHeaders['If-None-Match'] = usageETagRef.current
+            }
+
+            const usagePath = buildUsagePath(usageQueryParams(timeRange, customAppliedStart, customAppliedEnd))
+
+            const [usageRes, historyRes, accountsRes, queueRes, geminiQuotasRes] = await Promise.allSettled([
+                apiFetch(usagePath, { headers: usageHeaders }),
+                apiFetch('/admin/chat-history', { headers: historyHeaders }),
                 apiFetch('/admin/accounts'),
                 apiFetch('/admin/queue/status'),
                 apiFetch('/admin/accounts/gemini/quotas')
             ])
+
+            let hasNewUsage = false
+            if (usageRes.status === 'fulfilled') {
+                const res = usageRes.value
+                if (res.ok) {
+                    const etag = res.headers?.get('ETag') || ''
+                    if (etag) usageETagRef.current = etag
+                    const data = await res.json()
+                    setUsageData(data)
+                    hasNewUsage = true
+                } else if (res.status === 304) {
+                    // Cache fresh, no change needed
+                }
+            }
 
             let hasNewHistory = false
             if (historyRes.status === 'fulfilled') {
@@ -178,7 +214,7 @@ export default function TokenOverviewContainer({ config, authFetch, onNavigate, 
             }
 
             setLastUpdatedTime(new Date())
-            if (hasNewHistory && isSilent) {
+            if ((hasNewHistory || hasNewUsage) && isSilent) {
                 setDataPulse(true)
                 setTimeout(() => setDataPulse(false), 800)
             }
@@ -189,7 +225,7 @@ export default function TokenOverviewContainer({ config, authFetch, onNavigate, 
             setLoading(false)
             setRefreshing(false)
         }
-    }, [apiFetch, config?.accounts])
+    }, [apiFetch, config?.accounts, timeRange, customAppliedStart, customAppliedEnd])
 
     // Initial load
     useEffect(() => {
@@ -236,8 +272,29 @@ export default function TokenOverviewContainer({ config, authFetch, onNavigate, 
         return historyItems.filter((item) => item.status === 'streaming').length
     }, [historyItems])
 
-    // Compute token analytics based on FILTERED history items
+    // Compute token analytics based on usageData (with fallback to filtered history items)
     const telemetry = useMemo(() => {
+        if (usageData?.totals) {
+            const base = mapUsageTotals(usageData.totals)
+            const models = (usageData.models || []).map((m) => {
+                const count = Number(m.requests) || 0
+                const tokens = Number(m.total_tokens) || 0
+                const pct = typeof m.percentage === 'number'
+                    ? m.percentage
+                    : (base.totalTokens > 0 ? Math.round((tokens / base.totalTokens) * 100) : 0)
+                return {
+                    name: m.name || m.model || 'unknown',
+                    count,
+                    tokens,
+                    percentage: pct,
+                }
+            })
+            return {
+                ...base,
+                models,
+            }
+        }
+
         let totalPrompt = 0
         let totalCompletion = 0
         let totalReasoning = 0
@@ -265,7 +322,7 @@ export default function TokenOverviewContainer({ config, authFetch, onNavigate, 
                 if (ts > maxTs) maxTs = ts
             }
 
-            const isSuccess = item.status === 'ok' || (item.status_code && item.status_code >= 200 && item.status_code < 400)
+            const isSuccess = isSuccessItem(item)
             if (isSuccess) successRequests += 1
 
             if (item.elapsed_ms && item.elapsed_ms > 0) {
@@ -316,7 +373,7 @@ export default function TokenOverviewContainer({ config, authFetch, onNavigate, 
             tokensPerMin,
             models: sortedModels,
         }
-    }, [filteredHistoryItems])
+    }, [usageData, filteredHistoryItems])
 
     // Upstream nodes health
     const upstreamHealth = useMemo(() => {
@@ -410,14 +467,26 @@ export default function TokenOverviewContainer({ config, authFetch, onNavigate, 
 
     // Token Usage Timeline Bars: Adaptive Buckets or Per-Request Flow
     const timelineBars = useMemo(() => {
-        if (!filteredHistoryItems.length) return []
-
         if (chartViewMode === 'requests') {
-            // Per-request view: take up to 20 latest requests, ordered chronologically
-            const recent = filteredHistoryItems.slice(0, 20).reverse()
-            return recent.map((item, idx) => {
-                const est = estimateItemTokens(item)
-                const ts = parseItemTimestamp(item.created_at)
+            const items = usageData?.recent?.length
+                ? mapUsageRecent(usageData.recent).slice(0, 20)
+                : filteredHistoryItems.slice(0, 20).map((item, idx) => {
+                    const est = estimateItemTokens(item)
+                    return {
+                        id: item.id || `req-${idx}`,
+                        prompt_tokens: est.prompt,
+                        completion_tokens: est.completion,
+                        total_tokens: est.total,
+                        model: item.model || '',
+                        status: item.status || (item.status_code ? String(item.status_code) : ''),
+                        elapsed_ms: item.elapsed_ms || null,
+                        at: parseItemTimestamp(item.created_at) || 0,
+                    }
+                })
+
+            const sorted = [...items].sort((a, b) => (a.at || 0) - (b.at || 0))
+            return sorted.map((item, idx) => {
+                const ts = item.at
                 const date = ts ? new Date(ts) : null
                 const label = date
                     ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
@@ -428,11 +497,11 @@ export default function TokenOverviewContainer({ config, authFetch, onNavigate, 
 
                 return {
                     id: item.id || `req-${idx}`,
-                    prompt: est.prompt,
-                    completion: est.completion,
-                    total: est.total,
+                    prompt: item.prompt_tokens,
+                    completion: item.completion_tokens,
+                    total: item.total_tokens,
                     model: item.model || '',
-                    status: item.status || (item.status_code ? String(item.status_code) : ''),
+                    status: item.status || '',
                     elapsedMs: item.elapsed_ms || null,
                     count: 1,
                     label,
@@ -441,119 +510,12 @@ export default function TokenOverviewContainer({ config, authFetch, onNavigate, 
             })
         }
 
-        // Time Buckets View: Aggregate requests into time intervals
-        const now = Date.now()
-        let numBuckets = 16
-        let bucketDurationMs = 60 * 1000 // default 1 min
-        let windowStart = now - (numBuckets * bucketDurationMs)
-        let isDateScale = false
-
-        if (timeRange === '15m') {
-            numBuckets = 15
-            bucketDurationMs = 60 * 1000 // 1 min
-            windowStart = now - (15 * 60 * 1000)
-        } else if (timeRange === '1h') {
-            numBuckets = 12
-            bucketDurationMs = 5 * 60 * 1000 // 5 mins
-            windowStart = now - (60 * 60 * 1000)
-        } else if (timeRange === '24h') {
-            numBuckets = 24
-            bucketDurationMs = 60 * 60 * 1000 // 1 hour
-            windowStart = now - (24 * 60 * 60 * 1000)
-        } else if (timeRange === '7d') {
-            numBuckets = 7
-            bucketDurationMs = 24 * 60 * 60 * 1000 // 1 day
-            windowStart = now - (7 * 24 * 60 * 60 * 1000)
-            isDateScale = true
-        } else if (timeRange === '30d') {
-            numBuckets = 15
-            bucketDurationMs = 2 * 24 * 60 * 60 * 1000 // 2 days
-            windowStart = now - (30 * 24 * 60 * 60 * 1000)
-            isDateScale = true
-        } else {
-            // 'all' or 'custom': compute dynamically from items
-            let minTs = Infinity
-            let maxTs = now
-            filteredHistoryItems.forEach((item) => {
-                const ts = parseItemTimestamp(item.created_at)
-                if (ts && ts < minTs) minTs = ts
-                if (ts && ts > maxTs) maxTs = ts
-            })
-            if (minTs === Infinity) minTs = now - 3600 * 1000
-            const span = Math.max(60 * 1000, maxTs - minTs)
-            numBuckets = Math.min(20, Math.max(8, Math.round(span / (60 * 1000))))
-            bucketDurationMs = Math.ceil(span / numBuckets)
-            windowStart = minTs
-            if (span > 2 * 24 * 60 * 60 * 1000) isDateScale = true
+        if (usageData?.timeline) {
+            return mapUsageTimeline(usageData.timeline)
         }
 
-        // Initialize empty buckets
-        const buckets = []
-        for (let i = 0; i < numBuckets; i++) {
-            const bStart = windowStart + (i * bucketDurationMs)
-            const bEnd = bStart + bucketDurationMs
-            const date = new Date(bStart)
-            const endDate = new Date(bEnd)
-
-            let label = ''
-            if (isDateScale) {
-                label = `${date.getDate()}/${date.getMonth() + 1}`
-            } else if (bucketDurationMs >= 3600 * 1000) {
-                label = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            } else {
-                label = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            }
-
-            const fullTime = `${date.toLocaleDateString([], { month: '2-digit', day: '2-digit' })} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-
-            buckets.push({
-                id: `bucket-${i}`,
-                bStart,
-                bEnd,
-                prompt: 0,
-                completion: 0,
-                total: 0,
-                count: 0,
-                elapsedSum: 0,
-                models: new Set(),
-                label,
-                fullTime,
-            })
-        }
-
-        // Fill buckets with filtered items
-        filteredHistoryItems.forEach((item) => {
-            const ts = parseItemTimestamp(item.created_at)
-            if (!ts) return
-            const est = estimateItemTokens(item)
-
-            // Find matching bucket
-            const bucket = buckets.find((b) => ts >= b.bStart && ts < b.bEnd)
-            if (bucket) {
-                bucket.prompt += est.prompt
-                bucket.completion += est.completion
-                bucket.total += est.total
-                bucket.count += 1
-                if (item.elapsed_ms) bucket.elapsedSum += item.elapsed_ms
-                if (item.model) bucket.models.add(item.model)
-            } else if (ts >= buckets[buckets.length - 1].bEnd) {
-                // Attach to last bucket if slightly ahead
-                const last = buckets[buckets.length - 1]
-                last.prompt += est.prompt
-                last.completion += est.completion
-                last.total += est.total
-                last.count += 1
-                if (item.elapsed_ms) last.elapsedSum += item.elapsed_ms
-                if (item.model) last.models.add(item.model)
-            }
-        })
-
-        return buckets.map((b) => ({
-            ...b,
-            model: Array.from(b.models).slice(0, 2).join(', ') + (b.models.size > 2 ? '...' : ''),
-            elapsedMs: b.count > 0 ? Math.round(b.elapsedSum / b.count) : null,
-        }))
-    }, [filteredHistoryItems, chartViewMode, timeRange])
+        return []
+    }, [chartViewMode, usageData, filteredHistoryItems])
 
     const maxBucketTotal = useMemo(() => {
         if (!timelineBars.length) return 1000
@@ -629,7 +591,12 @@ for await (const chunk of stream) {
 }`
     }
 
-    const recentStream = filteredHistoryItems.slice(0, 6)
+    const recentStream = useMemo(() => {
+        if (usageData?.recent && usageData.recent.length > 0) {
+            return mapUsageRecent(usageData.recent).slice(0, 6)
+        }
+        return filteredHistoryItems.slice(0, 6)
+    }, [usageData, filteredHistoryItems])
 
     return (
         <div className="space-y-6 pb-12">
@@ -734,11 +701,15 @@ for await (const chunk of stream) {
                         </span>
                         <span className="text-xs text-muted-foreground font-mono">
                             ({t('overview.filteredSummary', {
-                                count: filteredHistoryItems.length,
+                                count: telemetry.totalReqs,
                                 tokens: formatTokenCount(telemetry.totalTokens)
                             })})
                         </span>
                     </div>
+
+                    <span className="text-[11px] text-muted-foreground/70 hidden sm:inline ml-auto" title={t('overview.ledgerLagNote')}>
+                        {t('overview.ledgerLagNote')}
+                    </span>
 
                     {/* Quick reset button if filtered and less than total */}
                     {timeRange !== 'all' && (
@@ -1438,12 +1409,14 @@ for await (const chunk of stream) {
                         {recentStream.length > 0 ? (
                             <div className="divide-y divide-border/60">
                                 {recentStream.map((item) => {
-                                    const est = estimateItemTokens(item)
-                                    const isSuccess = item.status === 'ok' || (item.status_code && item.status_code < 400)
-                                    const ts = parseItemTimestamp(item.created_at)
+                                    const isSuccess = isSuccessItem(item)
+                                    const ts = item.at || parseItemTimestamp(item.created_at)
                                     const timeStr = ts
                                         ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
                                         : '—'
+                                    const totalTokens = typeof item.total_tokens === 'number'
+                                        ? item.total_tokens
+                                        : estimateItemTokens(item).total
 
                                     return (
                                         <div key={item.id} className="py-3 flex items-center justify-between gap-3 text-xs">
@@ -1457,14 +1430,14 @@ for await (const chunk of stream) {
                                                         {item.model || 'deepseek-chat'}
                                                     </div>
                                                     <div className="text-[11px] text-muted-foreground truncate max-w-[200px] sm:max-w-xs">
-                                                        {item.user_input || item.preview || item.id}
+                                                        {item.user_input || item.preview || item.caller_id || item.account_id || item.id}
                                                     </div>
                                                 </div>
                                             </div>
 
                                             <div className="text-right shrink-0">
                                                 <div className="font-mono font-bold text-foreground">
-                                                    {est.total.toLocaleString()} <span className="text-[10px] font-normal text-muted-foreground font-sans">tokens</span>
+                                                    {totalTokens.toLocaleString()} <span className="text-[10px] font-normal text-muted-foreground font-sans">tokens</span>
                                                 </div>
                                                 <div className="text-[10px] text-muted-foreground font-mono">
                                                     {item.elapsed_ms ? `${item.elapsed_ms}ms` : timeStr}

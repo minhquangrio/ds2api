@@ -66,6 +66,13 @@ func ChatHistoryPath() string {
 	return ResolvePath("DS2API_CHAT_HISTORY_PATH", "data/chat_history.json")
 }
 
+func UsageLedgerPath() string {
+	if IsVercel() && strings.TrimSpace(os.Getenv("DS2API_USAGE_LEDGER_PATH")) == "" {
+		return "/tmp/usage_ledger.json"
+	}
+	return ResolvePath("DS2API_USAGE_LEDGER_PATH", "data/usage_ledger.json")
+}
+
 func StaticAdminDir() string {
 	return ResolvePath("DS2API_STATIC_ADMIN_DIR", "static/admin")
 }

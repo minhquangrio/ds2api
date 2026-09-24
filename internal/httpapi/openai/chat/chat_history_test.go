@@ -17,6 +17,7 @@ import (
 	"ds2api/internal/chathistory"
 	dsclient "ds2api/internal/deepseek/client"
 	"ds2api/internal/promptcompat"
+	"ds2api/internal/usageledger"
 )
 
 func newTestChatHistoryStore(t *testing.T) *chathistory.Store {
@@ -206,7 +207,7 @@ func TestStartChatHistoryRecoversFromTransientWriteFailure(t *testing.T) {
 		FinalPrompt: "hello",
 	}
 
-	session := startChatHistory(historyStore, req, a, stdReq)
+	session := startChatHistory(historyStore, nil, req, a, stdReq)
 	if session == nil {
 		t.Fatalf("expected session even when initial persistence fails")
 		return
@@ -494,5 +495,94 @@ func TestChatCompletionsStreamDirectTokenErrorDiscardsHistory(t *testing.T) {
 	}
 	if len(snapshot.Items) != 0 {
 		t.Fatalf("expected direct-token auth failure to leave no stream history, got %#v", snapshot.Items)
+	}
+}
+
+func TestStartChatHistoryWithDisabledHistoryRecordsToLedger(t *testing.T) {
+	dir := t.TempDir()
+	histStore := chathistory.New(filepath.Join(dir, "chat_history.json"))
+	_, _ = histStore.SetLimit(0)
+
+	ledger := usageledger.New(filepath.Join(dir, "usage_ledger.json"))
+	defer func() { _ = ledger.Close() }()
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	authData := &auth.RequestAuth{CallerID: "caller_1", AccountID: "acc_1"}
+	stdReq := promptcompat.StandardRequest{
+		ResponseModel: "deepseek-chat",
+		FinalPrompt:   "hello",
+	}
+
+	sess := startChatHistory(histStore, ledger, req, authData, stdReq)
+	if sess == nil {
+		t.Fatalf("expected non-nil session even when history is disabled")
+	}
+
+	sess.success(200, "thinking", "content", "stop", map[string]any{
+		"prompt_tokens":     10,
+		"completion_tokens": 20,
+		"total_tokens":      30,
+	})
+
+	res, err := ledger.Query(usageledger.QueryOptions{RangeKey: "all"})
+	if err != nil {
+		t.Fatalf("query ledger failed: %v", err)
+	}
+	if res.Totals.Requests != 1 || res.Totals.Success != 1 || res.Totals.TotalTokens != 30 {
+		t.Fatalf("unexpected ledger totals: %+v", res.Totals)
+	}
+}
+
+func TestStartChatHistoryStreamPrepareCreatesNoRecords(t *testing.T) {
+	dir := t.TempDir()
+	ledger := usageledger.New(filepath.Join(dir, "usage_ledger.json"))
+	defer func() { _ = ledger.Close() }()
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions?__stream_prepare=1", nil)
+	authData := &auth.RequestAuth{CallerID: "caller_1"}
+	stdReq := promptcompat.StandardRequest{ResponseModel: "deepseek-chat"}
+
+	sess := startChatHistory(nil, ledger, req, authData, stdReq)
+	if sess != nil {
+		t.Fatalf("expected nil session for stream prepare")
+	}
+
+	res, err := ledger.Query(usageledger.QueryOptions{RangeKey: "all"})
+	if err != nil {
+		t.Fatalf("query ledger failed: %v", err)
+	}
+	if res.Totals.Requests != 0 {
+		t.Fatalf("expected 0 requests in ledger, got %d", res.Totals.Requests)
+	}
+}
+
+func TestStartChatHistoryStoppedRecordsUsage(t *testing.T) {
+	dir := t.TempDir()
+	ledger := usageledger.New(filepath.Join(dir, "usage_ledger.json"))
+	defer func() { _ = ledger.Close() }()
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	authData := &auth.RequestAuth{CallerID: "caller_1"}
+	stdReq := promptcompat.StandardRequest{
+		ResponseModel: "deepseek-chat",
+		FinalPrompt:   "hello",
+	}
+
+	sess := startChatHistory(nil, ledger, req, authData, stdReq)
+	if sess == nil {
+		t.Fatalf("expected non-nil session")
+	}
+
+	sess.stopped("thinking", "content", "stop")
+
+	res, err := ledger.Query(usageledger.QueryOptions{RangeKey: "all"})
+	if err != nil {
+		t.Fatalf("query ledger failed: %v", err)
+	}
+	if res.Totals.Requests != 1 || res.Totals.Stopped != 1 || res.Totals.Success != 0 {
+		t.Fatalf("unexpected ledger totals for stopped: %+v", res.Totals)
+	}
+	if res.Totals.TotalTokens == 0 {
+		t.Fatalf("expected non-zero total tokens for stopped")
 	}
 }

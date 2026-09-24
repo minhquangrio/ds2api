@@ -105,6 +105,7 @@ func (h *Handler) handleClaudeDirect(w http.ResponseWriter, r *http.Request) boo
 	}
 	historySession := responsehistory.Start(responsehistory.StartParams{
 		Store:    h.ChatHistory,
+		Ledger:   h.UsageLedger,
 		Request:  r,
 		Auth:     a,
 		Surface:  "claude.messages",

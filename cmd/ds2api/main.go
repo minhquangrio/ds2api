@@ -74,6 +74,11 @@ func main() {
 	// Release pooled upstream/proxy connections after the HTTP server stops
 	// accepting work, so graceful shutdown does not leak transport resources.
 	app.DS.Close()
+	if app.Ledger != nil {
+		if err := app.Ledger.Close(); err != nil {
+			config.Logger.Warn("[usage_ledger] close failed", "error", err)
+		}
+	}
 	if err := shutdownErr; err != nil {
 		config.Logger.Error("graceful shutdown failed, forcing exit", "error", err)
 		os.Exit(1)

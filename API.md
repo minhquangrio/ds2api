@@ -325,7 +325,7 @@ data: [DONE]
 - 开启 thinking 时会输出 `delta.reasoning_content`
 - 普通文本输出 `delta.content`
 - 最后一段包含 `finish_reason` 和 `usage`
-- token 计数优先透传上游 DeepSeek SSE（如 `accumulated_token_usage` / `token_usage`）；仅在上游缺失时回退本地估算。失败/中断型结束（例如 `response.failed`）可能不会携带 `usage`
+- token 计数基于本地标准化估算（通过字符/词长估算 prompt/completion/reasoning token 数）；失败/中断型结束（例如 `response.failed`）可能不会携带 `usage`
 
 #### Tool Calls
 
@@ -636,7 +636,7 @@ data: {"type":"message_stop"}
 - thinking：持续返回 `parts[].thought=true` 的增量 chunk
 - `tools` 场景：会缓冲并在结束时输出 `functionCall` 结构
 - 结束 chunk：包含 `finishReason: "STOP"` 与 `usageMetadata`
-- token 计数优先透传上游 DeepSeek SSE（如 `accumulated_token_usage` / `token_usage`）；仅在上游缺失时回退本地估算
+- token 计数基于本地标准化估算（通过字符/词长估算 prompt/completion/reasoning token 数）
 
 ---
 
@@ -1316,6 +1316,104 @@ data: {"type":"message_stop"}
 
 ```json
 {"success":true,"detail":"capture logs cleared"}
+```
+
+### `GET /admin/usage`
+
+查询持久化 Token 消耗账本与多维聚合统计数据（需 Admin 鉴权）。数据由后台每 5 秒（`DS2API_USAGE_LEDGER_FLUSH_MS`）异步落盘。
+
+**查询参数**：
+
+| 参数 | 默认值 | 说明 |
+| --- | --- | --- |
+| `range` | `all` | 时间预设：`15m`、`1h`、`24h`、`7d`、`30d`、`all`、`custom` |
+| `start` | 空 | 毫秒时间戳（当 `range=custom` 时生效） |
+| `end` | 空 | 毫秒时间戳（当 `range=custom` 时生效） |
+| `tz` | `0` | 客户端时区偏移量（分钟，即 `new Date().getTimezoneOffset()`） |
+| `model` | 空 | 按模型名称精确过滤 |
+| `account` | 空 | 按账号标识（identifier）精确过滤 |
+| `caller` | 空 | 按调用凭据（API key 等）精确过滤 |
+| `limit` | `100` | 返回最近明细条数上限（最大 100） |
+
+**缓存策略**：
+支持标准 `ETag` 与 `If-None-Match`。若当前筛选范围内账本 revision 无变化，接口直接返回 `304 Not Modified`。
+
+**响应示例**：
+
+```json
+{
+  "totals": {
+    "requests": 150,
+    "success": 145,
+    "errors": 4,
+    "stopped": 1,
+    "prompt_tokens": 12000,
+    "completion_tokens": 25000,
+    "reasoning_tokens": 5000,
+    "total_tokens": 37000,
+    "avg_latency_ms": 1250,
+    "tokens_per_sec": 42.5,
+    "success_rate": 97
+  },
+  "timeline": [
+    {
+      "start_ms": 1741230000000,
+      "end_ms": 1741233600000,
+      "requests": 25,
+      "prompt": 2000,
+      "completion": 4000,
+      "reasoning": 800,
+      "total": 6000,
+      "count": 25,
+      "avg_latency_ms": 1100,
+      "models": ["deepseek-chat"]
+    }
+  ],
+  "models": [
+    {
+      "name": "deepseek-chat",
+      "requests": 120,
+      "prompt_tokens": 10000,
+      "completion_tokens": 20000,
+      "reasoning_tokens": 0,
+      "total_tokens": 30000,
+      "percentage": 81
+    }
+  ],
+  "recent": [
+    {
+      "id": "req-1",
+      "at": 1741234567000,
+      "model": "deepseek-chat",
+      "status": "success",
+      "status_code": 200,
+      "elapsed_ms": 1200,
+      "prompt_tokens": 150,
+      "completion_tokens": 350,
+      "reasoning_tokens": 0,
+      "total_tokens": 500,
+      "account_id": "user@example.com",
+      "caller_id": "sk-xxx",
+      "surface": "openai_chat",
+      "stream": true
+    }
+  ]
+}
+```
+
+### `POST /admin/usage/backfill`
+
+手动触发从现有对话历史（`chat-history`）向持久化账本的一次性回填（需 Admin 鉴权）。该操作具备幂等性，已回填记录不会重复计入。
+
+**响应**：
+
+```json
+{
+  "success": true,
+  "imported": 42,
+  "skipped": 0,
+  "total": 42
+}
 ```
 
 ---

@@ -15,6 +15,7 @@ import (
 	"ds2api/internal/textclean"
 	"ds2api/internal/toolcall"
 	"ds2api/internal/toolstream"
+	"ds2api/internal/usageledger"
 )
 
 const openAIGeneralMaxSize = shared.GeneralMaxSize
@@ -26,6 +27,7 @@ type Handler struct {
 	Auth         shared.AuthResolver
 	DS           shared.DeepSeekCaller
 	ChatHistory  *chathistory.Store
+	UsageLedger  *usageledger.Store
 	ContentStore files.ContentStore
 
 	leaseMu      sync.Mutex

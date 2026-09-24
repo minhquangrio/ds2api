@@ -691,7 +691,9 @@
         "allTime": "全部时间",
         "requestsUnit": "条请求",
         "filterPresetTooltip": "按 {range} 筛选统计与图表",
-        "streamingInFlight": "生成流处理中"
+        "streamingInFlight": "生成流处理中",
+        "ledgerLagNote": "统计数据每5秒落盘一次",
+        "ledgerTruncated": "显示截断样本"
     },
     "apiKeysManager": {
         "title": "API 密钥管理",

@@ -15,8 +15,10 @@ import (
 	adminrawsamples "ds2api/internal/httpapi/admin/rawsamples"
 	adminsettings "ds2api/internal/httpapi/admin/settings"
 	adminshared "ds2api/internal/httpapi/admin/shared"
+	adminusage "ds2api/internal/httpapi/admin/usage"
 	adminvercel "ds2api/internal/httpapi/admin/vercel"
 	adminversion "ds2api/internal/httpapi/admin/version"
+	"ds2api/internal/usageledger"
 )
 
 type Handler struct {
@@ -25,6 +27,7 @@ type Handler struct {
 	DS          adminshared.DeepSeekCaller
 	OpenAI      adminshared.OpenAIChatCaller
 	ChatHistory *chathistory.Store
+	UsageLedger *usageledger.Store
 	// WebUIFallback is forwarded to the auth sub-handler so its RequireAdmin
 	// middleware can serve the SPA index.html when a browser navigation request
 	// (GET, no Authorization, Accept: text/html) hits a protected admin API
@@ -42,6 +45,7 @@ func RegisterRoutes(r chi.Router, h *Handler) {
 	rawSamplesHandler := &adminrawsamples.Handler{Store: deps.Store, Pool: deps.Pool, DS: deps.DS, OpenAI: deps.OpenAI, ChatHistory: deps.ChatHistory}
 	vercelHandler := &adminvercel.Handler{Store: deps.Store, Pool: deps.Pool, DS: deps.DS, OpenAI: deps.OpenAI, ChatHistory: deps.ChatHistory}
 	historyHandler := &adminhistory.Handler{Store: deps.Store, Pool: deps.Pool, DS: deps.DS, OpenAI: deps.OpenAI, ChatHistory: deps.ChatHistory}
+	usageHandler := &adminusage.Handler{Store: deps.Store, Pool: deps.Pool, DS: deps.DS, OpenAI: deps.OpenAI, ChatHistory: deps.ChatHistory, UsageLedger: deps.UsageLedger}
 	devCaptureHandler := &admindevcapture.Handler{Store: deps.Store, Pool: deps.Pool, DS: deps.DS, OpenAI: deps.OpenAI, ChatHistory: deps.ChatHistory}
 	versionHandler := &adminversion.Handler{Store: deps.Store, Pool: deps.Pool, DS: deps.DS, OpenAI: deps.OpenAI, ChatHistory: deps.ChatHistory}
 
@@ -57,6 +61,7 @@ func RegisterRoutes(r chi.Router, h *Handler) {
 		adminvercel.RegisterRoutes(pr, vercelHandler)
 		admindevcapture.RegisterRoutes(pr, devCaptureHandler)
 		adminhistory.RegisterRoutes(pr, historyHandler)
+		adminusage.RegisterRoutes(pr, usageHandler)
 		adminversion.RegisterRoutes(pr, versionHandler)
 	})
 }
@@ -65,7 +70,7 @@ func adminsharedDeps(h *Handler) adminsharedDepsValue {
 	if h == nil {
 		return adminsharedDepsValue{}
 	}
-	return adminsharedDepsValue{Store: h.Store, Pool: h.Pool, DS: h.DS, OpenAI: h.OpenAI, ChatHistory: h.ChatHistory}
+	return adminsharedDepsValue{Store: h.Store, Pool: h.Pool, DS: h.DS, OpenAI: h.OpenAI, ChatHistory: h.ChatHistory, UsageLedger: h.UsageLedger}
 }
 
 type adminsharedDepsValue struct {
@@ -74,4 +79,5 @@ type adminsharedDepsValue struct {
 	DS          adminshared.DeepSeekCaller
 	OpenAI      adminshared.OpenAIChatCaller
 	ChatHistory *chathistory.Store
+	UsageLedger *usageledger.Store
 }

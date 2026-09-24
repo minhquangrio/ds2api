@@ -326,7 +326,7 @@ data: [DONE]
 - When thinking is enabled, the stream may emit `delta.reasoning_content`
 - Text emits `delta.content`
 - Last chunk includes `finish_reason` and `usage`
-- Token counting prefers pass-through from upstream DeepSeek SSE (`accumulated_token_usage` / `token_usage`), and only falls back to local estimation when upstream usage is absent. Failed/interrupted endings (for example `response.failed`) may not include `usage`
+- Token counting is calculated via normalized local estimation (estimating prompt, completion, and reasoning tokens based on character/word counts); failed/interrupted endings (for example `response.failed`) may not include `usage`
 
 #### Tool Calls
 
@@ -632,7 +632,7 @@ Returns SSE (`text/event-stream`), each chunk as `data: <json>`:
 - thinking: incremental chunks with `parts[].thought=true`
 - `tools` mode: buffered and emitted as `functionCall` at finalize phase
 - final chunk: includes `finishReason: "STOP"` and `usageMetadata`
-- Token counting prefers pass-through from upstream DeepSeek SSE (`accumulated_token_usage` / `token_usage`), and only falls back to local estimation when upstream usage is absent
+- Token counting is calculated via normalized local estimation (estimating prompt, completion, and reasoning tokens based on character/word counts)
 
 ---
 
@@ -1310,6 +1310,104 @@ Clears packet-capture entries:
 
 ```json
 {"success":true,"detail":"capture logs cleared"}
+```
+
+### `GET /admin/usage`
+
+Query persistent token usage ledger and multidimensional aggregations (Admin auth required). Data is flushed to disk asynchronously every 5 seconds (`DS2API_USAGE_LEDGER_FLUSH_MS`).
+
+**Query Parameters**:
+
+| Parameter | Default | Description |
+| --- | --- | --- |
+| `range` | `all` | Time preset: `15m`, `1h`, `24h`, `7d`, `30d`, `all`, `custom` |
+| `start` | empty | Millisecond timestamp (effective when `range=custom`) |
+| `end` | empty | Millisecond timestamp (effective when `range=custom`) |
+| `tz` | `0` | Client timezone offset in minutes (`new Date().getTimezoneOffset()`) |
+| `model` | empty | Filter by exact model name |
+| `account` | empty | Filter by account identifier |
+| `caller` | empty | Filter by caller identity (API key, etc.) |
+| `limit` | `100` | Max recent request log entries to return (capped at 100) |
+
+**Caching**:
+Supports standard `ETag` and `If-None-Match`. When the ledger revision has not changed within the filtered scope, the API returns `304 Not Modified`.
+
+**Example Response**:
+
+```json
+{
+  "totals": {
+    "requests": 150,
+    "success": 145,
+    "errors": 4,
+    "stopped": 1,
+    "prompt_tokens": 12000,
+    "completion_tokens": 25000,
+    "reasoning_tokens": 5000,
+    "total_tokens": 37000,
+    "avg_latency_ms": 1250,
+    "tokens_per_sec": 42.5,
+    "success_rate": 97
+  },
+  "timeline": [
+    {
+      "start_ms": 1741230000000,
+      "end_ms": 1741233600000,
+      "requests": 25,
+      "prompt": 2000,
+      "completion": 4000,
+      "reasoning": 800,
+      "total": 6000,
+      "count": 25,
+      "avg_latency_ms": 1100,
+      "models": ["deepseek-chat"]
+    }
+  ],
+  "models": [
+    {
+      "name": "deepseek-chat",
+      "requests": 120,
+      "prompt_tokens": 10000,
+      "completion_tokens": 20000,
+      "reasoning_tokens": 0,
+      "total_tokens": 30000,
+      "percentage": 81
+    }
+  ],
+  "recent": [
+    {
+      "id": "req-1",
+      "at": 1741234567000,
+      "model": "deepseek-chat",
+      "status": "success",
+      "status_code": 200,
+      "elapsed_ms": 1200,
+      "prompt_tokens": 150,
+      "completion_tokens": 350,
+      "reasoning_tokens": 0,
+      "total_tokens": 500,
+      "account_id": "user@example.com",
+      "caller_id": "sk-xxx",
+      "surface": "openai_chat",
+      "stream": true
+    }
+  ]
+}
+```
+
+### `POST /admin/usage/backfill`
+
+Manually trigger a one-time idempotent backfill from existing chat history logs into the persistent usage ledger (Admin auth required). Already backfilled records are skipped.
+
+**Response**:
+
+```json
+{
+  "success": true,
+  "imported": 42,
+  "skipped": 0,
+  "total": 42
+}
 ```
 
 ---

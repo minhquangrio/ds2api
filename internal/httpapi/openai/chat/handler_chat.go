@@ -98,7 +98,7 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 		writeOpenAIError(w, status, message)
 		return
 	}
-	historySession := startChatHistory(h.ChatHistory, r, a, stdReq)
+	historySession := startChatHistory(h.ChatHistory, h.UsageLedger, r, a, stdReq)
 
 	if a.Provider == "gemini" {
 		client, err := geminiweb.DefaultRuntime().GetClient(r.Context(), a.Account, h.Store)

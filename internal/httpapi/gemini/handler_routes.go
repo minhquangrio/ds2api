@@ -7,6 +7,7 @@ import (
 
 	"ds2api/internal/chathistory"
 	"ds2api/internal/textclean"
+	"ds2api/internal/usageledger"
 	"ds2api/internal/util"
 )
 
@@ -18,6 +19,7 @@ type Handler struct {
 	DS          DeepSeekCaller
 	OpenAI      OpenAIChatRunner
 	ChatHistory *chathistory.Store
+	UsageLedger *usageledger.Store
 }
 
 //nolint:unused // used by native Gemini stream/non-stream runtime helpers.

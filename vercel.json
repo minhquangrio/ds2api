@@ -86,6 +86,10 @@
       "destination": "/api/index"
     },
     {
+      "source": "/admin/usage(.*)",
+      "destination": "/api/index"
+    },
+    {
       "source": "/admin/proxies(.*)",
       "destination": "/api/index"
     },
