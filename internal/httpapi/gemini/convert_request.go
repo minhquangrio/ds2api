@@ -33,7 +33,7 @@ func normalizeGeminiRequest(store ConfigReader, routeModel string, req map[strin
 	}
 
 	toolsRaw := convertGeminiTools(req["tools"])
-	finalPrompt, toolNames := promptcompat.BuildOpenAIPromptForAdapter(messagesRaw, toolsRaw, "", thinkingEnabled)
+	promptMessages, finalPrompt, toolNames := promptcompat.BuildOpenAIPromptForAdapterWithMessages(messagesRaw, toolsRaw, "", thinkingEnabled)
 	if len(toolNames) == 0 && len(toolsRaw) > 0 {
 		toolNames = []string{"__any_tool__"}
 	}
@@ -45,6 +45,7 @@ func normalizeGeminiRequest(store ConfigReader, routeModel string, req map[strin
 		ResolvedModel:   resolvedModel,
 		ResponseModel:   requestedModel,
 		Messages:        messagesRaw,
+		PromptMessages:  promptMessages,
 		PromptTokenText: finalPrompt,
 		ToolsRaw:        toolsRaw,
 		FinalPrompt:     finalPrompt,

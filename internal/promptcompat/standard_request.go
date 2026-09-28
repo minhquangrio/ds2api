@@ -22,6 +22,7 @@ type StandardRequest struct {
 	Search                  bool
 	RefFileIDs              []string
 	RefFileTokens           int
+	PromptMessages          []map[string]any
 	PassThrough             map[string]any
 }
 

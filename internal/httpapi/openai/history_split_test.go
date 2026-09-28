@@ -220,6 +220,16 @@ func TestApplyThinkingInjectionAppendsLatestUserPrompt(t *testing.T) {
 	if !strings.Contains(out.FinalPrompt, "hello\n\n"+promptcompat.ThinkingInjectionMarker) {
 		t.Fatalf("expected thinking injection after latest user message, got %s", out.FinalPrompt)
 	}
+	foundThinkingInPromptMessages := false
+	for _, m := range out.PromptMessages {
+		if content, _ := m["content"].(string); strings.Contains(content, promptcompat.ThinkingInjectionMarker) {
+			foundThinkingInPromptMessages = true
+			break
+		}
+	}
+	if !foundThinkingInPromptMessages {
+		t.Fatalf("expected PromptMessages to also contain thinking injection prompt, got: %#v", out.PromptMessages)
+	}
 }
 
 func TestApplyThinkingInjectionUsesCustomPrompt(t *testing.T) {

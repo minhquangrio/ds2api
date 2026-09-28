@@ -114,3 +114,69 @@ func TestNormalizeOpenAIResponsesRequestAlwaysAcceptsWideInput(t *testing.T) {
 		t.Fatalf("unexpected final prompt: %q", out.FinalPrompt)
 	}
 }
+
+func TestNormalizeOpenAIChatRequestPopulatesPromptMessagesWithTools(t *testing.T) {
+	req := map[string]any{
+		"model": "deepseek-v4-flash",
+		"messages": []any{
+			map[string]any{"role": "user", "content": "run tool"},
+		},
+		"tools": []any{
+			map[string]any{
+				"type": "function",
+				"function": map[string]any{
+					"name":        "calculator",
+					"description": "Calculate math expressions",
+				},
+			},
+		},
+	}
+	out, err := promptcompat.NormalizeOpenAIChatRequest(mockOpenAIConfig{}, req, "")
+	if err != nil {
+		t.Fatalf("NormalizeOpenAIChatRequest error: %v", err)
+	}
+	if len(out.PromptMessages) == 0 {
+		t.Fatalf("expected non-empty PromptMessages")
+	}
+	found := false
+	for _, m := range out.PromptMessages {
+		if content, _ := m["content"].(string); strings.Contains(content, "calculator") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected tool prompt inside PromptMessages, got: %#v", out.PromptMessages)
+	}
+}
+
+func TestNormalizeOpenAIResponsesRequestPopulatesPromptMessagesWithTools(t *testing.T) {
+	req := map[string]any{
+		"model": "deepseek-v4-flash",
+		"input": "calculate 2+2",
+		"tools": []any{
+			map[string]any{
+				"type":        "function",
+				"name":        "calculator",
+				"description": "Calculate math expressions",
+			},
+		},
+	}
+	out, err := promptcompat.NormalizeOpenAIResponsesRequest(mockOpenAIConfig{}, req, "")
+	if err != nil {
+		t.Fatalf("NormalizeOpenAIResponsesRequest error: %v", err)
+	}
+	if len(out.PromptMessages) == 0 {
+		t.Fatalf("expected non-empty PromptMessages")
+	}
+	found := false
+	for _, m := range out.PromptMessages {
+		if content, _ := m["content"].(string); strings.Contains(content, "calculator") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected tool prompt inside PromptMessages, got: %#v", out.PromptMessages)
+	}
+}

@@ -159,10 +159,7 @@ func FormatProxyURL(p config.Proxy) string {
 }
 
 func ExecuteTurn(ctx context.Context, client *Client, stdReq promptcompat.StandardRequest) (assistantturn.Turn, error) {
-	prompt := stdReq.PromptTokenText
-	if prompt == "" {
-		prompt = stdReq.FinalPrompt
-	}
+	prompt := buildGeminiPrompt(stdReq)
 
 	opts := GenerateOptions{
 		Model:    stdReq.ResolvedModel,

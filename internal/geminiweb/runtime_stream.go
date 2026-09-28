@@ -149,12 +149,13 @@ func StreamClaudeMessages(ctx context.Context, client *Client, stdReq promptcomp
 	flusher, canFlush := w.(http.Flusher)
 	msgID := fmt.Sprintf("msg_%d", time.Now().UnixNano())
 
+	inputTokens := len(buildGeminiPrompt(stdReq))/4 + 1
 	sendClaudeEvent(w, flusher, canFlush, "message_start", map[string]any{
 		"type": "message_start",
 		"message": map[string]any{
 			"id": msgID, "type": "message", "role": "assistant", "model": stdReq.ResponseModel,
 			"content": []any{}, "stop_reason": nil, "stop_sequence": nil,
-			"usage": map[string]any{"input_tokens": len(stdReq.PromptTokenText)/4 + 1, "output_tokens": 1},
+			"usage": map[string]any{"input_tokens": inputTokens, "output_tokens": 1},
 		},
 	})
 	blockIndex := 0
@@ -257,10 +258,7 @@ func StreamClaudeMessages(ctx context.Context, client *Client, stdReq promptcomp
 }
 
 func prepareStream(ctx context.Context, client *Client, stdReq promptcompat.StandardRequest) (*StreamReader, error) {
-	prompt := stdReq.PromptTokenText
-	if prompt == "" {
-		prompt = stdReq.FinalPrompt
-	}
+	prompt := buildGeminiPrompt(stdReq)
 	opts := GenerateOptions{
 		Model:    stdReq.ResolvedModel,
 		Thinking: stdReq.Thinking,

@@ -10,11 +10,12 @@ func ApplyThinkingInjection(store ConfigReader, stdReq promptcompat.StandardRequ
 	if !changed {
 		return stdReq
 	}
-	finalPrompt, toolNames := promptcompat.BuildOpenAIPrompt(messages, stdReq.ToolsRaw, "", stdReq.ToolChoice, stdReq.Thinking)
+	promptMessages, finalPrompt, toolNames := promptcompat.BuildOpenAIPromptWithMessages(messages, stdReq.ToolsRaw, "", stdReq.ToolChoice, stdReq.Thinking, true)
 	if len(toolNames) == 0 && len(stdReq.ToolNames) > 0 {
 		toolNames = stdReq.ToolNames
 	}
 	stdReq.Messages = messages
+	stdReq.PromptMessages = promptMessages
 	stdReq.FinalPrompt = finalPrompt
 	stdReq.ToolNames = toolNames
 	return stdReq

@@ -42,13 +42,14 @@ DS2API 当前的核心思路，不是把客户端传来的 `messages`、`tools`�
 ```text
 客户端请求
   -> HTTP API surface（OpenAI / Claude / Gemini）
-  -> promptcompat 统一消息标准化
+  -> promptcompat 统一消息标准化（生成 StandardRequest 与 PromptMessages）
   -> Provider 调度（X-Ds2-Target-Provider / ModelTarget）
      ├─ DeepSeek:
-     │   -> tool prompt 注入 / DeepSeek prompt 拼装
+     │   -> tool prompt 注入 / StyleDeepSeekWeb prompt 拼装 (<System>:<User>:<Assistant>:)
      │   -> current input file / expert prompt segment
      │   -> completionruntime 下游网页对话接口
      └─ Google Gemini:
+         -> StyleGeminiWeb prompt 渲染（纯文本/无尾部伪标签）
          -> internal/geminiweb 客户端 (httpcloak TLS/H2)
          -> Gemini Web Session / Generate / StreamGenerate
   -> assistantturn 输出语义归一（Turn 结构）
@@ -130,7 +131,11 @@ OpenAI Chat / Responses 在标准化后、current input file 之前，会默认�
 - 普通请求会直接出现在最终 `prompt` 的最新 user block 末尾。
 - 如果触发 current input file，它会进入完整上下文文件中。
 
-### 5.1 角色标记
+### 5.1 角色标记与 Renderer Styles
+
+最终 prompt 根据目标 upstream provider 分为两种渲染风格（`internal/prompt/messages.go` 中的 `PromptRenderStyle`）：
+
+#### 5.1.1 DeepSeek 风格（StyleDeepSeekWeb）
 
 最终 prompt 使用纯文本角色标记，以 `<>:` 包裹：
 
@@ -139,10 +144,20 @@ OpenAI Chat / Responses 在标准化后、current input file 之前，会默认�
 - `<Assistant>:`
 - `<Tool>:`
 
-每个角色块以对应标记开头，紧跟内容文本，不再有 begin/end 分隔符。
+每个角色块以对应标记开头，紧跟内容文本，不再有 begin/end 分隔符。若最后一个角色不是 `assistant`，会在 prompt 末尾追加 `<Assistant>:` 作为助手轮次引导符。
+
+#### 5.1.2 Gemini Web 风格（StyleGeminiWeb）
+
+针对 Google Gemini 网页版（`internal/geminiweb/`）上游：
+
+- **单轮 User 提问：** 直接输出 User 原始内容纯文本，不加任何 `<User>:`、`User:` 或 `<Assistant>:` 标记。
+- **含 System / Tool 说明：** 将系统指令和注入的 tool 声明组织为前置 `[Instructions]` 区块，紧跟用户输入 `User: ...`。
+- **多轮会话：** 组织为 `User: ...` 和 `Model: ...` 自然轮次结构，Tool result 渲染为 `User: [Tool Result]\n...`。
+- **禁止尾部悬空标记：** 绝对不追加 `<Assistant>:` 或 `Model:` 尾部引导标记，避免触发 Google Gemini 网页端的安全/越狱审查（Safety & Prompt Injection Guardrail）。
 
 实现位置：
 [internal/prompt/messages.go](../internal/prompt/messages.go)
+[internal/geminiweb/prompt.go](../internal/geminiweb/prompt.go)
 
 ### 5.2 相邻同角色消息会合并
 
@@ -477,10 +492,11 @@ expert（pro）模型本身不会收到任何 `ref_file_ids` 或 inline 文件�
 
 - `systemInstruction`、`contents.parts`、`functionCall`、`functionResponse` 会先归一
 - tools 会转成 OpenAI 风格 function schema
-- prompt 构建复用 OpenAI 的 `promptcompat.BuildOpenAIPromptForAdapter`，`current_input_file` 触发时也会使用统一的 `TOOLS.txt` 拆分上传路径
+- prompt 构建复用 OpenAI 的 `promptcompat.BuildOpenAIPromptForAdapter` 并记录结构化 `PromptMessages`，`current_input_file` 触发时也会使用统一的 `TOOLS.txt` 拆分上传路径
 - 未识别的非文本 part 会被安全序列化进 prompt，并对二进制/疑似 base64 内容做省略或截断处理
+- 当请求被调度至 Gemini Web 上游（`a.Provider == "gemini"`）时，`geminiweb` 会采用 `StyleGeminiWeb` 进行最终 prompt 渲染（单轮纯文本、无尾部 `<Assistant>:`），避免触发 Gemini 网页端安全拦截；调度至 DeepSeek 上游时则继续沿用 `StyleDeepSeekWeb`
 
-也就是说，Gemini 在“最终 prompt 语义”上，尽量和 OpenAI 保持一致。
+也就是说，Gemini 在对外 API 接收与结构化标准化层尽量和 OpenAI 保持一致，但在对接 upstream 渲染层时与 DeepSeek 做了清晰解耦。
 
 ## 11. 一份贴近真实的最终上下文示意
 
@@ -530,7 +546,7 @@ expert（pro）模型本身不会收到任何 `ref_file_ids` 或 inline 文件�
 - expert 模式提示词分段（`expert_prompt_segment`）触发条件、切分算法或续发逻辑变更
 - 旧 `history_split` 字段忽略/清理行为变更
 - completion payload 字段语义变更
-- Claude / Gemini 对这套统一语义的复用关系变更
+- Claude / Gemini 对这套统一语义的复用关系变更（包括引入 StandardRequest.PromptMessages 与 StyleGeminiWeb 独立渲染以解耦 DeepSeek/Gemini upstream prompt 格式）
 
 优先检查这些文件：
 

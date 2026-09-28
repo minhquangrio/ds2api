@@ -63,3 +63,21 @@ func TestMessagesPrepareWithThinkingPreservesPromptShape(t *testing.T) {
 		t.Fatalf("expected assistant suffix, got %q", gotThinking)
 	}
 }
+
+func TestRenderMessagesEquivalenceToDeepSeek(t *testing.T) {
+	messages := []map[string]any{
+		{"role": "system", "content": "Instructions"},
+		{"role": "user", "content": "Hello ![alt](http://img.png)"},
+		{"role": "assistant", "content": "Hi there"},
+		{"role": "tool", "content": "Tool output"},
+		{"role": "user", "content": "Next question"},
+	}
+
+	for _, thinking := range []bool{false, true} {
+		oldResult := MessagesPrepareWithThinking(messages, thinking)
+		rendered := RenderMessages(messages, StyleDeepSeekWeb)
+		if oldResult != rendered {
+			t.Fatalf("mismatch between MessagesPrepareWithThinking and RenderMessages(StyleDeepSeekWeb):\nold: %q\nnew: %q", oldResult, rendered)
+		}
+	}
+}

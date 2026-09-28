@@ -111,7 +111,7 @@ func (s Service) ApplyCurrentInputFile(ctx context.Context, a *auth.RequestAuth,
 	stdReq.CurrentInputFileID = fileID
 	stdReq.CurrentToolsFileID = toolFileID
 	stdReq.RefFileIDs = prependUniqueRefFileIDs(stdReq.RefFileIDs, fileID, toolFileID)
-	stdReq.FinalPrompt, stdReq.ToolNames = promptcompat.BuildOpenAIPromptWithToolInstructionsOnly(messages, stdReq.ToolsRaw, "", stdReq.ToolChoice, stdReq.Thinking)
+	stdReq.PromptMessages, stdReq.FinalPrompt, stdReq.ToolNames = promptcompat.BuildOpenAIPromptWithMessages(messages, stdReq.ToolsRaw, "", stdReq.ToolChoice, stdReq.Thinking, false)
 	// Token accounting must reflect the actual downstream context:
 	// uploaded context files + the continuation live prompt.
 	tokenParts := []string{fileText}

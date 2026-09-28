@@ -40,7 +40,8 @@ func normalizeClaudeRequest(store ConfigReader, req map[string]any) (claudeNorma
 	if config.IsNoThinkingModel(dsModel) {
 		thinkingEnabled = false
 	}
-	finalPrompt := prompt.MessagesPrepareWithThinking(toMessageMaps(dsPayload["messages"]), thinkingEnabled)
+	promptMessages := toMessageMaps(dsPayload["messages"])
+	finalPrompt := prompt.MessagesPrepareWithThinking(promptMessages, thinkingEnabled)
 	toolNames := extractClaudeToolNames(toolsRequested)
 	if len(toolNames) == 0 && len(toolsRequested) > 0 {
 		toolNames = []string{"__any_tool__"}
@@ -53,6 +54,7 @@ func normalizeClaudeRequest(store ConfigReader, req map[string]any) (claudeNorma
 			ResolvedModel:   dsModel,
 			ResponseModel:   strings.TrimSpace(model),
 			Messages:        normalizedMessages,
+			PromptMessages:  promptMessages,
 			PromptTokenText: finalPrompt,
 			ToolsRaw:        toolsRequested,
 			FinalPrompt:     finalPrompt,

@@ -90,6 +90,16 @@ func TestNormalizeClaudeRequestInjectsToolsIntoExistingSystemMessage(t *testing.
 	if !containsStr(norm.Standard.FinalPrompt, "baseline rule") {
 		t.Fatalf("expected existing system message preserved, got=%q", norm.Standard.FinalPrompt)
 	}
+	hasToolInPromptMessages := false
+	for _, m := range norm.Standard.PromptMessages {
+		if content, _ := m["content"].(string); containsStr(content, "You have access to these tools") {
+			hasToolInPromptMessages = true
+			break
+		}
+	}
+	if !hasToolInPromptMessages {
+		t.Fatalf("expected tool prompt in PromptMessages, got=%#v", norm.Standard.PromptMessages)
+	}
 }
 
 func TestNormalizeClaudeRequestInjectsToolsIntoTopLevelSystem(t *testing.T) {
