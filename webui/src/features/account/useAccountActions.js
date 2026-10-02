@@ -158,9 +158,18 @@ export function useAccountActions({ apiFetch, t, onMessage, onRefresh, config, f
                 return
             }
         } else {
-            if (!newAccount.password || (!newAccount.email && !newAccount.mobile)) {
-                onMessage('error', t('accountManager.requiredFields'))
-                return
+            const hasCookies = Boolean(String(newAccount.cookies || '').trim())
+            const hasId = Boolean(String(newAccount.name || '').trim() || String(newAccount.email || '').trim() || String(newAccount.mobile || '').trim())
+            if (hasCookies) {
+                if (!hasId) {
+                    onMessage('error', t('accountManager.deepseekCookieRequiredFields') || t('accountManager.geminiRequiredFields'))
+                    return
+                }
+            } else {
+                if (!newAccount.password || (!newAccount.email && !newAccount.mobile)) {
+                    onMessage('error', t('accountManager.requiredFields'))
+                    return
+                }
             }
         }
         setLoading(true)

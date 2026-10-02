@@ -335,7 +335,7 @@ go run ./cmd/ds2api
 常用字段：
 
 - `keys` / `api_keys`：客户端访问密钥，`api_keys` 支持 `name` 与 `remark` 元信息，`keys` 继续兼容。
-- `accounts`：DeepSeek 托管账号，支持 `email` 或 `mobile` 登录，可配置代理、名称和备注。
+- `accounts`：托管账号（DeepSeek 或 Gemini）。DeepSeek 支持两种认证方式：(1) **Cookie / Web Session**（推荐，可规避数美风控 `RISK_DEVICE_DETECTED`，支持控制台脚本一键导出）或 (2) **账号密码登录**（`email` / `mobile` + `password`）。Gemini 配置 `provider: "gemini"` 与 Cookies。
 - `model_aliases`：OpenAI / Claude / Gemini 共用的模型 alias 映射。
 - `runtime`：账号并发、队列与 token 刷新策略，可通过 Admin Settings 热更新。
 - `auto_delete.mode`：请求结束后的远端会话清理策略，支持 `none` / `single` / `all`。

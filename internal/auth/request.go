@@ -340,6 +340,10 @@ func (r *Resolver) RefreshToken(ctx context.Context, a *RequestAuth) bool {
 	if !a.UseConfigToken || a.AccountID == "" {
 		return false
 	}
+	if strings.TrimSpace(a.Account.Password) == "" {
+		config.Logger.Warn("[refresh_token] cannot refresh passwordless account", "account", a.AccountID)
+		return false
+	}
 	_ = r.Store.UpdateAccountToken(a.AccountID, "")
 	a.Account.Token = ""
 	if err := r.loginAndPersist(ctx, a); err != nil {
@@ -525,9 +529,12 @@ func (r *Resolver) ensureManagedToken(ctx context.Context, a *RequestAuth) error
 		return nil
 	}
 	if strings.TrimSpace(a.Account.Token) == "" {
+		if strings.TrimSpace(a.Account.Cookies) != "" && strings.TrimSpace(a.Account.Password) == "" {
+			return errors.New("deepseek cookie session missing token (please provide cookies or token)")
+		}
 		return r.loginAndPersist(ctx, a)
 	}
-	if r.shouldForceRefresh(a.AccountID) {
+	if r.shouldForceRefresh(a.Account) {
 		if err := r.loginAndPersist(ctx, a); err != nil {
 			return err
 		}
@@ -537,11 +544,15 @@ func (r *Resolver) ensureManagedToken(ctx context.Context, a *RequestAuth) error
 	return nil
 }
 
-func (r *Resolver) shouldForceRefresh(accountID string) bool {
+func (r *Resolver) shouldForceRefresh(acc config.Account) bool {
 	if r == nil || r.Store == nil {
 		return false
 	}
+	accountID := acc.Identifier()
 	if strings.TrimSpace(accountID) == "" {
+		return false
+	}
+	if strings.TrimSpace(acc.Password) == "" {
 		return false
 	}
 	intervalHours := r.Store.RuntimeTokenRefreshIntervalHours()

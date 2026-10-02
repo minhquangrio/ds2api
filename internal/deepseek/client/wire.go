@@ -78,12 +78,60 @@ func accountIDFromRequest(req *http.Request) string {
 // application layer. Replaying what the server sets removes that tell without
 // changing any request semantics: nothing is invented, only echoed back.
 type cookieJar struct {
-	mu sync.RWMutex
-	m  map[string]map[string]string // accountID -> cookie name -> value
+	mu      sync.RWMutex
+	m       map[string]map[string]string // accountID -> cookie name -> value
+	lastRaw map[string]string            // accountID -> rawCookies string
 }
 
 func newCookieJar() *cookieJar {
-	return &cookieJar{m: map[string]map[string]string{}}
+	return &cookieJar{
+		m:       map[string]map[string]string{},
+		lastRaw: map[string]string{},
+	}
+}
+
+func (j *cookieJar) preload(accountID string, rawCookies string) {
+	if j == nil || accountID == "" || strings.TrimSpace(rawCookies) == "" {
+		return
+	}
+	cleanRaw := strings.TrimSpace(rawCookies)
+
+	j.mu.Lock()
+	defer j.mu.Unlock()
+
+	jar := j.m[accountID]
+	isNewRaw := (j.lastRaw[accountID] != cleanRaw)
+	if isNewRaw || jar == nil {
+		jar = map[string]string{}
+		j.m[accountID] = jar
+		j.lastRaw[accountID] = cleanRaw
+	}
+
+	parsed, err := ParseDeepSeekSession(cleanRaw)
+	if err == nil && len(parsed.CookiesMap) > 0 {
+		for k, v := range parsed.CookiesMap {
+			if isNewRaw || jar[k] == "" {
+				jar[k] = v
+			}
+		}
+		return
+	}
+
+	pairs := strings.Split(cleanRaw, ";")
+	for _, p := range pairs {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		idx := strings.IndexByte(p, '=')
+		if idx > 0 {
+			k := strings.TrimSpace(p[:idx])
+			v := strings.TrimSpace(p[idx+1:])
+			if k != "" && (isNewRaw || jar[k] == "") {
+				jar[k] = v
+			}
+		}
+	}
 }
 
 func (j *cookieJar) apply(accountID string, req *http.Request) {
@@ -93,6 +141,10 @@ func (j *cookieJar) apply(accountID string, req *http.Request) {
 	// Never overwrite a Cookie header a caller set deliberately.
 	if req.Header.Get("Cookie") != "" {
 		return
+	}
+
+	if a, ok := auth.FromContext(req.Context()); ok && a != nil && strings.TrimSpace(a.Account.Cookies) != "" {
+		j.preload(accountID, a.Account.Cookies)
 	}
 
 	j.mu.RLock()

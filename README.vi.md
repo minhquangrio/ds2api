@@ -332,7 +332,7 @@ Dịch vụ thực tế bind tại: `0.0.0.0:5001`, do đó các thiết bị tr
 Các trường thường dùng:
 
 - `keys` / `api_keys`: Khóa truy cập của client, `api_keys` hỗ trợ thông tin meta `name` và `remark`, `keys` tiếp tục tương thích.
-- `accounts`: Tài khoản DeepSeek quản lý, hỗ trợ đăng nhập `email` hoặc `mobile`, có thể cấu hình proxy, tên và ghi chú.
+- `accounts`: Tài khoản quản lý (DeepSeek hoặc Gemini). DeepSeek hỗ trợ 2 phương thức xác thực: (1) **Cookie / Web Session** (Khuyên dùng - bỏ qua cơ chế chống bot Shumei `RISK_DEVICE_DETECTED` bằng cách trích xuất token/cookie từ phiên duyệt web) hoặc (2) **Email / Số điện thoại + Mật khẩu**. Gemini cấu hình `provider: "gemini"` cùng Cookies trình duyệt.
 - `model_aliases`: Ánh xạ bí danh (alias) mô hình dùng chung cho OpenAI / Claude / Gemini.
 - `runtime`: Chiến lược đồng thời tài khoản, hàng chờ và làm mới token, có thể cập nhật hot qua Admin Settings.
 - `auto_delete.mode`: Chiến lược dọn dẹp phiên từ xa sau khi yêu cầu kết thúc, hỗ trợ `none` / `single` / `all`.

@@ -148,7 +148,7 @@ func (h *Handler) validateAccountsForVercelSync(ctx context.Context, enabled boo
 	}
 	validated, failed := 0, []string{}
 	for _, acc := range h.Store.Snapshot().Accounts {
-		if strings.TrimSpace(acc.Token) != "" {
+		if strings.TrimSpace(acc.Token) != "" || acc.IsGemini() || strings.TrimSpace(acc.Password) == "" {
 			continue
 		}
 		token, err := h.DS.Login(ctx, acc)

@@ -97,6 +97,104 @@ func TestCookieJarReplaysWhatServerSet(t *testing.T) {
 	}
 }
 
+func TestCookieJarPreloadsAccountCookies(t *testing.T) {
+	jar := newCookieJar()
+	var sent string
+	doer := newWireDoer(fakeDoer{fn: func(req *http.Request) (*http.Response, error) {
+		sent = req.Header.Get("Cookie")
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{},
+			Body:       io.NopCloser(strings.NewReader("{}")),
+		}, nil
+	}}, jar)
+
+	ctx := auth.WithAuth(context.Background(), &auth.RequestAuth{
+		AccountID: "cookie-acct",
+		Account: config.Account{
+			Name:    "cookie-acct",
+			Cookies: "ds_session_id=sess999; HWWAF=tok888",
+		},
+	})
+
+	resp, err := doer.Do(mustRequest(t, ctx))
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	want := "HWWAF=tok888; ds_session_id=sess999"
+	if sent != want {
+		t.Errorf("got preloaded cookie %q, want %q", sent, want)
+	}
+}
+
+func TestCookieJarPreloadUpdatesWhenRawCookiesChanges(t *testing.T) {
+	jar := newCookieJar()
+	var sent string
+	setRespCookie := ""
+
+	doer := newWireDoer(fakeDoer{fn: func(req *http.Request) (*http.Response, error) {
+		sent = req.Header.Get("Cookie")
+		resp := &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{},
+			Body:       io.NopCloser(strings.NewReader("{}")),
+		}
+		if setRespCookie != "" {
+			resp.Header.Add("Set-Cookie", setRespCookie)
+		}
+		return resp, nil
+	}}, jar)
+
+	// Step 1: Initial preload
+	ctx1 := auth.WithAuth(context.Background(), &auth.RequestAuth{
+		AccountID: "cookie-acct",
+		Account: config.Account{
+			Name:    "cookie-acct",
+			Cookies: "ds_session_id=old_sess",
+		},
+	})
+	setRespCookie = "ds_session_id=upstream_updated; Path=/"
+	resp1, err := doer.Do(mustRequest(t, ctx1))
+	if err != nil {
+		t.Fatalf("Do 1: %v", err)
+	}
+	_ = resp1.Body.Close()
+	if sent != "ds_session_id=old_sess" {
+		t.Fatalf("step 1 sent %q, want %q", sent, "ds_session_id=old_sess")
+	}
+
+	// Step 2: Same raw cookies, should keep upstream's Set-Cookie
+	setRespCookie = ""
+	resp2, err := doer.Do(mustRequest(t, ctx1))
+	if err != nil {
+		t.Fatalf("Do 2: %v", err)
+	}
+	_ = resp2.Body.Close()
+	if sent != "ds_session_id=upstream_updated" {
+		t.Fatalf("step 2 sent %q, want %q", sent, "ds_session_id=upstream_updated")
+	}
+
+	// Step 3: Raw cookies changed (user updated credentials), should reset and apply new cookies
+	ctx3 := auth.WithAuth(context.Background(), &auth.RequestAuth{
+		AccountID: "cookie-acct",
+		Account: config.Account{
+			Name:    "cookie-acct",
+			Cookies: "ds_session_id=new_sess; extra_token=xyz",
+		},
+	})
+	resp3, err := doer.Do(mustRequest(t, ctx3))
+	if err != nil {
+		t.Fatalf("Do 3: %v", err)
+	}
+	_ = resp3.Body.Close()
+	want3 := "ds_session_id=new_sess; extra_token=xyz"
+	if sent != want3 {
+		t.Fatalf("step 3 sent %q, want %q", sent, want3)
+	}
+}
+
 func TestCookieJarIsolatesAccounts(t *testing.T) {
 	jar := newCookieJar()
 	var lastSent string

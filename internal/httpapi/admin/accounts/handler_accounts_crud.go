@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"ds2api/internal/config"
+	dsclient "ds2api/internal/deepseek/client"
 	"ds2api/internal/geminiweb"
 )
 
@@ -104,6 +105,20 @@ func (h *Handler) addAccount(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"detail": "Gemini 账号必须配置 cookies"})
 		return
 	}
+	if acc.IsDeepSeek() && strings.TrimSpace(acc.Cookies) != "" {
+		if parsed, err := dsclient.ParseDeepSeekSession(acc.Cookies); err == nil {
+			if parsed.Token != "" {
+				acc.Token = parsed.Token
+			}
+			if parsed.CookieHeader != "" {
+				acc.Cookies = parsed.CookieHeader
+			}
+		}
+	}
+	if acc.IsDeepSeek() && strings.TrimSpace(acc.Password) == "" && strings.TrimSpace(acc.Token) == "" && strings.TrimSpace(acc.Cookies) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"detail": "DeepSeek 账号需要密码或 Cookie/Session"})
+		return
+	}
 	err := h.Store.Update(func(c *config.Config) error {
 		if acc.ProxyID != "" {
 			if _, ok := findProxyByID(*c, acc.ProxyID); !ok {
@@ -118,7 +133,7 @@ func (h *Handler) addAccount(w http.ResponseWriter, r *http.Request) {
 			if mobileKey != "" && config.CanonicalMobileKey(a.Mobile) == mobileKey {
 				return fmt.Errorf("手机号已存在")
 			}
-			if acc.IsGemini() && acc.Name != "" && a.Name == acc.Name && acc.Email == "" && acc.Mobile == "" {
+			if (acc.IsGemini() || acc.IsDeepSeek()) && acc.Name != "" && a.Name == acc.Name && acc.Email == "" && acc.Mobile == "" {
 				return fmt.Errorf("账号名称已存在")
 			}
 		}
@@ -167,7 +182,23 @@ func (h *Handler) updateAccount(w http.ResponseWriter, r *http.Request) {
 				c.Accounts[i].PoolType = config.NormalizePoolType(poolType)
 			}
 			if cookiesOK && strings.TrimSpace(cookies) != "" {
-				c.Accounts[i].Cookies = strings.TrimSpace(cookies)
+				cleanCookies := strings.TrimSpace(cookies)
+				if c.Accounts[i].IsDeepSeek() {
+					if parsed, err := dsclient.ParseDeepSeekSession(cleanCookies); err == nil {
+						if parsed.Token != "" {
+							c.Accounts[i].Token = parsed.Token
+						}
+						if parsed.CookieHeader != "" {
+							c.Accounts[i].Cookies = parsed.CookieHeader
+						} else {
+							c.Accounts[i].Cookies = cleanCookies
+						}
+					} else {
+						c.Accounts[i].Cookies = cleanCookies
+					}
+				} else {
+					c.Accounts[i].Cookies = cleanCookies
+				}
 			}
 			if proxyIDOK {
 				c.Accounts[i].ProxyID = proxyID

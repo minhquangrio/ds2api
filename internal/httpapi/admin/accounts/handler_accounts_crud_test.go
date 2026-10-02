@@ -222,3 +222,35 @@ func TestUpdateAccountNewCookiesUpdatesSuccessfully(t *testing.T) {
 		t.Fatalf("expected cookies to be updated to new_sid, got %q", acc.Cookies)
 	}
 }
+
+func TestAddAccountDeepSeekWithCookieSession(t *testing.T) {
+	h := newAdminTestHandler(t, `{"accounts":[]}`)
+	r := chi.NewRouter()
+	r.Post("/admin/accounts", h.addAccount)
+
+	jwt := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgN"
+	sessionJSON := fmt.Sprintf(`{"name":"ds-cookie-1","provider":"deepseek","cookies":"{\"token\":\"%s\",\"cookies\":\"ds_session_id=sess123\"}"}`, jwt)
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/accounts", strings.NewReader(sessionJSON))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	snap := h.Store.Snapshot()
+	if len(snap.Accounts) != 1 {
+		t.Fatalf("expected 1 account, got %d", len(snap.Accounts))
+	}
+	acc := snap.Accounts[0]
+	if acc.Token != jwt {
+		t.Errorf("got token %q, want %q", acc.Token, jwt)
+	}
+	if acc.Cookies != "ds_session_id=sess123" {
+		t.Errorf("got cookies %q, want %q", acc.Cookies, "ds_session_id=sess123")
+	}
+	if acc.Identifier() != "ds-cookie-1" {
+		t.Errorf("got identifier %q, want %q", acc.Identifier(), "ds-cookie-1")
+	}
+}

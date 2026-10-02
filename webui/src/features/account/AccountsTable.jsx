@@ -202,13 +202,18 @@ export default function AccountsTable({
                                                     {t('accountManager.accountMutedRecoverAt', { time: mutedRecoverAt })}
                                                 </span>
                                             )}
+                                            {acc.provider === 'deepseek' && (
+                                                <span className={`font-mono px-1.5 py-0.5 rounded text-[10px] border ${(acc.has_cookies || !acc.has_password) ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-slate-500/10 text-slate-500 border-slate-500/20'}`}>
+                                                    {(acc.has_cookies || !acc.has_password) ? t('accountManager.cookieAuthBadge') : t('accountManager.passwordAuthBadge')}
+                                                </span>
+                                            )}
                                             {acc.token_preview && (
                                                 <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-[10px]">
                                                     {acc.token_preview}
                                                 </span>
                                             )}
                                             {acc.cookies_preview && (
-                                                <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-[10px]" title="Gemini Cookies">
+                                                <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-[10px]" title={acc.provider === 'gemini' ? 'Gemini Cookies' : 'DeepSeek Cookies'}>
                                                     {acc.cookies_preview}
                                                 </span>
                                             )}

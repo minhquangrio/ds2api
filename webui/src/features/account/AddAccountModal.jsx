@@ -1,4 +1,7 @@
-import { X } from 'lucide-react'
+import { useState } from 'react'
+import { X, Copy, Check, Info } from 'lucide-react'
+
+const EXTRACT_SCRIPT = `copy(JSON.stringify({token: localStorage.getItem('userToken'), cookies: document.cookie}))`
 
 export default function AddAccountModal({
     show,
@@ -9,9 +12,20 @@ export default function AddAccountModal({
     onClose,
     onAdd,
 }) {
+    const [dsAuthMode, setDsAuthMode] = useState('cookie')
+    const [copiedScript, setCopiedScript] = useState(false)
+
     if (!show) {
         return null
     }
+
+    const handleCopyScript = () => {
+        navigator.clipboard.writeText(EXTRACT_SCRIPT)
+        setCopiedScript(true)
+        setTimeout(() => setCopiedScript(false), 2000)
+    }
+
+    const isGemini = newAccount.provider === 'gemini'
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
@@ -22,7 +36,7 @@ export default function AddAccountModal({
                         <X className="w-5 h-5" />
                     </button>
                 </div>
-                <div className="p-6 space-y-4">
+                <div className="p-6 space-y-4 max-h-[85vh] overflow-y-auto custom-scrollbar">
                     <div>
                         <label className="block text-sm font-medium mb-1.5">Provider</label>
                         <select
@@ -34,10 +48,41 @@ export default function AddAccountModal({
                             <option value="gemini">Google Gemini Web</option>
                         </select>
                     </div>
+
+                    {!isGemini && (
+                        <div>
+                            <label className="block text-sm font-medium mb-1.5">{t('accountManager.authModeLabel')}</label>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setDsAuthMode('cookie')}
+                                    className={`px-3 py-2 text-xs font-medium rounded-lg border transition-all ${
+                                        dsAuthMode === 'cookie'
+                                            ? 'bg-primary text-primary-foreground border-primary shadow-xs'
+                                            : 'bg-secondary/40 text-muted-foreground border-border hover:bg-secondary'
+                                    }`}
+                                >
+                                    {t('accountManager.authModeCookie')}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setDsAuthMode('password')}
+                                    className={`px-3 py-2 text-xs font-medium rounded-lg border transition-all ${
+                                        dsAuthMode === 'password'
+                                            ? 'bg-primary text-primary-foreground border-primary shadow-xs'
+                                            : 'bg-secondary/40 text-muted-foreground border-border hover:bg-secondary'
+                                    }`}
+                                >
+                                    {t('accountManager.authModePassword')}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     <div>
                         <label className="block text-sm font-medium mb-1.5">
                             {t('accountManager.nameOptional')}
-                            {newAccount.provider === 'gemini' && (
+                            {(isGemini || dsAuthMode === 'cookie') && (
                                 <span className="text-xs text-muted-foreground font-normal ml-1">
                                     ({t('accountManager.geminiNameOrEmailHint')})
                                 </span>
@@ -61,7 +106,8 @@ export default function AddAccountModal({
                             onChange={e => setNewAccount({ ...newAccount, remark: e.target.value })}
                         />
                     </div>
-                    {newAccount.provider === 'gemini' ? (
+
+                    {isGemini ? (
                         <>
                             <div>
                                 <label className="block text-sm font-medium mb-1.5">{t('accountManager.emailOptional')}</label>
@@ -81,6 +127,34 @@ export default function AddAccountModal({
                                     value={newAccount.cookies || ''}
                                     onChange={e => setNewAccount({ ...newAccount, cookies: e.target.value })}
                                 />
+                            </div>
+                        </>
+                    ) : dsAuthMode === 'cookie' ? (
+                        <>
+                            <div>
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <label className="block text-sm font-medium">
+                                        {t('accountManager.deepseekCookiesLabel')} <span className="text-destructive">*</span>
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={handleCopyScript}
+                                        className="text-xs text-primary hover:underline flex items-center gap-1 font-medium"
+                                    >
+                                        {copiedScript ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                                        {copiedScript ? t('accountManager.copiedScript') : t('accountManager.copyExtractScript')}
+                                    </button>
+                                </div>
+                                <textarea
+                                    className="input-field bg-background font-mono text-xs h-24"
+                                    placeholder={t('accountManager.deepseekCookiesPlaceholder')}
+                                    value={newAccount.cookies || ''}
+                                    onChange={e => setNewAccount({ ...newAccount, cookies: e.target.value })}
+                                />
+                            </div>
+                            <div className="rounded-lg border border-border/60 bg-secondary/30 p-2.5 text-xs text-muted-foreground flex gap-2">
+                                <Info className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                                <div>{t('accountManager.extractScriptHint')}</div>
                             </div>
                         </>
                     ) : (

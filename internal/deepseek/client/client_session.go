@@ -155,13 +155,23 @@ func (c *Client) GetSessionCountAll(ctx context.Context) []*SessionStats {
 
 	for _, acc := range accounts {
 		token := acc.Token
-		accountID := acc.Email
-		if accountID == "" {
-			accountID = acc.Mobile
-		}
+		accountID := acc.Identifier()
 
-		// 如果没有 token，尝试登录获取
+		// 如果没有 token，尝试从 Cookies 解析或登录获取
+		if token == "" && strings.TrimSpace(acc.Cookies) != "" {
+			if parsed, pErr := ParseDeepSeekSession(acc.Cookies); pErr == nil && parsed.Token != "" {
+				token = parsed.Token
+			}
+		}
 		if token == "" {
+			if strings.TrimSpace(acc.Password) == "" {
+				results = append(results, &SessionStats{
+					AccountID:    accountID,
+					Success:      false,
+					ErrorMessage: "missing token or cookies",
+				})
+				continue
+			}
 			var err error
 			token, err = c.Login(auth.WithAuth(ctx, &auth.RequestAuth{AccountID: acc.Identifier(), Account: acc}), acc)
 			if err != nil {

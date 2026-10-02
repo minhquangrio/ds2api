@@ -13,6 +13,7 @@ import (
 
 	authn "ds2api/internal/auth"
 	"ds2api/internal/config"
+	dsclient "ds2api/internal/deepseek/client"
 	"ds2api/internal/geminiweb"
 	"ds2api/internal/prompt"
 	"ds2api/internal/promptcompat"
@@ -148,13 +149,27 @@ func (h *Handler) testAccount(ctx context.Context, acc config.Account, model, me
 		return result
 	}
 
-	token, err := h.DS.Login(ctx, acc)
-	if err != nil {
-		result["message"] = "登录失败: " + err.Error()
-		return result
+	token := strings.TrimSpace(acc.Token)
+	if token == "" && strings.TrimSpace(acc.Cookies) != "" {
+		if parsed, pErr := dsclient.ParseDeepSeekSession(acc.Cookies); pErr == nil && parsed.Token != "" {
+			token = parsed.Token
+			_ = h.Store.UpdateAccountToken(acc.Identifier(), token)
+		}
 	}
-	if err := h.Store.UpdateAccountToken(acc.Identifier(), token); err != nil {
-		result["config_warning"] = "登录成功，但 token 持久化失败（仅保存在内存，重启后会丢失）: " + err.Error()
+	if token == "" {
+		if strings.TrimSpace(acc.Password) == "" {
+			result["message"] = "DeepSeek 账号缺少 Token 或有效 Cookie（无密码可供登录）"
+			return result
+		}
+		var err error
+		token, err = h.DS.Login(ctx, acc)
+		if err != nil {
+			result["message"] = "登录失败: " + err.Error()
+			return result
+		}
+		if err := h.Store.UpdateAccountToken(acc.Identifier(), token); err != nil {
+			result["config_warning"] = "登录成功，但 token 持久化失败（仅保存在内存，重启后会丢失）: " + err.Error()
+		}
 	}
 	if acc.IsMuted() {
 		result["message"] = fmt.Sprintf("账号已被禁言，解禁时间: %s", formatMuteUntil(acc.MutedUntil))
@@ -166,19 +181,24 @@ func (h *Handler) testAccount(ctx context.Context, acc config.Account, model, me
 	proxyCtx := authn.WithAuth(ctx, authCtx)
 	sessionID, err := h.DS.CreateSession(proxyCtx, authCtx, 1)
 	if err != nil {
-		newToken, loginErr := h.DS.Login(proxyCtx, acc)
-		if loginErr != nil {
-			result["message"] = "创建会话失败: " + err.Error()
-			return result
-		}
-		token = newToken
-		authCtx.DeepSeekToken = token
-		if err := h.Store.UpdateAccountToken(acc.Identifier(), token); err != nil {
-			result["config_warning"] = "刷新 token 成功，但 token 持久化失败（仅保存在内存，重启后会丢失）: " + err.Error()
-		}
-		sessionID, err = h.DS.CreateSession(proxyCtx, authCtx, 1)
-		if err != nil {
-			result["message"] = "创建会话失败: " + err.Error()
+		if strings.TrimSpace(acc.Password) != "" {
+			newToken, loginErr := h.DS.Login(proxyCtx, acc)
+			if loginErr != nil {
+				result["message"] = "创建会话失败: " + err.Error()
+				return result
+			}
+			token = newToken
+			authCtx.DeepSeekToken = token
+			if err := h.Store.UpdateAccountToken(acc.Identifier(), token); err != nil {
+				result["config_warning"] = "刷新 token 成功，但 token 持久化失败（仅保存在内存，重启后会丢失）: " + err.Error()
+			}
+			sessionID, err = h.DS.CreateSession(proxyCtx, authCtx, 1)
+			if err != nil {
+				result["message"] = "创建会话失败: " + err.Error()
+				return result
+			}
+		} else {
+			result["message"] = "创建会话失败（Token/Cookie 可能已失效，请更新 Cookie）: " + err.Error()
 			return result
 		}
 	}
@@ -304,31 +324,49 @@ func (h *Handler) deleteAllSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 每次先登录刷新一次 token，避免使用过期 token。
 	authCtx := &authn.RequestAuth{UseConfigToken: false, AccountID: acc.Identifier(), Account: acc}
 	proxyCtx := authn.WithAuth(r.Context(), authCtx)
-	token, err := h.DS.Login(proxyCtx, acc)
-	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]any{"success": false, "message": "登录失败: " + err.Error()})
-		return
+	token := strings.TrimSpace(acc.Token)
+	if token == "" && strings.TrimSpace(acc.Cookies) != "" {
+		if parsed, pErr := dsclient.ParseDeepSeekSession(acc.Cookies); pErr == nil && parsed.Token != "" {
+			token = parsed.Token
+			_ = h.Store.UpdateAccountToken(acc.Identifier(), token)
+		}
 	}
-	_ = h.Store.UpdateAccountToken(acc.Identifier(), token)
+	if token == "" {
+		if strings.TrimSpace(acc.Password) == "" {
+			writeJSON(w, http.StatusOK, map[string]any{"success": false, "message": "账号缺少 Token 或有效 Cookie（无密码可供登录）"})
+			return
+		}
+		var err error
+		token, err = h.DS.Login(proxyCtx, acc)
+		if err != nil {
+			writeJSON(w, http.StatusOK, map[string]any{"success": false, "message": "登录失败: " + err.Error()})
+			return
+		}
+		_ = h.Store.UpdateAccountToken(acc.Identifier(), token)
+	}
 	authCtx.DeepSeekToken = token
 
 	// 删除所有会话
-	err = h.DS.DeleteAllSessionsForToken(proxyCtx, token)
+	err := h.DS.DeleteAllSessionsForToken(proxyCtx, token)
 	if err != nil {
-		// token 可能过期，尝试重新登录并重试一次
-		newToken, loginErr := h.DS.Login(proxyCtx, acc)
-		if loginErr != nil {
-			writeJSON(w, http.StatusOK, map[string]any{"success": false, "message": "删除失败: " + err.Error()})
-			return
-		}
-		token = newToken
-		_ = h.Store.UpdateAccountToken(acc.Identifier(), token)
-		authCtx.DeepSeekToken = token
-		if retryErr := h.DS.DeleteAllSessionsForToken(proxyCtx, token); retryErr != nil {
-			writeJSON(w, http.StatusOK, map[string]any{"success": false, "message": "删除失败: " + retryErr.Error()})
+		if strings.TrimSpace(acc.Password) != "" {
+			// token 可能过期，尝试重新登录并重试一次
+			newToken, loginErr := h.DS.Login(proxyCtx, acc)
+			if loginErr != nil {
+				writeJSON(w, http.StatusOK, map[string]any{"success": false, "message": "删除失败: " + err.Error()})
+				return
+			}
+			token = newToken
+			_ = h.Store.UpdateAccountToken(acc.Identifier(), token)
+			authCtx.DeepSeekToken = token
+			if retryErr := h.DS.DeleteAllSessionsForToken(proxyCtx, token); retryErr != nil {
+				writeJSON(w, http.StatusOK, map[string]any{"success": false, "message": "删除失败: " + retryErr.Error()})
+				return
+			}
+		} else {
+			writeJSON(w, http.StatusOK, map[string]any{"success": false, "message": "删除失败（Token/Cookie 可能已失效）: " + err.Error()})
 			return
 		}
 	}
