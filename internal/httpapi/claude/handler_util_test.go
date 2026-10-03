@@ -61,6 +61,133 @@ func TestNormalizeClaudeMessagesToolResult(t *testing.T) {
 	}
 }
 
+func TestNormalizeClaudeMessagesToolResultIsErrorStringContent(t *testing.T) {
+	msgs := []any{
+		map[string]any{
+			"role": "user",
+			"content": []any{
+				map[string]any{
+					"type":     "tool_result",
+					"content":  "build failed: exit status 1",
+					"is_error": true,
+				},
+			},
+		},
+	}
+	got := normalizeClaudeMessages(msgs)
+	if len(got) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(got))
+	}
+	m := got[0].(map[string]any)
+	if m["role"] != "tool" {
+		t.Fatalf("expected role tool, got %v", m["role"])
+	}
+	content, _ := m["content"].(string)
+	expected := "[tool_error]\nbuild failed: exit status 1\n[/tool_error]"
+	if content != expected {
+		t.Fatalf("expected %q, got %q", expected, content)
+	}
+}
+
+func TestNormalizeClaudeMessagesToolResultIsErrorNonTextPayload(t *testing.T) {
+	msgs := []any{
+		map[string]any{
+			"role": "user",
+			"content": []any{
+				map[string]any{
+					"type": "tool_result",
+					"content": []any{
+						map[string]any{"type": "text", "text": "error detail"},
+					},
+					"is_error": true,
+				},
+			},
+		},
+	}
+	got := normalizeClaudeMessages(msgs)
+	if len(got) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(got))
+	}
+	m := got[0].(map[string]any)
+	content, _ := m["content"].(string)
+	if !strings.HasPrefix(content, "[tool_error]\n") || !strings.HasSuffix(content, "\n[/tool_error]") {
+		t.Fatalf("expected wrapped [tool_error], got %q", content)
+	}
+	if !strings.Contains(content, "error detail") {
+		t.Fatalf("expected content to contain 'error detail', got %q", content)
+	}
+	if !strings.Contains(content, `"type":"tool_result"`) {
+		t.Fatalf("expected JSON payload for non-text content, got %q", content)
+	}
+}
+
+func TestNormalizeClaudeMessagesToolResultIsErrorKeepsToolCallIDAndName(t *testing.T) {
+	msgs := []any{
+		map[string]any{
+			"role": "assistant",
+			"content": []any{
+				map[string]any{
+					"type":  "tool_use",
+					"id":    "call_42",
+					"name":  "bash",
+					"input": map[string]any{"command": "make test"},
+				},
+			},
+		},
+		map[string]any{
+			"role": "user",
+			"content": []any{
+				map[string]any{
+					"type":        "tool_result",
+					"tool_use_id": "call_42",
+					"content":     "command not found",
+					"is_error":    true,
+				},
+			},
+		},
+	}
+	got := normalizeClaudeMessages(msgs)
+	if len(got) != 2 {
+		t.Fatalf("expected 2 messages, got %d", len(got))
+	}
+	toolMsg := got[1].(map[string]any)
+	if toolMsg["tool_call_id"] != "call_42" {
+		t.Fatalf("expected tool_call_id=call_42, got %v", toolMsg["tool_call_id"])
+	}
+	if toolMsg["name"] != "bash" {
+		t.Fatalf("expected name=bash, got %v", toolMsg["name"])
+	}
+	content, _ := toolMsg["content"].(string)
+	expected := "[tool_error]\ncommand not found\n[/tool_error]"
+	if content != expected {
+		t.Fatalf("expected %q, got %q", expected, content)
+	}
+}
+
+func TestNormalizeClaudeMessagesToolResultWithoutIsErrorUnchanged(t *testing.T) {
+	msgs := []any{
+		map[string]any{
+			"role": "user",
+			"content": []any{
+				map[string]any{
+					"type":     "tool_result",
+					"content":  "normal output",
+					"is_error": false,
+				},
+			},
+		},
+	}
+	got := normalizeClaudeMessages(msgs)
+	if len(got) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(got))
+	}
+	m := got[0].(map[string]any)
+	content, _ := m["content"].(string)
+	if content != "normal output" {
+		t.Fatalf("expected 'normal output', got %q", content)
+	}
+}
+
 func TestNormalizeClaudeMessagesToolUseToAssistantToolCalls(t *testing.T) {
 	msgs := []any{
 		map[string]any{

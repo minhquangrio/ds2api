@@ -131,6 +131,14 @@ func formatClaudeReasoningForPrompt(reasoning string) string {
 	return "[reasoning_content]\n" + reasoning + "\n[/reasoning_content]"
 }
 
+func formatClaudeToolErrorForPrompt(result string) string {
+	result = strings.TrimSpace(result)
+	if result == "" {
+		return "[tool_error]"
+	}
+	return "[tool_error]\n" + result + "\n[/tool_error]"
+}
+
 func extractClaudeThinkingBlockText(block map[string]any) string {
 	if block == nil {
 		return ""
@@ -250,10 +258,11 @@ func normalizeClaudeToolResultToToolMessage(block map[string]any, state *claudeT
 	if toolCallID == "" {
 		toolCallID = state.nextID()
 	}
+	isError, _ := block["is_error"].(bool)
 	out := map[string]any{
 		"role":         "tool",
 		"tool_call_id": toolCallID,
-		"content":      normalizeClaudeToolResultContent(block["content"]),
+		"content":      normalizeClaudeToolResultContent(block["content"], isError),
 	}
 	if name != "" {
 		out["name"] = name
@@ -265,8 +274,11 @@ func normalizeClaudeToolResultToToolMessage(block map[string]any, state *claudeT
 	return out
 }
 
-func normalizeClaudeToolResultContent(content any) any {
+func normalizeClaudeToolResultContent(content any, isError bool) any {
 	if text, ok := content.(string); ok {
+		if isError {
+			return formatClaudeToolErrorForPrompt(text)
+		}
 		return text
 	}
 	payload := map[string]any{
@@ -274,10 +286,14 @@ func normalizeClaudeToolResultContent(content any) any {
 		"content": content,
 	}
 	b, err := json.Marshal(sanitizeClaudeBlockForPrompt(payload))
+	result := string(b)
 	if err != nil {
-		return strings.TrimSpace(fmt.Sprintf("%v", content))
+		result = strings.TrimSpace(fmt.Sprintf("%v", content))
 	}
-	return string(b)
+	if isError {
+		return formatClaudeToolErrorForPrompt(result)
+	}
+	return result
 }
 
 func formatClaudeBlockRaw(block map[string]any) string {

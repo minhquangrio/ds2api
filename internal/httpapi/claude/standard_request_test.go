@@ -128,3 +128,73 @@ func TestNormalizeClaudeRequestInjectsToolsIntoTopLevelSystem(t *testing.T) {
 		t.Fatalf("expected tool prompt injected, got=%q", norm.Standard.FinalPrompt)
 	}
 }
+
+func TestNormalizeClaudeRequestFlattensSystemTextBlocksIntoPrompt(t *testing.T) {
+	t.Setenv("DS2API_CONFIG_JSON", `{}`)
+	store := config.LoadStore()
+	req := map[string]any{
+		"model": "claude-sonnet-4-5",
+		"system": []any{
+			map[string]any{
+				"type":          "text",
+				"text":          "first system instruction",
+				"cache_control": map[string]any{"type": "ephemeral"},
+			},
+			map[string]any{
+				"type": "text",
+				"text": "second system instruction",
+			},
+		},
+		"messages": []any{
+			map[string]any{"role": "user", "content": "hello"},
+		},
+	}
+
+	norm, err := normalizeClaudeRequest(store, req)
+	if err != nil {
+		t.Fatalf("normalize failed: %v", err)
+	}
+
+	if !containsStr(norm.Standard.FinalPrompt, "first system instruction\nsecond system instruction") {
+		t.Fatalf("expected flattened system text in final prompt, got=%q", norm.Standard.FinalPrompt)
+	}
+	if containsStr(norm.Standard.FinalPrompt, "cache_control") || containsStr(norm.Standard.FinalPrompt, "ephemeral") {
+		t.Fatalf("expected cache_control not in final prompt, got=%q", norm.Standard.FinalPrompt)
+	}
+}
+
+func TestNormalizeClaudeRequestMergesToolPromptIntoFlattenedSystem(t *testing.T) {
+	t.Setenv("DS2API_CONFIG_JSON", `{}`)
+	store := config.LoadStore()
+	req := map[string]any{
+		"model": "claude-sonnet-4-5",
+		"system": []any{
+			map[string]any{
+				"type":          "text",
+				"text":          "base system array",
+				"cache_control": map[string]any{"type": "ephemeral"},
+			},
+		},
+		"messages": []any{
+			map[string]any{"role": "user", "content": "hello"},
+		},
+		"tools": []any{
+			map[string]any{"name": "search", "description": "Search"},
+		},
+	}
+
+	norm, err := normalizeClaudeRequest(store, req)
+	if err != nil {
+		t.Fatalf("normalize failed: %v", err)
+	}
+
+	if !containsStr(norm.Standard.FinalPrompt, "base system array") {
+		t.Fatalf("expected base system preserved, got=%q", norm.Standard.FinalPrompt)
+	}
+	if !containsStr(norm.Standard.FinalPrompt, "You have access to these tools") {
+		t.Fatalf("expected tool prompt injected, got=%q", norm.Standard.FinalPrompt)
+	}
+	if containsStr(norm.Standard.FinalPrompt, "cache_control") || containsStr(norm.Standard.FinalPrompt, "ephemeral") {
+		t.Fatalf("expected cache_control not in prompt, got=%q", norm.Standard.FinalPrompt)
+	}
+}

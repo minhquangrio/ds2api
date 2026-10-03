@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"ds2api/internal/claudeconv"
 	"ds2api/internal/config"
 	"ds2api/internal/prompt"
 	"ds2api/internal/promptcompat"
@@ -26,6 +27,7 @@ func normalizeClaudeRequest(store ConfigReader, req map[string]any) (claudeNorma
 	}
 	normalizedMessages := normalizeClaudeMessages(messagesRaw)
 	payload := cloneMap(req)
+	payload["system"] = claudeconv.FlattenSystemPrompt(payload["system"])
 	payload["messages"] = normalizedMessages
 	toolsRequested, _ := req["tools"].([]any)
 	payload["messages"] = injectClaudeToolPrompt(payload, normalizedMessages, toolsRequested)

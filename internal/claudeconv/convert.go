@@ -20,7 +20,7 @@ func ConvertClaudeToDeepSeek(claudeReq map[string]any, aliasProvider config.Mode
 	}
 
 	convertedMessages := make([]any, 0, len(messages)+1)
-	if system, ok := claudeReq["system"].(string); ok && system != "" {
+	if system := FlattenSystemPrompt(claudeReq["system"]); system != "" {
 		convertedMessages = append(convertedMessages, map[string]any{"role": "system", "content": system})
 	}
 	convertedMessages = append(convertedMessages, messages...)

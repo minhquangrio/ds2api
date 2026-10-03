@@ -297,13 +297,15 @@ tool / function role 的结果会作为 `<Tool>:...` 进入 prompt。
 
 如果 tool content 为空，当前会补成字符串 `"null"`，避免整个 tool turn 丢失。
 
+对 Claude 的 `tool_result`，若携带 `is_error: true`，内容会被包裹为 `[tool_error]\n...\n[/tool_error]`（若内容为空则为 `[tool_error]`），该标记对普通纯文本与 JSON 序列化块均统一生效；`is_error` 缺省或为 `false` 时保持原样。
+
 ## 8. files、附件、systemprompt 文件的实际语义
 
 这里要明确区分两类东西：
 
 1. 文本型 system prompt
    例如 OpenAI `developer` / `system` / Responses `instructions` / Claude top-level `system`
-   这类会进入 `prompt`。
+   这类会进入 `prompt`。其中 Claude top-level `system` 支持 `string` 或包含 `{"type":"text","text":...}` 的 block 数组；多个 text block 会以换行符 `\n` 连接；`cache_control` 及其他非 text 字段会被安全过滤，提取后的纯文本再进入 `prompt` 与工具声明合并。
 2. 文件型 systemprompt
    例如通过附件、`input_file`、base64、data URL 上传的文件
    这类不会直接内联进 `prompt`，而是进入 `ref_file_ids`。
@@ -480,7 +482,7 @@ expert（pro）模型本身不会收到任何 `ref_file_ids` 或 inline 文件�
 
 特点：
 
-- top-level `system` 优先作为系统提示
+- top-level `system` 优先作为系统提示，支持 string 与 `{"type":"text","text":...}` 块数组（自动展平为 `\n` 连接的纯文本并剥离 `cache_control`）
 - `tool_use` / `tool_result` 会被转换成统一的 assistant/tool 历史语义
 - 普通直传时 `tools` 同样会被并进 system prompt；`current_input_file` 触发时会沿用统一的 `TOOLS.txt` 拆分上传路径
 - 常规执行通过 `internal/httpapi/claude/handler_messages.go` 转到 OpenAI chat 路径，模型 alias 会先解析成 DeepSeek 原生模型
@@ -562,6 +564,7 @@ expert（pro）模型本身不会收到任何 `ref_file_ids` 或 inline 文件�
 - `internal/promptcompat/responses_input_normalize.go`
 - `internal/httpapi/claude/standard_request.go`
 - `internal/httpapi/claude/handler_utils.go`
+- `internal/claudeconv/system.go`
 - `internal/httpapi/gemini/convert_request.go`
 - `internal/httpapi/gemini/convert_messages.go`
 - `internal/httpapi/gemini/convert_tools.go`
@@ -580,6 +583,7 @@ expert（pro）模型本身不会收到任何 `ref_file_ids` 或 inline 文件�
 - `go test ./internal/httpapi/openai/...`
 - `go test ./internal/httpapi/claude/...`
 - `go test ./internal/httpapi/gemini/...`
+- `go test ./internal/claudeconv/...`
 - `go test ./internal/util/...`
 
 如果改的是 tool call 相关兼容语义，还应同时检查：
