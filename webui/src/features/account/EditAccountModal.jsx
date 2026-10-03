@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { X, Copy, Check } from 'lucide-react'
 
-const EXTRACT_SCRIPT = `copy(JSON.stringify({token: localStorage.getItem('userToken'), cookies: document.cookie}))`
+const EXTRACT_SCRIPT = `(() => { let t = localStorage.getItem('userToken') || ''; try { const p = JSON.parse(t); if (p && p.value) t = p.value; } catch (e) {} copy(JSON.stringify({token: t, cookies: document.cookie})); console.log('DS2API: Đã sao chép token & cookies thành công!'); })()`
 
 export default function EditAccountModal({
     show,

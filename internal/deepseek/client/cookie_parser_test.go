@@ -94,3 +94,21 @@ func TestParseDeepSeekSession_Empty(t *testing.T) {
 		t.Fatal("expected error for empty string, got nil")
 	}
 }
+
+func TestParseDeepSeekSession_WrappedJSONToken(t *testing.T) {
+	raw := `{"token":"{\"value\":\"/zVuNHSdX0sdi+X0oSzD0otMgOZAwaXs+AIq4tYYyPoANfh4KbT17g3nBTcSV3AF\",\"__version\":\"0\"}","cookies":"smidV2=2025092620382621098f218c3ceb2e0e1b108a3aa54c120065d3f7c4b5b1930; aws-waf-token=9e52fb6d"}`
+	res, err := ParseDeepSeekSession(raw)
+	if err != nil {
+		t.Fatalf("ParseDeepSeekSession failed: %v", err)
+	}
+	wantToken := "/zVuNHSdX0sdi+X0oSzD0otMgOZAwaXs+AIq4tYYyPoANfh4KbT17g3nBTcSV3AF"
+	if res.Token != wantToken {
+		t.Errorf("got token %q, want %q", res.Token, wantToken)
+	}
+	if res.CookiesMap["smidV2"] != "2025092620382621098f218c3ceb2e0e1b108a3aa54c120065d3f7c4b5b1930" {
+		t.Errorf("got smidV2 %q", res.CookiesMap["smidV2"])
+	}
+	if res.CookiesMap["aws-waf-token"] != "9e52fb6d" {
+		t.Errorf("got aws-waf-token %q", res.CookiesMap["aws-waf-token"])
+	}
+}

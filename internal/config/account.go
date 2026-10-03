@@ -1,9 +1,42 @@
 package config
 
 import (
+	"encoding/json"
 	"strings"
 	"time"
 )
+
+// CleanWrappedToken extracts the raw token string if it was stored as a JSON object
+// like {"value":"...","__version":"0"} or with Bearer prefix/quotes.
+func CleanWrappedToken(s string) string {
+	for i := 0; i < 5; i++ {
+		s = strings.TrimSpace(s)
+		if strings.HasPrefix(strings.ToLower(s), "bearer ") {
+			s = strings.TrimSpace(s[7:])
+		}
+		s = strings.Trim(s, `"'`)
+		s = strings.TrimSpace(s)
+		if !strings.HasPrefix(s, "{") || !strings.HasSuffix(s, "}") {
+			return s
+		}
+		var obj map[string]any
+		if err := json.Unmarshal([]byte(s), &obj); err == nil && len(obj) > 0 {
+			found := false
+			for _, k := range []string{"value", "token", "userToken", "usertoken", "access_token", "authToken", "auth_token"} {
+				if v, ok := obj[k].(string); ok && strings.TrimSpace(v) != "" {
+					s = v
+					found = true
+					break
+				}
+			}
+			if found {
+				continue
+			}
+		}
+		break
+	}
+	return s
+}
 
 const (
 	// PoolTypeDefault 允许无工具调用和含工具调用的请求使用此账号。

@@ -124,6 +124,7 @@ func (c *Config) NormalizeCredentials() {
 		c.Accounts[i].DeviceID = strings.TrimSpace(c.Accounts[i].DeviceID)
 		c.Accounts[i].Locale = strings.TrimSpace(c.Accounts[i].Locale)
 		c.Accounts[i].PoolType = NormalizePoolType(c.Accounts[i].PoolType)
+		c.Accounts[i].Token = CleanWrappedToken(c.Accounts[i].Token)
 	}
 
 	c.Vercel = NormalizeVercelConfig(c.Vercel)

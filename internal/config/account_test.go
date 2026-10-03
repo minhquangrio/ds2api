@@ -49,3 +49,24 @@ func TestMatchesPoolType(t *testing.T) {
 		t.Fatal("tools_only account should match tools-enabled request")
 	}
 }
+
+func TestCleanWrappedToken(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"", ""},
+		{"simple_token", "simple_token"},
+		{"Bearer simple_token", "simple_token"},
+		{`"quoted_token"`, "quoted_token"},
+		{`{"value":"actual_token","__version":"0"}`, "actual_token"},
+		{`{"token":"nested_token"}`, "nested_token"},
+		{`{"userToken":"user_tok"}`, "user_tok"},
+		{`{"value":"{\"value\":\"deep_token\"}"}`, "deep_token"},
+	}
+	for _, c := range cases {
+		if got := CleanWrappedToken(c.in); got != c.want {
+			t.Errorf("CleanWrappedToken(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}

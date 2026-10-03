@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"ds2api/internal/config"
 )
 
 // ParsedDeepSeekSession holds the extracted JWT token and normalized cookies
@@ -31,13 +33,7 @@ func isTokenKey(k string) bool {
 }
 
 func cleanTokenValue(v string) string {
-	v = strings.TrimSpace(v)
-	if strings.HasPrefix(strings.ToLower(v), "bearer ") {
-		v = strings.TrimSpace(v[7:])
-	}
-	// Strip surrounding quotes if present
-	v = strings.Trim(v, `"'`)
-	return strings.TrimSpace(v)
+	return config.CleanWrappedToken(v)
 }
 
 func isLikelyJWT(s string) bool {
@@ -125,8 +121,17 @@ func parseJSONObject(obj map[string]any, result *ParsedDeepSeekSession) {
 		}
 
 		if isTokenKey(key) && result.Token == "" {
-			if strVal, ok := v.(string); ok {
-				result.Token = cleanTokenValue(strVal)
+			switch tv := v.(type) {
+			case string:
+				result.Token = cleanTokenValue(tv)
+				continue
+			case map[string]any:
+				for _, tk := range []string{"value", "token", "userToken", "usertoken", "access_token", "authToken", "auth_token"} {
+					if val, ok := tv[tk].(string); ok && strings.TrimSpace(val) != "" {
+						result.Token = cleanTokenValue(val)
+						break
+					}
+				}
 				continue
 			}
 		}

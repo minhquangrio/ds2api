@@ -528,6 +528,15 @@ func (r *Resolver) ensureManagedToken(ctx context.Context, a *RequestAuth) error
 		}
 		return nil
 	}
+	if strings.TrimSpace(a.Account.Token) != "" {
+		cleaned := config.CleanWrappedToken(a.Account.Token)
+		if cleaned != a.Account.Token {
+			a.Account.Token = cleaned
+			if r.Store != nil {
+				_ = r.Store.UpdateAccountToken(a.Account.Identifier(), cleaned)
+			}
+		}
+	}
 	if strings.TrimSpace(a.Account.Token) == "" {
 		if strings.TrimSpace(a.Account.Cookies) != "" && strings.TrimSpace(a.Account.Password) == "" {
 			return errors.New("deepseek cookie session missing token (please provide cookies or token)")
