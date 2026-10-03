@@ -1,0 +1,1 @@
+import{_ as e}from"./index-CV7aeB00.js";var t=e(`search`,[[`path`,{d:`m21 21-4.34-4.34`,key:`14j7rj`}],[`circle`,{cx:`11`,cy:`11`,r:`8`,key:`4ej97u`}]]);function n(e){let t=String(e??``);return t?t.length<=4?`*`.repeat(t.length):`${t.slice(0,2)}****${t.slice(-2)}`:``}export{t as n,n as t};

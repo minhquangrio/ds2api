@@ -32,6 +32,16 @@ export default function AccountManagerContainer({ config, onRefresh, onMessage, 
         resolveAccountIdentifier,
         searchQuery,
         handleSearchChange,
+        filterProvider,
+        handleFilterProviderChange,
+        filterPoolType,
+        handleFilterPoolTypeChange,
+        filterStatus,
+        handleFilterStatusChange,
+        filterProxy,
+        handleFilterProxyChange,
+        handleResetFilters,
+        accountStats,
     } = useAccountsData({ apiFetch })
 
     const {
@@ -166,11 +176,21 @@ export default function AccountManagerContainer({ config, onRefresh, onMessage, 
                 onUpdateAccountProxy={updateAccountProxy}
                 onToggleAccountEnabled={toggleAccountEnabled}
                 onToggleAllAccountsEnabled={toggleAllAccountsEnabled}
-                onPrevPage={() => fetchAccounts(page - 1)}
-                onNextPage={() => fetchAccounts(page + 1)}
+                onPrevPage={() => fetchAccounts(page - 1, pageSize, searchQuery, filterProvider, filterPoolType, filterStatus, filterProxy)}
+                onNextPage={() => fetchAccounts(page + 1, pageSize, searchQuery, filterProvider, filterPoolType, filterStatus, filterProxy)}
                 onPageSizeChange={changePageSize}
                 searchQuery={searchQuery}
                 onSearchChange={handleSearchChange}
+                filterProvider={filterProvider}
+                onFilterProviderChange={handleFilterProviderChange}
+                filterPoolType={filterPoolType}
+                onFilterPoolTypeChange={handleFilterPoolTypeChange}
+                filterStatus={filterStatus}
+                onFilterStatusChange={handleFilterStatusChange}
+                filterProxy={filterProxy}
+                onFilterProxyChange={handleFilterProxyChange}
+                onResetFilters={handleResetFilters}
+                accountStats={accountStats}
                 envBacked={Boolean(config?.env_backed)}
             />
 

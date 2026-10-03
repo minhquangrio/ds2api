@@ -254,3 +254,82 @@ func TestAddAccountDeepSeekWithCookieSession(t *testing.T) {
 		t.Errorf("got identifier %q, want %q", acc.Identifier(), "ds-cookie-1")
 	}
 }
+
+func TestListAccountsGroupFiltersAndStats(t *testing.T) {
+	raw := `{
+		"accounts": [
+			{"email":"ds1@example.com","password":"pwd","pool_type":"default","proxy_id":"px1"},
+			{"email":"ds2@example.com","password":"pwd","pool_type":"no_tools","disabled":true},
+			{"name":"gem1","provider":"gemini","cookies":"__Secure-1PSID=sid1","pool_type":"tools_only","proxy_id":"px1"},
+			{"name":"gem2","provider":"gemini","cookies":"__Secure-1PSID=sid2","pool_type":"default","banned":true}
+		]
+	}`
+	router := newHTTPAdminHarness(t, raw, &testingDSMock{})
+
+	// 1. Check stats and all accounts
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, adminReq(http.MethodGet, "/accounts?page=1&page_size=10", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+	}
+	var res map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+		t.Fatalf("json decode: %v", err)
+	}
+	stats, ok := res["stats"].(map[string]any)
+	if !ok {
+		t.Fatalf("missing stats in response: %v", res)
+	}
+	if stats["total"].(float64) != 4 {
+		t.Errorf("expected total=4, got %v", stats["total"])
+	}
+	if stats["deepseek"].(float64) != 2 {
+		t.Errorf("expected deepseek=2, got %v", stats["deepseek"])
+	}
+	if stats["gemini"].(float64) != 2 {
+		t.Errorf("expected gemini=2, got %v", stats["gemini"])
+	}
+	if stats["disabled"].(float64) != 1 {
+		t.Errorf("expected disabled=1, got %v", stats["disabled"])
+	}
+
+	// 2. Filter by provider=gemini
+	recGem := httptest.NewRecorder()
+	router.ServeHTTP(recGem, adminReq(http.MethodGet, "/accounts?provider=gemini", nil))
+	var resGem map[string]any
+	_ = json.Unmarshal(recGem.Body.Bytes(), &resGem)
+	itemsGem := resGem["items"].([]any)
+	if len(itemsGem) != 2 {
+		t.Errorf("expected 2 gemini accounts, got %d", len(itemsGem))
+	}
+
+	// 3. Filter by pool_type=tools_only
+	recTools := httptest.NewRecorder()
+	router.ServeHTTP(recTools, adminReq(http.MethodGet, "/accounts?pool_type=tools_only", nil))
+	var resTools map[string]any
+	_ = json.Unmarshal(recTools.Body.Bytes(), &resTools)
+	itemsTools := resTools["items"].([]any)
+	if len(itemsTools) != 1 {
+		t.Errorf("expected 1 tools_only account, got %d", len(itemsTools))
+	}
+
+	// 4. Filter by status=disabled
+	recDis := httptest.NewRecorder()
+	router.ServeHTTP(recDis, adminReq(http.MethodGet, "/accounts?status=disabled", nil))
+	var resDis map[string]any
+	_ = json.Unmarshal(recDis.Body.Bytes(), &resDis)
+	itemsDis := resDis["items"].([]any)
+	if len(itemsDis) != 1 {
+		t.Errorf("expected 1 disabled account, got %d", len(itemsDis))
+	}
+
+	// 5. Filter by proxy_id=direct
+	recDirect := httptest.NewRecorder()
+	router.ServeHTTP(recDirect, adminReq(http.MethodGet, "/accounts?proxy_id=direct", nil))
+	var resDirect map[string]any
+	_ = json.Unmarshal(recDirect.Body.Bytes(), &resDirect)
+	itemsDirect := resDirect["items"].([]any)
+	if len(itemsDirect) != 2 {
+		t.Errorf("expected 2 direct accounts, got %d", len(itemsDirect))
+	}
+}

@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { ChevronLeft, ChevronRight, Check, Copy, Pencil, Play, Plus, Trash2, FolderX, Gauge } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Play, Plus, SlidersHorizontal, RefreshCw } from 'lucide-react'
 import clsx from 'clsx'
+import AccountFiltersBar from './AccountFiltersBar'
+import AccountItemRow from './AccountItemRow'
 
 export default function AccountsTable({
     t,
@@ -19,7 +20,7 @@ export default function AccountsTable({
     pageSize,
     totalPages,
     resolveAccountIdentifier,
-    proxies,
+    proxies = [],
     elasticPoolEnabled,
     onOpenElasticPool,
     onTestAll,
@@ -37,94 +38,154 @@ export default function AccountsTable({
     onPageSizeChange,
     searchQuery,
     onSearchChange,
+    filterProvider,
+    onFilterProviderChange,
+    filterPoolType,
+    onFilterPoolTypeChange,
+    filterStatus,
+    onFilterStatusChange,
+    filterProxy,
+    onFilterProxyChange,
+    onResetFilters,
+    accountStats,
     envBacked = false,
 }) {
-    const [copiedId, setCopiedId] = useState(null)
+    const isFiltered = (
+        (filterProvider && filterProvider !== 'all') ||
+        (filterPoolType && filterPoolType !== 'all') ||
+        (filterStatus && filterStatus !== 'all') ||
+        (filterProxy && filterProxy !== 'all') ||
+        Boolean(searchQuery && searchQuery.trim())
+    )
 
-    const copyId = (id) => {
-        navigator.clipboard.writeText(id).then(() => {
-            setCopiedId(id)
-            setTimeout(() => setCopiedId(null), 1500)
-        })
-    }
     return (
         <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
-            <div className="p-6 border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-4">
+            {/* Header Section */}
+            <div className="p-5 sm:p-6 border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h2 className="text-lg font-semibold">{t('accountManager.accountsTitle')}</h2>
-                    <p className="text-sm text-muted-foreground">{t('accountManager.accountsDesc')}</p>
+                    <div className="flex items-center gap-2.5">
+                        <h2 className="text-lg font-bold text-foreground tracking-tight">
+                            {t('accountManager.accountsTitle')}
+                        </h2>
+                        <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-primary/10 text-primary border border-primary/20">
+                            {totalAccounts}
+                        </span>
+                    </div>
+                    <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+                        {t('accountManager.accountsDesc')}
+                    </p>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                    <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={e => onSearchChange(e.target.value)}
-                        placeholder={t('accountManager.searchPlaceholder')}
-                        className="px-3 py-1.5 text-sm bg-muted border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground"
-                    />
+                <div className="flex flex-wrap items-center gap-2.5">
                     <button
+                        type="button"
                         onClick={onTestAll}
                         disabled={testingAll || totalAccounts === 0}
-                        className="flex items-center px-3 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors text-xs font-medium border border-border disabled:opacity-50"
+                        className="flex items-center gap-1.5 px-3 py-2 bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-lg transition-colors text-xs font-medium border border-border disabled:opacity-50 shadow-xs"
                     >
-                        {testingAll ? <span className="animate-spin mr-2">⟳</span> : <Play className="w-3 h-3 mr-2" />}
-                        {t('accountManager.testAll')}
+                        {testingAll ? (
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin text-primary" />
+                        ) : (
+                            <Play className="w-3.5 h-3.5 text-emerald-400" />
+                        )}
+                        <span>{t('accountManager.testAll')}</span>
                     </button>
                     <button
+                        type="button"
                         onClick={onShowAddAccount}
-                        className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium text-sm shadow-sm"
+                        className="flex items-center gap-1.5 px-3.5 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg transition-colors font-medium text-xs shadow-xs"
                     >
                         <Plus className="w-4 h-4" />
-                        {t('accountManager.addAccount')}
+                        <span>{t('accountManager.addAccount')}</span>
                     </button>
                 </div>
             </div>
 
-            <div className="px-6 py-3 border-b border-border flex items-center justify-between gap-2">
+            {/* Interactive Stat Strip & Group Filter Toolbar */}
+            <AccountFiltersBar
+                t={t}
+                searchQuery={searchQuery}
+                onSearchChange={onSearchChange}
+                filterProvider={filterProvider}
+                onFilterProviderChange={onFilterProviderChange}
+                filterPoolType={filterPoolType}
+                onFilterPoolTypeChange={onFilterPoolTypeChange}
+                filterStatus={filterStatus}
+                onFilterStatusChange={onFilterStatusChange}
+                filterProxy={filterProxy}
+                onFilterProxyChange={onFilterProxyChange}
+                onResetFilters={onResetFilters}
+                accountStats={accountStats}
+                totalAccounts={totalAccounts}
+                proxies={proxies}
+            />
+
+            {/* Elastic Pool and Batch Operations Sub-bar */}
+            <div className="px-5 py-2.5 border-b border-border bg-muted/20 flex flex-wrap items-center justify-between gap-3">
                 <button
+                    type="button"
                     onClick={onOpenElasticPool}
-                    className="flex items-center px-3 py-1.5 rounded-lg transition-colors text-xs font-medium border bg-primary text-primary-foreground border-primary hover:bg-primary/90"
+                    className={clsx(
+                        "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors shadow-xs",
+                        elasticPoolEnabled
+                            ? "bg-primary/15 text-primary border-primary/40 hover:bg-primary/25"
+                            : "bg-muted text-muted-foreground border-border hover:bg-muted/80"
+                    )}
                 >
-                    {t('accountManager.elasticPool')}
+                    <span className={clsx(
+                        "w-2 h-2 rounded-full",
+                        elasticPoolEnabled ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground/60"
+                    )} />
+                    <SlidersHorizontal className="w-3 h-3" />
+                    <span>{t('accountManager.elasticPool')}</span>
                 </button>
-                <div className="flex flex-wrap gap-2">
+
+                <div className="flex items-center gap-2">
                     <button
+                        type="button"
                         onClick={() => onToggleAllAccountsEnabled(false)}
                         disabled={elasticPoolEnabled || togglingAllEnabled || testingAll || totalAccounts === 0}
-                        className="flex items-center px-3 py-1.5 bg-destructive/10 text-destructive border border-destructive/20 rounded-lg hover:bg-destructive/20 transition-colors text-xs font-medium disabled:opacity-50"
+                        className="px-2.5 py-1.5 bg-destructive/10 text-destructive border border-destructive/20 rounded-lg hover:bg-destructive/20 transition-colors text-xs font-medium disabled:opacity-50"
                     >
-                        {togglingAllEnabled && <span className="animate-spin mr-2">⟳</span>}
+                        {togglingAllEnabled ? <span className="animate-spin mr-1">⟳</span> : null}
                         {t('accountManager.disableAllAccounts')}
                     </button>
                     <button
+                        type="button"
                         onClick={() => onToggleAllAccountsEnabled(true)}
                         disabled={elasticPoolEnabled || togglingAllEnabled || testingAll || totalAccounts === 0}
-                        className="flex items-center px-3 py-1.5 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors text-xs font-medium border border-border disabled:opacity-50"
+                        className="px-2.5 py-1.5 bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors text-xs font-medium border border-border disabled:opacity-50"
                     >
+                        {togglingAllEnabled ? <span className="animate-spin mr-1">⟳</span> : null}
                         {t('accountManager.enableAllAccounts')}
                     </button>
                 </div>
             </div>
 
-            {testingAll && batchProgress.total > 0 && (
-                <div className="p-4 border-b border-border bg-muted/30">
-                    <div className="flex items-center justify-between text-sm mb-2">
-                        <span className="font-medium">{t('accountManager.testingAllAccounts')}</span>
-                        <span className="text-muted-foreground">{batchProgress.current} / {batchProgress.total}</span>
+            {/* Testing All Progress Bar */}
+            {testingAll && batchProgress && batchProgress.total > 0 && (
+                <div className="p-4 border-b border-border bg-muted/40 animate-in fade-in duration-200">
+                    <div className="flex items-center justify-between text-xs mb-2">
+                        <span className="font-semibold text-foreground">{t('accountManager.testingAllAccounts')}</span>
+                        <span className="text-muted-foreground font-mono">{batchProgress.current} / {batchProgress.total}</span>
                     </div>
-                    <div className="w-full bg-muted rounded-full h-2 overflow-hidden mb-4">
+                    <div className="w-full bg-muted rounded-full h-2 overflow-hidden mb-3">
                         <div
                             className="bg-primary h-full transition-all duration-300"
                             style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
                         />
                     </div>
-                    {batchProgress.results.length > 0 && (
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 max-h-32 overflow-y-auto custom-scrollbar">
+                    {batchProgress.results && batchProgress.results.length > 0 && (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1.5 max-h-28 overflow-y-auto custom-scrollbar">
                             {batchProgress.results.map((r, i) => (
-                                <div key={i} className={clsx(
-                                    "text-xs px-2 py-1 rounded border truncate",
-                                    r.success ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500" : "bg-destructive/10 border-destructive/20 text-destructive"
-                                )}>
+                                <div
+                                    key={i}
+                                    className={clsx(
+                                        "text-[11px] px-2 py-1 rounded border truncate font-mono",
+                                        r.success
+                                            ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                                            : "bg-destructive/10 border-destructive/20 text-destructive"
+                                    )}
+                                >
                                     {r.success ? '✓' : '✗'} {r.id}
                                 </div>
                             ))}
@@ -133,227 +194,106 @@ export default function AccountsTable({
                 </div>
             )}
 
+            {/* Account List Rows */}
             <div className="divide-y divide-border">
                 {loadingAccounts ? (
-                    <div className="p-8 text-center text-muted-foreground">{t('actions.loading')}</div>
-                ) : accounts.length > 0 ? (
-                    accounts.map((acc, i) => {
-                        const id = resolveAccountIdentifier(acc)
-                        const assignedProxy = proxies.find(proxy => proxy.id === acc.proxy_id)
-                        const runtimeUnknown = envBacked && !acc.test_status
-                        const isDisabled = acc.enabled === false
-                        const isBanned = acc.banned === true
-                        const isMuted = acc.muted === true
-                        const mutedRecoverAt = formatMuteUntil(acc.muted_until)
-                        const isActive = !isDisabled && !isBanned && !isMuted && (acc.test_status === 'ok' || acc.has_token)
-                        return (
-                            <div key={i} className={clsx(
-                                "p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-muted/50 transition-colors",
-                                (isDisabled || isBanned || isMuted) && "opacity-60"
-                            )}>
-                                <div className="flex items-center gap-3 min-w-0">
-                                    <div className={clsx(
-                                        "w-2 h-2 rounded-full shrink-0",
-                                        isDisabled ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" :
-                                        isBanned ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" :
-                                        isMuted ? "bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.5)]" :
-                                        acc.test_status === 'failed' ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" :
-                                        isActive ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" :
-                                        runtimeUnknown ? "bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" : "bg-amber-500"
-                                    )} />
-                                    <div className="min-w-0">
-                                        <div className="text-sm font-medium truncate">{acc.name || '-'}</div>
-                                        <div
-                                            className="font-medium truncate flex items-center gap-1.5 cursor-pointer hover:text-primary transition-colors group"
-                                            onClick={() => copyId(id)}
-                                        >
-                                            <span className="truncate">{id || '-'}</span>
-                                            {copiedId === id
-                                                ? <Check className="w-3 h-3 text-emerald-500 shrink-0" />
-                                                : <Copy className="w-3 h-3 opacity-0 group-hover:opacity-50 shrink-0 transition-opacity" />
-                                            }
-                                        </div>
-                                        {acc.remark && (
-                                            <div className="text-xs text-muted-foreground truncate mt-0.5">{acc.remark}</div>
-                                        )}
-                                        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                                            {acc.provider === 'gemini' ? (
-                                                <span className="font-semibold bg-blue-500/10 text-blue-500 border border-blue-500/20 px-1.5 py-0.5 rounded text-[10px]">
-                                                    Gemini
-                                                </span>
-                                            ) : (
-                                                <span className="font-semibold bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 rounded text-[10px]">
-                                                    DeepSeek
-                                                </span>
-                                            )}
-                                            <span>{isBanned ? (acc.disabled_reason || t('accountManager.accountBanned')) : isDisabled ? t('accountManager.accountDisabled') : isMuted ? t('accountManager.accountMuted') : acc.test_status === 'failed' ? t('accountManager.testStatusFailed') : isActive ? t('accountManager.sessionActive') : runtimeUnknown ? t('accountManager.runtimeStatusUnknown') : t('accountManager.reauthRequired')}</span>
-                                            {isDisabled && !isBanned && (
-                                                <span className="font-mono bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded text-[10px]" title={t('accountManager.accountDisabledHint')}>
-                                                    {t('accountManager.accountDisabled')}
-                                                </span>
-                                            )}
-                                            {isBanned && (
-                                                <span className="font-mono bg-red-500/10 text-red-500 px-1.5 py-0.5 rounded text-[10px]" title={acc.disabled_reason || t('accountManager.accountBannedHint')}>
-                                                    {acc.disabled_reason || t('accountManager.accountBanned')}
-                                                </span>
-                                            )}
-                                            {isMuted && (
-                                                <span className="font-mono bg-orange-500/10 text-orange-500 px-1.5 py-0.5 rounded text-[10px]" title={t('accountManager.accountMutedHint')}>
-                                                    {t('accountManager.accountMutedRecoverAt', { time: mutedRecoverAt })}
-                                                </span>
-                                            )}
-                                            {acc.provider === 'deepseek' && (
-                                                <span className={`font-mono px-1.5 py-0.5 rounded text-[10px] border ${(acc.has_cookies || !acc.has_password) ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-slate-500/10 text-slate-500 border-slate-500/20'}`}>
-                                                    {(acc.has_cookies || !acc.has_password) ? t('accountManager.cookieAuthBadge') : t('accountManager.passwordAuthBadge')}
-                                                </span>
-                                            )}
-                                            {acc.token_preview && (
-                                                <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-[10px]">
-                                                    {acc.token_preview}
-                                                </span>
-                                            )}
-                                            {acc.cookies_preview && (
-                                                <span className="font-mono bg-muted px-1.5 py-0.5 rounded text-[10px]" title={acc.provider === 'gemini' ? 'Gemini Cookies' : 'DeepSeek Cookies'}>
-                                                    {acc.cookies_preview}
-                                                </span>
-                                            )}
-                                            {sessionCounts && sessionCounts[id] !== undefined && (
-                                                <span className="font-mono bg-blue-500/10 text-blue-500 px-1.5 py-0.5 rounded text-[10px]">
-                                                    {t('accountManager.sessionCount', { count: sessionCounts[id] })}
-                                                </span>
-                                            )}
-                                            {sessionCounts && sessionCounts[id] !== undefined && sessionCounts[id] > 0 && (
-                                                <button
-                                                    onClick={() => onDeleteAllSessions(id)}
-                                                    disabled={deletingSessions && deletingSessions[id]}
-                                                    className="flex items-center gap-1 font-mono bg-red-500/10 text-red-500 hover:bg-red-500/20 px-1.5 py-0.5 rounded text-[10px] transition-colors disabled:opacity-50"
-                                                    title={t('accountManager.deleteAllSessions')}
-                                                >
-                                                    {deletingSessions && deletingSessions[id] ? (
-                                                        <span className="animate-spin">⟳</span>
-                                                    ) : (
-                                                        <FolderX className="w-3 h-3" />
-                                                    )}
-                                                </button>
-                                            )}
-                                            {acc.proxy_id && (
-                                                <span className="font-mono bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded text-[10px]">
-                                                    {t('accountManager.proxyBadge', { name: assignedProxy ? (assignedProxy.name || `${assignedProxy.host}:${assignedProxy.port}`) : acc.proxy_id })}
-                                                </span>
-                                            )}
-                                            {acc.pool_type === 'no_tools' && (
-                                                <span className="font-mono bg-blue-500/10 text-blue-500 px-1.5 py-0.5 rounded text-[10px]">
-                                                    {t('accountManager.poolBadgeNoTools')}
-                                                </span>
-                                            )}
-                                            {acc.pool_type === 'tools_only' && (
-                                                <span className="font-mono bg-purple-500/10 text-purple-500 px-1.5 py-0.5 rounded text-[10px]">
-                                                    {t('accountManager.poolBadgeToolsOnly')}
-                                                </span>
-                                            )}
-                                        </div>
+                    <div className="p-8 space-y-4">
+                        {[1, 2, 3].map(i => (
+                            <div key={i} className="animate-pulse flex items-center justify-between gap-4 p-4 rounded-lg bg-muted/20">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-xl bg-muted" />
+                                    <div className="space-y-2">
+                                        <div className="h-4 w-48 bg-muted rounded" />
+                                        <div className="h-3 w-32 bg-muted/70 rounded" />
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2 self-start lg:self-auto ml-5 lg:ml-0">
-                                    <button
-                                        type="button"
-                                        role="switch"
-                                        aria-checked={!isDisabled}
-                                        onClick={() => onToggleAccountEnabled(id, isDisabled)}
-                                        disabled={elasticPoolEnabled || togglingEnabled?.[id]}
-                                        title={isDisabled ? t('accountManager.enableAccount') : t('accountManager.disableAccount')}
-                                        className={clsx(
-                                            "relative inline-flex h-5 w-9 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0",
-                                            isDisabled ? "bg-muted-foreground/30" : "bg-primary"
-                                        )}
-                                    >
-                                        <span className={clsx(
-                                            "inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform shadow-sm",
-                                            isDisabled ? "translate-x-1" : "translate-x-[18px]"
-                                        )} />
-                                    </button>
-                                    <select
-                                        value={acc.proxy_id || ''}
-                                        onChange={e => onUpdateAccountProxy(id, e.target.value)}
-                                        disabled={updatingProxy?.[id]}
-                                        className="max-w-[180px] px-2.5 py-1.5 text-[10px] lg:text-xs bg-secondary border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
-                                    >
-                                        <option value="">{t('accountManager.proxyNone')}</option>
-                                        {proxies.map(proxy => (
-                                            <option key={proxy.id} value={proxy.id}>
-                                                {proxy.name || `${proxy.host}:${proxy.port}`}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <button
-                                        onClick={() => onEditAccount(acc)}
-                                        disabled={!id}
-                                        className="p-1 lg:p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                                        title={id ? t('accountManager.editAccountTitle') : t('accountManager.invalidIdentifier')}
-                                    >
-                                        <Pencil className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
-                                    </button>
-                                    <button
-                                        onClick={() => onTestAccount(id)}
-                                        disabled={testing[id]}
-                                        className="px-2 lg:px-3 py-1 lg:py-1.5 text-[10px] lg:text-xs font-medium border border-border rounded-md hover:bg-secondary transition-colors disabled:opacity-50"
-                                    >
-                                        {testing[id] ? t('actions.testing') : t('actions.test')}
-                                    </button>
-                                    {acc.provider === 'gemini' && (
-                                        <button
-                                            onClick={() => onViewQuota && onViewQuota(acc)}
-                                            className="flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] lg:text-xs font-semibold border border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 rounded-lg transition-colors shadow-sm"
-                                            title={t('accountManager.quota.button')}
-                                        >
-                                            <Gauge className="w-3.5 h-3.5 text-purple-400" />
-                                            <span>{t('accountManager.quota.button')}</span>
-                                        </button>
-                                    )}
-                                    <button
-                                        onClick={() => onDeleteAccount(id)}
-                                        className="p-1 lg:p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
-                                    >
-                                        <Trash2 className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
-                                    </button>
-                                </div>
+                                <div className="h-8 w-28 bg-muted rounded-lg" />
                             </div>
-                        )
-                    })
+                        ))}
+                    </div>
+                ) : accounts.length > 0 ? (
+                    accounts.map((acc, i) => (
+                        <AccountItemRow
+                            key={acc.identifier || acc.email || acc.mobile || acc.name || i}
+                            acc={acc}
+                            t={t}
+                            resolveAccountIdentifier={resolveAccountIdentifier}
+                            proxies={proxies}
+                            sessionCounts={sessionCounts}
+                            deletingSessions={deletingSessions}
+                            updatingProxy={updatingProxy}
+                            togglingEnabled={togglingEnabled}
+                            testing={testing}
+                            elasticPoolEnabled={elasticPoolEnabled}
+                            envBacked={envBacked}
+                            onToggleAccountEnabled={onToggleAccountEnabled}
+                            onUpdateAccountProxy={onUpdateAccountProxy}
+                            onEditAccount={onEditAccount}
+                            onTestAccount={onTestAccount}
+                            onViewQuota={onViewQuota}
+                            onDeleteAccount={onDeleteAccount}
+                            onDeleteAllSessions={onDeleteAllSessions}
+                        />
+                    ))
                 ) : (
-                    <div className="p-8 text-center text-muted-foreground">{searchQuery ? t('accountManager.searchNoResults') : t('accountManager.noAccounts')}</div>
+                    <div className="p-12 text-center space-y-3">
+                        <div className="w-12 h-12 rounded-full bg-muted/60 text-muted-foreground flex items-center justify-center mx-auto">
+                            <SlidersHorizontal className="w-6 h-6 opacity-60" />
+                        </div>
+                        <div className="text-sm font-medium text-foreground">
+                            {isFiltered
+                                ? (t('accountManager.noAccountsFiltered') || t('accountManager.searchNoResults'))
+                                : t('accountManager.noAccounts')}
+                        </div>
+                        {isFiltered && (
+                            <div>
+                                <button
+                                    type="button"
+                                    onClick={onResetFilters}
+                                    className="px-3 py-1.5 text-xs font-medium bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border rounded-lg transition-colors"
+                                >
+                                    {t('accountManager.clearFilterAction') || t('accountManager.filterReset')}
+                                </button>
+                            </div>
+                        )}
+                    </div>
                 )}
             </div>
 
+            {/* Pagination Section */}
             {totalPages > 1 && (
-                <div className="p-4 border-t border-border flex items-center justify-between">
+                <div className="p-4 border-t border-border bg-muted/10 flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
-                        <div className="text-sm text-muted-foreground">
+                        <span className="text-xs text-muted-foreground">
                             {t('accountManager.pageInfo', { current: page, total: totalPages, count: totalAccounts })}
-                        </div>
+                        </span>
                         <select
                             value={pageSize}
                             onChange={e => onPageSizeChange(Number(e.target.value))}
-                            className="text-sm border border-border rounded-md px-2 py-1 bg-background text-foreground"
+                            className="text-xs border border-border rounded-md px-2 py-1 bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                         >
-                            {[10, 20, 50, 100, 500, 1000, 2000, 5000].map(s => (
-                                <option key={s} value={s}>{s}</option>
+                            {[10, 20, 50, 100, 500, 1000].map(s => (
+                                <option key={s} value={s}>{s} / trang</option>
                             ))}
                         </select>
                     </div>
                     <div className="flex items-center gap-2">
                         <button
+                            type="button"
                             onClick={onPrevPage}
                             disabled={page <= 1 || loadingAccounts}
-                            className="p-2 border border-border rounded-md hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="p-1.5 border border-border rounded-lg hover:bg-secondary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                            title="Trang trước"
                         >
                             <ChevronLeft className="w-4 h-4" />
                         </button>
-                        <span className="text-sm font-medium px-2">{page} / {totalPages}</span>
+                        <span className="text-xs font-medium px-2">{page} / {totalPages}</span>
                         <button
+                            type="button"
                             onClick={onNextPage}
                             disabled={page >= totalPages || loadingAccounts}
-                            className="p-2 border border-border rounded-md hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="p-1.5 border border-border rounded-lg hover:bg-secondary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                            title="Trang sau"
                         >
                             <ChevronRight className="w-4 h-4" />
                         </button>
@@ -362,14 +302,4 @@ export default function AccountsTable({
             )}
         </div>
     )
-}
-
-function formatMuteUntil(muteUntil) {
-    if (!muteUntil || muteUntil <= 0) return '--'
-    const d = new Date(muteUntil * 1000)
-    const month = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    const hour = String(d.getHours()).padStart(2, '0')
-    const min = String(d.getMinutes()).padStart(2, '0')
-    return `${day}/${month} ${hour}:${min}`
 }

@@ -27,30 +27,131 @@ func (h *Handler) listAccounts(w http.ResponseWriter, r *http.Request) {
 	if pageSize > 5000 {
 		pageSize = 5000
 	}
-	accounts := h.Store.Snapshot().Accounts
-	reverseAccounts(accounts)
+	allAccounts := h.Store.Snapshot().Accounts
+	reverseAccounts(allAccounts)
 	// 将已启用且未禁言的账号排在前面，方便管理后台优先看到可用账号。
-	sort.SliceStable(accounts, func(i, j int) bool {
-		ai, aj := accounts[i], accounts[j]
+	sort.SliceStable(allAccounts, func(i, j int) bool {
+		ai, aj := allAccounts[i], allAccounts[j]
 		activeI := ai.IsEnabled() && !ai.IsMuted()
 		activeJ := aj.IsEnabled() && !aj.IsMuted()
 		return activeI && !activeJ
 	})
+
+	totalCount := len(allAccounts)
+	activeCount := 0
+	deepseekCount := 0
+	geminiCount := 0
+	disabledCount := 0
+	issuesCount := 0
+
+	for _, acc := range allAccounts {
+		provider := acc.AccountProvider()
+		if provider == "gemini" {
+			geminiCount++
+		} else {
+			deepseekCount++
+		}
+
+		testStatus, _ := h.Store.AccountTestStatus(acc.Identifier())
+		isEnabled := acc.IsEnabled()
+		isBanned := acc.IsBanned()
+		isMuted := acc.IsMuted()
+		isFailed := testStatus == "failed"
+		isActive := isEnabled && !isBanned && !isMuted && !isFailed
+		hasIssue := !isEnabled || isBanned || isMuted || isFailed
+
+		if isActive {
+			activeCount++
+		}
+		if !isEnabled {
+			disabledCount++
+		}
+		if hasIssue {
+			issuesCount++
+		}
+	}
+
 	q := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("q")))
-	if q != "" {
-		filtered := make([]config.Account, 0, len(accounts))
-		for _, acc := range accounts {
-			id := strings.ToLower(acc.Identifier())
-			if strings.Contains(id, q) ||
-				strings.Contains(strings.ToLower(acc.Name), q) ||
-				strings.Contains(strings.ToLower(acc.Remark), q) ||
-				strings.Contains(strings.ToLower(acc.Email), q) ||
-				strings.Contains(strings.ToLower(acc.Mobile), q) {
-				filtered = append(filtered, acc)
+	providerFilter := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("provider")))
+	poolTypeFilter := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("pool_type")))
+	statusFilter := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("status")))
+	proxyFilter := strings.TrimSpace(r.URL.Query().Get("proxy_id"))
+
+	filtered := make([]config.Account, 0, len(allAccounts))
+	for _, acc := range allAccounts {
+		testStatus, _ := h.Store.AccountTestStatus(acc.Identifier())
+		isEnabled := acc.IsEnabled()
+		isBanned := acc.IsBanned()
+		isMuted := acc.IsMuted()
+		isFailed := testStatus == "failed"
+		isActive := isEnabled && !isBanned && !isMuted && !isFailed
+		hasIssue := !isEnabled || isBanned || isMuted || isFailed
+
+		if providerFilter != "" && providerFilter != "all" {
+			if acc.AccountProvider() != providerFilter {
+				continue
 			}
 		}
-		accounts = filtered
+
+		if poolTypeFilter != "" && poolTypeFilter != "all" {
+			if config.NormalizePoolType(acc.PoolType) != poolTypeFilter {
+				continue
+			}
+		}
+
+		if statusFilter != "" && statusFilter != "all" {
+			switch statusFilter {
+			case "active":
+				if !isActive {
+					continue
+				}
+			case "disabled":
+				if isEnabled {
+					continue
+				}
+			case "banned":
+				if !isBanned {
+					continue
+				}
+			case "muted":
+				if !isMuted {
+					continue
+				}
+			case "failed":
+				if !isFailed {
+					continue
+				}
+			case "issues":
+				if !hasIssue {
+					continue
+				}
+			}
+		}
+
+		if proxyFilter != "" && proxyFilter != "all" {
+			if proxyFilter == "direct" {
+				if strings.TrimSpace(acc.ProxyID) != "" {
+					continue
+				}
+			} else if acc.ProxyID != proxyFilter {
+				continue
+			}
+		}
+
+		if q != "" {
+			id := strings.ToLower(acc.Identifier())
+			if !strings.Contains(id, q) &&
+				!strings.Contains(strings.ToLower(acc.Name), q) &&
+				!strings.Contains(strings.ToLower(acc.Remark), q) &&
+				!strings.Contains(strings.ToLower(acc.Email), q) &&
+				!strings.Contains(strings.ToLower(acc.Mobile), q) {
+				continue
+			}
+		}
+		filtered = append(filtered, acc)
 	}
+
+	accounts := filtered
 	total := len(accounts)
 	totalPages := 1
 	if total > 0 {
@@ -90,7 +191,21 @@ func (h *Handler) listAccounts(w http.ResponseWriter, r *http.Request) {
 			"muted_until":     acc.MutedUntil,
 		})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items, "total": total, "page": page, "page_size": pageSize, "total_pages": totalPages})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items":       items,
+		"total":       total,
+		"page":        page,
+		"page_size":   pageSize,
+		"total_pages": totalPages,
+		"stats": map[string]int{
+			"total":    totalCount,
+			"active":   activeCount,
+			"deepseek": deepseekCount,
+			"gemini":   geminiCount,
+			"disabled": disabledCount,
+			"issues":   issuesCount,
+		},
+	})
 }
 
 func (h *Handler) addAccount(w http.ResponseWriter, r *http.Request) {
