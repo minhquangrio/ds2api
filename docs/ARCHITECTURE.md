@@ -25,6 +25,7 @@ ds2api/
 │   ├── auth/                             # 鉴权/JWT/凭证解析
 │   ├── chathistory/                      # 服务器端对话记录存储与查询
 │   ├── claudeconv/                       # Claude 消息格式转换工具
+│   ├── codex/                            # OpenAI Codex / ChatGPT OAuth PKCE 客户端与流式解析
 │   ├── compat/                           # 兼容性辅助与回归支持
 │   ├── assistantturn/                    # 上游输出到统一 assistant turn / stream event 的语义层
 │   ├── completionruntime/                # Go 主路径共享 DeepSeek completion 启动、收集、空输出/切号 retry
@@ -34,11 +35,17 @@ ds2api/
 │   │   ├── protocol/                     # DeepSeek URL、常量、skip path/pattern
 │   │   └── transport/                    # DeepSeek 传输层细节
 │   ├── devcapture/                       # 开发抓包与调试采集
+│   ├── extprovider/                      # 第三方兼容服务商存储、模型扫描与能力实测
 │   ├── format/                           # 响应格式化层
 │   │   ├── claude/                       # Claude 输出格式化
 │   │   └── openai/                       # OpenAI 输出格式化
+│   ├── geminiweb/                        # Google Gemini 网页客户端与 TLS 反指纹
 │   ├── httpapi/                          # HTTP surface：OpenAI/Claude/Gemini/Admin
 │   │   ├── admin/                        # Admin API 根装配与资源子包
+│   │   │   ├── codex/                    # Admin Codex OAuth 登录与账号管理
+│   │   │   ├── extprovider/              # Admin 第三方服务商 CRUD 与探测
+│   │   │   ├── imagebed/                 # Admin GitHub 图床管理与上传
+│   │   │   └── netdiag/                  # Admin 网络探测与连通性分析
 │   │   ├── claude/                       # Claude HTTP 协议适配
 │   │   ├── gemini/                       # Gemini HTTP 协议适配
 │   │   ├── ollama/                       # Ollama 兼容模型/能力查询接口
@@ -50,11 +57,13 @@ ds2api/
 │   │   │   ├── history/                  # OpenAI context file handling
 │   │   │   └── shared/                   # OpenAI HTTP 公共错误/模型/工具格式
 │   │   └── requestbody/                  # HTTP 请求体读取与 UTF-8/JSON 校验辅助
+│   ├── imagebed/                         # GitHub 图床核心逻辑与存储
 │   ├── js/                               # Node Runtime 相关逻辑
 │   │   ├── chat-stream/                  # Node 流式输出桥接
 │   │   ├── helpers/                      # JS 辅助函数
 │   │   │   └── stream-tool-sieve/        # Tool sieve JS 实现
 │   │   └── shared/                       # Go/Node 共用语义片段
+│   ├── netdiag/                          # 网络出口 IPv4/IPv6、DNS 与各平台上游链路诊断
 │   ├── prompt/                           # Prompt 组装
 │   ├── promptcompat/                     # API 请求到 DeepSeek 网页纯文本上下文兼容层
 │   ├── rawsample/                        # raw sample 读写与管理
@@ -68,6 +77,7 @@ ds2api/
 │   ├── toolcall/                         # 工具调用解析与修复
 │   ├── toolstream/                       # Go 流式 tool call 防泄漏与增量检测
 │   ├── translatorcliproxy/               # Vercel/fallback/测试用协议互转桥
+│   ├── usageledger/                      # Token 账本与持久化
 │   ├── util/                             # 通用工具函数
 │   ├── version/                          # 版本查询/比较
 │   └── webui/                            # WebUI 静态托管相关逻辑
@@ -96,9 +106,14 @@ ds2api/
         ├── app/                          # 路由/状态框架
         ├── components/                   # 共享组件
         ├── features/                     # 功能模块
-        │   ├── account/                  # 账号管理页面
+        │   ├── account/                  # 账号管理页面与 Codex OAuth 登录
+        │   ├── apiKeys/                  # API 密钥管理
         │   ├── apiTester/                # API 测试页面
         │   ├── chatHistory/              # 服务器端对话记录页面
+        │   ├── imageBed/                 # GitHub 图床页面
+        │   ├── network/                  # 网络诊断页面
+        │   ├── overview/                 # Token 总览页面
+        │   ├── providers/                # 第三方服务商管理页面
         │   ├── proxy/                    # 代理管理页面
         │   ├── settings/                 # 设置页面
         │   └── vercel/                   # Vercel 同步页面

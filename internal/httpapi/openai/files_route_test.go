@@ -45,6 +45,9 @@ func (managedFilesAuthStub) ToolsEnabledForRequest(_ *http.Request) bool { retur
 func (managedFilesAuthStub) SetAccountMutedUntil(_ *auth.RequestAuth, _ float64) {}
 
 func (managedFilesAuthStub) SetAccountBanned(_ *auth.RequestAuth, _ string) {}
+func (managedFilesAuthStub) DetermineForProvider(req *http.Request, _ string) (*auth.RequestAuth, error) {
+	return (&managedFilesAuthStub{}).Determine(req)
+}
 func (managedFilesAuthStub) EnforceKeyModelQuota(_ *http.Request, _ auth.CallerTokenReader, _ string) error {
 	return nil
 }

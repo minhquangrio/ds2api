@@ -16,6 +16,9 @@ import {
     Loader2,
     ChevronRight,
     Zap,
+    Layers,
+    Image as ImageIcon,
+    Wifi,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -32,6 +35,9 @@ const BatchImport = lazy(() => import('../components/BatchImport'))
 const VercelSyncContainer = lazy(() => import('../features/vercel/VercelSyncContainer'))
 const SettingsContainer = lazy(() => import('../features/settings/SettingsContainer'))
 const ProxyManagerContainer = lazy(() => import('../features/proxy/ProxyManagerContainer'))
+const ProvidersContainer = lazy(() => import('../features/providers/ProvidersContainer'))
+const ImageBedContainer = lazy(() => import('../features/imageBed/ImageBedContainer'))
+const NetworkDiagnosticsContainer = lazy(() => import('../features/network/NetworkDiagnosticsContainer'))
 
 function TabLoadingFallback({ label }) {
     return (
@@ -86,8 +92,17 @@ export default function DashboardShell({ token, onLogout, config, fetchConfig, s
             title: t('nav.groups.upstream'),
             items: [
                 { id: 'accounts', label: t('nav.accounts.label'), icon: Cpu, description: t('nav.accounts.desc') },
+                { id: 'providers', label: t('nav.providers.label'), icon: Layers, description: t('nav.providers.desc') },
                 { id: 'proxies', label: t('nav.proxies.label'), icon: Globe, description: t('nav.proxies.desc') },
                 { id: 'test', label: t('nav.test.label'), icon: Server, description: t('nav.test.desc') },
+            ]
+        },
+        {
+            groupKey: 'tools',
+            title: t('nav.groups.tools'),
+            items: [
+                { id: 'image-bed', label: t('nav.imageBed.label'), icon: ImageIcon, description: t('nav.imageBed.desc') },
+                { id: 'network', label: t('nav.network.label'), icon: Wifi, description: t('nav.network.desc') },
             ]
         },
         {
@@ -163,6 +178,12 @@ export default function DashboardShell({ token, onLogout, config, fetchConfig, s
                 return <ApiKeysManagerContainer config={config} onRefresh={fetchConfig} onMessage={showMessage} authFetch={authFetch} />
             case 'accounts':
                 return <AccountManagerContainer config={config} onRefresh={fetchConfig} onMessage={showMessage} authFetch={authFetch} onNavigate={navigateToTab} />
+            case 'providers':
+                return <ProvidersContainer authFetch={authFetch} onMessage={showMessage} />
+            case 'image-bed':
+                return <ImageBedContainer authFetch={authFetch} onMessage={showMessage} />
+            case 'network':
+                return <NetworkDiagnosticsContainer authFetch={authFetch} onMessage={showMessage} />
             case 'proxies':
                 return <ProxyManagerContainer config={config} onRefresh={fetchConfig} onMessage={showMessage} authFetch={authFetch} />
             case 'test':

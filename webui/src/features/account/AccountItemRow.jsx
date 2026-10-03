@@ -16,7 +16,7 @@ import {
     Globe,
     FileText,
     Wrench,
-    Layers,
+    Zap,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -43,6 +43,7 @@ export default function AccountItemRow({
     const [copiedId, setCopiedId] = useState(false)
     const id = resolveAccountIdentifier(acc)
     const isGemini = acc.provider === 'gemini'
+    const isCodex = acc.provider === 'codex' || Boolean(acc.codex_account_id)
 
     const assignedProxy = proxies.find(proxy => proxy.id === acc.proxy_id)
     const runtimeUnknown = envBacked && !acc.test_status
@@ -81,13 +82,15 @@ export default function AccountItemRow({
                     <div
                         className={clsx(
                             "w-10 h-10 rounded-xl flex items-center justify-center border shadow-xs transition-colors",
-                            isGemini
-                                ? "bg-blue-500/10 text-blue-400 border-blue-500/25"
-                                : "bg-primary/10 text-primary border-primary/25"
+                            isCodex
+                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/25"
+                                : isGemini
+                                    ? "bg-blue-500/10 text-blue-400 border-blue-500/25"
+                                    : "bg-primary/10 text-primary border-primary/25"
                         )}
-                        title={isGemini ? 'Google Gemini' : 'DeepSeek'}
+                        title={isCodex ? 'OpenAI ChatGPT / Codex' : isGemini ? 'Google Gemini' : 'DeepSeek'}
                     >
-                        {isGemini ? <Sparkles className="w-5 h-5" /> : <Bot className="w-5 h-5" />}
+                        {isCodex ? <Zap className="w-5 h-5" /> : isGemini ? <Sparkles className="w-5 h-5" /> : <Bot className="w-5 h-5" />}
                     </div>
                     {/* Status Dot */}
                     <span
@@ -129,7 +132,11 @@ export default function AccountItemRow({
                         )}
 
                         {/* Provider Pill */}
-                        {isGemini ? (
+                        {isCodex ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 uppercase">
+                                Codex {acc.codex_plan_type ? `(${acc.codex_plan_type})` : ''}
+                            </span>
+                        ) : isGemini ? (
                             <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/15 text-indigo-400 border border-indigo-500/25">
                                 Gemini
                             </span>

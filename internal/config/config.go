@@ -25,10 +25,19 @@ type Config struct {
 	ExpertPromptSegment     ExpertPromptSegmentConfig  `json:"expert_prompt_segment,omitempty"`
 	AutoRouteVision         AutoRouteVisionConfig      `json:"auto_route_vision,omitempty"`
 	ElasticPool             ElasticPoolConfig          `json:"elastic_pool,omitempty"`
+	Codex                   CodexConfig                `json:"codex,omitempty"`
 	Vercel                  VercelConfig               `json:"vercel,omitempty"`
 	VercelSyncHash          string                     `json:"_vercel_sync_hash,omitempty"`
 	VercelSyncTime          int64                      `json:"_vercel_sync_time,omitempty"`
 	AdditionalFields        map[string]any             `json:"-"`
+}
+
+type CodexConfig struct {
+	// Enabled is a pointer so "unset" is distinguishable from an explicit
+	// false; an absent setting keeps the provider usable.
+	Enabled            *bool  `json:"enabled,omitempty"`
+	DefaultModel       string `json:"default_model,omitempty"`
+	RefreshSkewSeconds int64  `json:"refresh_skew_seconds,omitempty"`
 }
 
 type Account struct {
@@ -50,9 +59,15 @@ type Account struct {
 	// 与 MutedUntil 不同：MutedUntil 由上游下发，CooldownUntil 是我们自己
 	// 在收到验证码挑战后主动设置的——挑战意味着风控已经盯上这个账号，
 	// 继续用它只会把情况变得更糟。
-	CooldownUntil float64 `json:"cooldown_until,omitempty"`
-	Provider      string  `json:"provider,omitempty"`
-	Cookies       string  `json:"cookies,omitempty"`
+	CooldownUntil      float64 `json:"cooldown_until,omitempty"`
+	Provider           string  `json:"provider,omitempty"`
+	Cookies            string  `json:"cookies,omitempty"`
+	CodexRefreshToken  string  `json:"codex_refresh_token,omitempty"`
+	CodexIDToken       string  `json:"codex_id_token,omitempty"`
+	CodexExpiresAt     int64   `json:"codex_expires_at,omitempty"` // unix seconds
+	CodexAccountID     string  `json:"codex_account_id,omitempty"`
+	CodexPlanType      string  `json:"codex_plan_type,omitempty"`
+	CodexAccountSource string  `json:"codex_account_source,omitempty"`
 }
 
 type APIKey struct {
@@ -102,6 +117,7 @@ func (c *Config) ClearAccountTokens() {
 	}
 	for i := range c.Accounts {
 		c.Accounts[i].Token = ""
+		// Note: CodexRefreshToken and Gemini Cookies are persistent long-term credentials and must not be cleared here.
 	}
 }
 
@@ -125,6 +141,15 @@ func (c *Config) NormalizeCredentials() {
 		c.Accounts[i].Locale = strings.TrimSpace(c.Accounts[i].Locale)
 		c.Accounts[i].PoolType = NormalizePoolType(c.Accounts[i].PoolType)
 		c.Accounts[i].Token = CleanWrappedToken(c.Accounts[i].Token)
+		if c.Accounts[i].IsCodex() {
+			c.Accounts[i].Provider = "codex"
+			c.Accounts[i].CodexRefreshToken = strings.TrimSpace(c.Accounts[i].CodexRefreshToken)
+			c.Accounts[i].CodexAccountID = strings.TrimSpace(c.Accounts[i].CodexAccountID)
+			c.Accounts[i].CodexIDToken = strings.TrimSpace(c.Accounts[i].CodexIDToken)
+			if c.Accounts[i].Email == "" && c.Accounts[i].Name == "" && c.Accounts[i].CodexAccountID != "" {
+				c.Accounts[i].Name = "codex:" + c.Accounts[i].CodexAccountID
+			}
+		}
 	}
 
 	c.Vercel = NormalizeVercelConfig(c.Vercel)

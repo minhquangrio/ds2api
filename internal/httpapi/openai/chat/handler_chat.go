@@ -10,6 +10,7 @@ import (
 
 	"ds2api/internal/assistantturn"
 	"ds2api/internal/auth"
+	"ds2api/internal/codex"
 	"ds2api/internal/completionruntime"
 	"ds2api/internal/config"
 	dsprotocol "ds2api/internal/deepseek/protocol"
@@ -138,6 +139,47 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 		thinking, text, streamErr := geminiweb.StreamOpenAIChat(r.Context(), client, stdReq, w)
 		if streamErr != nil {
 			config.Logger.Warn("[gemini] stream error", "error", streamErr)
+			if historySession != nil {
+				historySession.error(http.StatusBadGateway, streamErr.Error(), "upstream_error", thinking, text)
+			}
+			return
+		}
+		if historySession != nil {
+			historySession.success(http.StatusOK, thinking, text, "stop", nil)
+		}
+		return
+	}
+
+	if a.Provider == "codex" {
+		client, err := codex.DefaultRuntime().GetClient(r.Context(), a.Account, h.Store)
+		if err != nil {
+			if historySession != nil {
+				historySession.error(http.StatusBadGateway, err.Error(), "upstream_error", "", "")
+			}
+			writeOpenAIError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		if !stdReq.Stream {
+			turn, err := codex.ExecuteTurn(r.Context(), client, stdReq)
+			if err != nil {
+				if historySession != nil {
+					historySession.error(http.StatusBadGateway, err.Error(), "upstream_error", "", "")
+				}
+				writeOpenAIError(w, http.StatusBadGateway, err.Error())
+				return
+			}
+			respBody := openaifmt.BuildChatCompletionWithToolCalls("codex-"+time.Now().Format("20060102150405"), stdReq.ResponseModel, turn.Prompt, turn.Thinking, turn.Text, turn.ToolCalls, stdReq.ToolsRaw)
+			respBody["usage"] = assistantturn.OpenAIChatUsage(turn)
+			if historySession != nil {
+				historySession.success(http.StatusOK, turn.Thinking, turn.Text, "stop", assistantturn.OpenAIChatUsage(turn))
+			}
+			writeJSON(w, http.StatusOK, respBody)
+			return
+		}
+
+		thinking, text, streamErr := codex.StreamOpenAIChat(r.Context(), client, stdReq, w)
+		if streamErr != nil {
+			config.Logger.Warn("[codex] stream error", "error", streamErr)
 			if historySession != nil {
 				historySession.error(http.StatusBadGateway, streamErr.Error(), "upstream_error", thinking, text)
 			}

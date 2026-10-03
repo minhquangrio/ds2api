@@ -21,6 +21,7 @@ const (
 type AuthResolver interface {
 	Determine(req *http.Request) (*auth.RequestAuth, error)
 	DetermineCaller(req *http.Request) (*auth.RequestAuth, error)
+	DetermineForProvider(req *http.Request, provider string) (*auth.RequestAuth, error)
 	Release(a *auth.RequestAuth)
 	ToolsEnabledForRequest(req *http.Request) bool
 	SetAccountMutedUntil(a *auth.RequestAuth, muteUntil float64)

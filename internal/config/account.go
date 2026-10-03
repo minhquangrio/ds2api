@@ -59,12 +59,21 @@ func (a Account) Identifier() string {
 	if strings.TrimSpace(a.Name) != "" {
 		return strings.TrimSpace(a.Name)
 	}
+	if a.IsCodex() && strings.TrimSpace(a.CodexAccountID) != "" {
+		return "codex:" + strings.TrimSpace(a.CodexAccountID)
+	}
 	return ""
 }
 
-// AccountProvider returns "gemini" or "deepseek" (defaults to "deepseek").
+// AccountProvider returns "gemini", "codex", or "deepseek" (defaults to "deepseek").
 func (a Account) AccountProvider() string {
 	p := strings.ToLower(strings.TrimSpace(a.Provider))
+	if p == "codex" || a.CodexRefreshToken != "" || a.CodexAccountID != "" {
+		return "codex"
+	}
+	if p == "gemini" {
+		return "gemini"
+	}
 	if p == "" {
 		return "deepseek"
 	}
@@ -74,6 +83,11 @@ func (a Account) AccountProvider() string {
 // IsGemini reports whether the account is a Gemini Web account.
 func (a Account) IsGemini() bool {
 	return a.AccountProvider() == "gemini"
+}
+
+// IsCodex reports whether the account is a Codex account.
+func (a Account) IsCodex() bool {
+	return a.AccountProvider() == "codex"
 }
 
 // IsDeepSeek reports whether the account is a DeepSeek account.
@@ -115,6 +129,9 @@ func (a Account) IsCoolingDown() bool {
 
 // IsSchedulable reports whether the pool may hand this account to a request.
 func (a Account) IsSchedulable() bool {
+	if a.IsCodex() && strings.TrimSpace(a.CodexRefreshToken) == "" {
+		return false
+	}
 	return a.IsEnabled() && !a.IsMuted() && !a.IsBanned() && !a.IsCoolingDown()
 }
 

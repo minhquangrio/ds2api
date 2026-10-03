@@ -249,3 +249,21 @@ func (s *Store) ModelFallbackToDeepSeek() bool {
 	defer s.mu.RUnlock()
 	return s.cfg.ModelFallbackToDeepSeek
 }
+
+// CodexEnabled reports whether the ChatGPT/Codex provider may serve requests.
+// An unset value counts as enabled so existing configs keep working.
+func (s *Store) CodexEnabled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.cfg.Codex.Enabled == nil {
+		return true
+	}
+	return *s.cfg.Codex.Enabled
+}
+
+// CodexDefaultModel returns the configured fallback model for Codex requests.
+func (s *Store) CodexDefaultModel() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return strings.TrimSpace(s.cfg.Codex.DefaultModel)
+}

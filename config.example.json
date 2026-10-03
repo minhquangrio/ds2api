@@ -36,8 +36,21 @@
       "_comment": "手机号登录方式（中国大陆）",
       "mobile": "12345678901",
       "password": "your-password-3"
+    },
+    {
+      "_comment": "OpenAI Codex / ChatGPT OAuth 账号（通常由 Admin WebUI OAuth 自动授权录入）",
+      "provider": "codex",
+      "name": "ChatGPT-Plus",
+      "email": "user@example.com",
+      "token": "eyJhbGciOi...",
+      "codex_refresh_token": "rt_sample_refresh_token",
+      "codex_account_id": "acc_sample_id",
+      "codex_plan_type": "plus"
     }
   ],
+  "codex": {
+    "enabled": true
+  },
   "model_aliases": {
     "gpt-4o": "deepseek-v4-flash",
     "gpt-5.5": "deepseek-v4-flash",

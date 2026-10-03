@@ -67,6 +67,9 @@ func (streamStatusManagedAuthStub) ToolsEnabledForRequest(_ *http.Request) bool 
 func (streamStatusManagedAuthStub) SetAccountMutedUntil(_ *auth.RequestAuth, _ float64) {}
 
 func (streamStatusManagedAuthStub) SetAccountBanned(_ *auth.RequestAuth, _ string) {}
+func (streamStatusManagedAuthStub) DetermineForProvider(req *http.Request, _ string) (*auth.RequestAuth, error) {
+	return (&streamStatusManagedAuthStub{}).Determine(req)
+}
 func (streamStatusManagedAuthStub) EnforceKeyModelQuota(_ *http.Request, _ auth.CallerTokenReader, _ string) error {
 	return nil
 }

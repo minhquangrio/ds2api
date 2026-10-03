@@ -125,6 +125,7 @@ Xem chi tiết kiến trúc và trách nhiệm từng thư mục tại [docs/ARC
 | Khả năng | Mô tả |
 | --- | --- |
 | Tương thích OpenAI | `GET /v1/models`, `GET /v1/models/{id}`, `POST /v1/chat/completions`, `POST /v1/responses`, `GET /v1/responses/{response_id}`, `POST /v1/embeddings`, `POST /v1/files`, `GET /v1/files/{file_id}` |
+| Upstream ChatGPT/Codex | Tài khoản `provider: "codex"` đăng nhập qua OAuth PKCE vào ChatGPT/Codex, tự động làm mới token; `POST /codex/v1/responses` cung cấp đường passthrough SSE Responses cho Codex CLI |
 | Tương thích Claude | `GET /anthropic/v1/models`, `POST /anthropic/v1/messages`, `POST /anthropic/v1/messages/count_tokens` (và đường dẫn tắt `/v1/messages`, `/messages`) |
 | Tương thích Gemini | `POST /v1beta/models/{model}:generateContent`, `POST /v1beta/models/{model}:streamGenerateContent` (và đường dẫn `/v1/models/{model}:*`) |
 | Tương thích Ollama | `GET /api/version`, `GET /api/tags`, `POST /api/show` |
@@ -133,9 +134,12 @@ Xem chi tiết kiến trúc và trách nhiệm từng thư mục tại [docs/ARC
 | Kiểm soát hàng chờ đồng thời | Giới hạn in-flight trên mỗi tài khoản + hàng chờ, tính toán động giá trị đồng thời đề xuất |
 | DeepSeek PoW | Triển khai Go thuần hiệu năng cao (DeepSeekHashV1), phản hồi trong vài miligiây |
 | Tool Calling | Xử lý chống rò rỉ: Nhận diện đặc trưng độ tin cậy cao ngoài khối code, phát `delta.tool_calls` sớm, đầu ra tăng cường cấu trúc |
-| Admin API | Quản lý cấu hình, cập nhật hot cài đặt runtime, quản lý proxy, kiểm tra tài khoản / thử nghiệm hàng loạt, dọn dẹp phiên, nhập xuất, đồng bộ Vercel, kiểm tra phiên bản |
-| Bảng quản trị WebUI | Trực quan hóa tại `/admin` (Hỗ trợ song ngữ Trung/Anh, chế độ tối, xem lịch sử phản hồi phía máy chủ) |
+| Admin API | Quản lý cấu hình, cập nhật hot cài đặt runtime, quản lý proxy, kiểm tra tài khoản / thử nghiệm hàng loạt, dọn dẹp phiên, nhập xuất, đồng bộ Vercel, kiểm tra phiên bản, chẩn đoán mạng, quản lý nhà cung cấp ngoài, GitHub image bed |
+| Bảng quản trị WebUI | Trực quan hóa tại `/admin` (Hỗ trợ ba ngôn ngữ Trung/Anh/Việt, chế độ tối, xem lịch sử phản hồi phía máy chủ) |
 | Đầu dò vận hành | `GET /healthz` (Liveness), `GET /readyz` (Readiness) |
+
+> [!WARNING]
+> **Dùng tài khoản ChatGPT/Codex làm upstream có nguy cơ bị khoá tài khoản.** Việc đẩy lưu lượng của một tài khoản ChatGPT qua một gateway bên thứ ba rất có thể vi phạm điều khoản dịch vụ của OpenAI và có thể khiến tài khoản bị hạn chế hoặc khoá vĩnh viễn. Hãy tự cân nhắc rủi ro và chỉ dùng trên tài khoản bạn sở hữu và chấp nhận hậu quả. Cơ chế chống khoá tài khoản của DS2API dành cho DeepSeek **không áp dụng** cho upstream này.
 
 OpenAI `/v1/*` vẫn là đường dẫn chuẩn được khuyến nghị; đồng thời hỗ trợ các đường dẫn tắt gốc như `/models`, `/chat/completions`, `/responses`, `/embeddings`, `/files`, `/files/{file_id}`, thuận tiện cho client bên thứ ba chỉ cấu hình địa chỉ gốc DS2API.
 

@@ -112,6 +112,7 @@ func NewApp() (*App, error) {
 	r.Post("/v1/chat/completions", chatHandler.ChatCompletions)
 	r.Post("/v1/responses", responsesHandler.Responses)
 	r.Get("/v1/responses/{response_id}", responsesHandler.GetResponseByID)
+	r.Post("/codex/v1/responses", responsesHandler.CodexResponsesPassthrough)
 	r.Post("/v1/files", filesHandler.UploadFile)
 	r.Get("/v1/files/{file_id}", filesHandler.RetrieveFile)
 	r.Post("/v1/embeddings", embeddingsHandler.Embeddings)

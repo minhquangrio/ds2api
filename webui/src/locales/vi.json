@@ -18,6 +18,7 @@
         "groups": {
             "gateway": "Gateway Core",
             "upstream": "Tài nguyên Upstream",
+            "tools": "Công cụ & Mạng",
             "system": "Hệ thống"
         },
         "overview": {
@@ -30,11 +31,23 @@
         },
         "accounts": {
             "label": "Tài khoản Upstream",
-            "desc": "Quản lý nhóm tài khoản DeepSeek & Gemini"
+            "desc": "Quản lý nhóm tài khoản DeepSeek, Gemini & Codex"
+        },
+        "providers": {
+            "label": "Nhà cung cấp ngoài",
+            "desc": "Quản lý upstream bên thứ 3 tương thích OpenAI"
         },
         "proxies": {
             "label": "Proxy IP",
             "desc": "Quản lý các nút proxy đầu ra cho tài khoản"
+        },
+        "imageBed": {
+            "label": "GitHub Image Bed",
+            "desc": "Lưu trữ và nhúng hình ảnh qua kho lưu trữ GitHub"
+        },
+        "network": {
+            "label": "Chẩn đoán mạng",
+            "desc": "Kiểm tra IPv4/IPv6, DNS và kết nối các nền tảng"
         },
         "test": {
             "label": "Kiểm tra API",
@@ -771,5 +784,126 @@
         "confirmDelete": "Bạn có chắc chắn muốn xoá khoá API này không?",
         "integrationGuideTitle": "Hướng dẫn sử dụng Khoá API",
         "integrationGuideText": "Sử dụng khoá API này trong Header Authorization: Bearer <KEY> khi cấu hình NextChat, Cursor, Claude Code, Cline hoặc OpenAI SDK."
+    },
+    "netdiag": {
+        "title": "Chẩn đoán kết nối mạng",
+        "subtitle": "Kiểm tra địa chỉ IP công khai, máy chủ DNS và ma trận kết nối tới các nền tảng AI",
+        "lastCheck": "Kiểm tra lúc",
+        "refresh": "Chạy lại chẩn đoán",
+        "probing": "Đang kiểm tra...",
+        "probingDetail": "Đang phân tích địa chỉ IP, DNS và kết nối đa nền tảng...",
+        "ipv4": "Địa chỉ IPv4",
+        "ipv6": "Địa chỉ IPv6",
+        "routing": "Định tuyến Cloudflare",
+        "latency": "Độ trễ",
+        "source": "Nguồn",
+        "unreachable": "Không khả dụng",
+        "country": "Quốc gia / Khu vực",
+        "warp": "Mạng WARP",
+        "proxyUsed": "Đang dùng proxy",
+        "yes": "Có",
+        "no": "Không",
+        "gatewayOS": "Hệ điều hành Gateway",
+        "status": {
+            "online": "Hoạt động",
+            "degraded": "Bị suy giảm",
+            "offline": "Mất kết nối"
+        },
+        "platforms": {
+            "matrixTitle": "Ma trận kết nối Nền tảng AI",
+            "matrixDesc": "Đo độ trễ và mã phản hồi thực tế từ Gateway tới các máy chủ upstream"
+        },
+        "dns": {
+            "title": "Máy chủ phân giải DNS",
+            "noServers": "Không tìm thấy cấu hình DNS cục bộ"
+        },
+        "client": {
+            "title": "Môi trường trình duyệt của bạn",
+            "timezone": "Múi giờ máy khách",
+            "screen": "Độ phân giải màn hình",
+            "language": "Ngôn ngữ",
+            "ua": "Chuỗi User-Agent"
+        }
+    },
+    "imagebed": {
+        "title": "GitHub Image Bed",
+        "subtitle": "Lưu trữ hình ảnh trên GitHub repository cá nhân và phân phối qua mạng jsDelivr CDN",
+        "notConfigured": "Chưa cấu hình kho",
+        "configureBtn": "Cấu hình kho ảnh",
+        "validateRepo": "Kiểm tra kho",
+        "validating": "Đang kiểm tra...",
+        "uploadAreaTitle": "Tải lên hình ảnh",
+        "dragOrClick": "Kéo thả ảnh vào đây, hoặc bấm để duyệt chọn file",
+        "pasteSupport": "Hỗ trợ dán trực tiếp (Ctrl+V) từ bộ nhớ tạm clipboard",
+        "customFileNamePlaceholder": "Tên file tuỳ chỉnh (tuỳ chọn)",
+        "uploadBtn": "Tải lên GitHub",
+        "uploading": "Đang tải lên...",
+        "historyTitle": "Thư viện & Lịch sử tải lên",
+        "historyDesc": "Tối đa 100 hình ảnh gần nhất. Dễ dàng sao chép liên kết Markdown hoặc CDN chỉ với 1 cú click.",
+        "clearAll": "Xoá lịch sử",
+        "noHistory": "Chưa có hình ảnh nào được tải lên.",
+        "delHistory": "Xoá ghi chú",
+        "delGitHub": "Xoá trên GitHub",
+        "modalTitle": "Cài đặt GitHub Repository",
+        "tokenLabel": "GitHub Personal Access Token (PAT)",
+        "tokenHint": "Cần quyền 'repo' (Classic) hoặc 'Contents: Read & Write' (Fine-grained)",
+        "ownerLabel": "Chủ sở hữu (Owner/Org)",
+        "repoLabel": "Tên Repository",
+        "pathPrefixLabel": "Thư mục lưu trữ (Path Prefix)",
+        "configSaved": "Đã lưu cấu hình Image Bed thành công",
+        "validateSuccess": "Kết nối tới GitHub repository hợp lệ và sẵn sàng!",
+        "uploadSuccess": "Đã tải ảnh lên GitHub thành công!",
+        "deletedSuccess": "Đã xoá thành công",
+        "historyCleared": "Đã xoá sạch lịch sử tải ảnh",
+        "confirmDeleteBoth": "Bạn có chắc chắn muốn xoá cả file trên GitHub và lịch sử này không?",
+        "confirmDeleteRecord": "Bạn có chắc chắn muốn xoá mục này khỏi lịch sử không?",
+        "confirmClearAll": "Bạn có chắc chắn muốn xoá toàn bộ lịch sử không?",
+        "invalidImage": "File bạn chọn không phải là định dạng hình ảnh hợp lệ"
+    },
+    "providers": {
+        "title": "Nhà cung cấp ngoài (Third-party)",
+        "subtitle": "Quản lý các nguồn API bên thứ ba tương thích chuẩn OpenAI, tự động quét model và kiểm tra năng lực",
+        "addBtn": "Thêm nhà cung cấp",
+        "empty": "Chưa cấu hình nhà cung cấp bên ngoài nào.",
+        "addFirst": "Thêm nhà cung cấp đầu tiên",
+        "noToken": "Không có token",
+        "syncModels": "Quét Models",
+        "syncing": "Đang quét...",
+        "inspect": "Kiểm tra năng lực",
+        "inspecting": "Đang kiểm tra...",
+        "viewModels": "Xem danh mục Models",
+        "noModelsSynced": "Chưa quét được model nào từ nhà cung cấp này.",
+        "addTitle": "Thêm nhà cung cấp ngoài",
+        "editTitle": "Chỉnh sửa nhà cung cấp ngoài",
+        "nameLabel": "Tên gợi nhớ",
+        "urlLabel": "Base URL",
+        "urlHint": "Ví dụ: https://api.openai.com/v1 (Hệ thống tự động chuẩn hoá đường dẫn)",
+        "tokenLabel": "API Key / Token",
+        "enabledLabel": "Kích hoạt nhà cung cấp này",
+        "capabilitiesSource": "Nguồn năng lực",
+        "savedSuccess": "Đã lưu thông tin nhà cung cấp thành công",
+        "deletedSuccess": "Đã xoá nhà cung cấp thành công",
+        "confirmDelete": "Bạn có chắc chắn muốn xoá nhà cung cấp này không?",
+        "syncSuccess": "Quét model thành công",
+        "inspectSuccess": "Đã kiểm tra năng lực models thành công"
+    },
+    "codex": {
+        "loginModalTitle": "Đăng nhập ChatGPT / Codex OAuth",
+        "loginModalDesc": "Uỷ quyền bảo mật trực tiếp thông qua OpenAI OAuth PKCE không cần trích xuất cookie thủ công",
+        "loginInstructions": "Hệ thống sẽ mở trang uỷ quyền chính thức của OpenAI. Sau khi bạn cấp quyền, token truy cập và refresh token sẽ được lưu trữ tự động an toàn trong gateway.",
+        "oauthFeatures": "Tính năng hỗ trợ Codex:",
+        "feature1": "Tự động làm mới Access Token định kỳ (Offline Access Refresh)",
+        "feature2": "Hỗ trợ các gói ChatGPT Plus, Pro, Team",
+        "feature3": "Truy cập mô hình gpt-6-luna, gpt-6-sol, gpt-6-astra qua 4 giao thức gateway",
+        "startLoginBtn": "Bắt đầu đăng nhập OAuth",
+        "waitingForAuth": "Đang chờ bạn hoàn tất đăng nhập tại tab OpenAI...",
+        "openAuthTab": "Mở trang đăng nhập OpenAI",
+        "manualFallbackLabel": "Dán liên kết chuyển hướng thủ công (Ngoại tuyến / Headless):",
+        "manualFallbackHint": "Nếu trình duyệt không tự chuyển hướng về localhost:1455, hãy dán toàn bộ URL từ thanh địa chỉ vào đây.",
+        "submitCode": "Xác nhận",
+        "exchangingTokens": "Đang trao đổi mã uỷ quyền lấy Token bảo mật...",
+        "authSuccessTitle": "Đăng nhập Codex thành công!",
+        "authSuccessDesc": "Tài khoản đã được tích hợp vào cụm tài nguyên và sẵn sàng phục vụ các yêu cầu.",
+        "authFailedTitle": "Đăng nhập không thành công"
     }
 }

@@ -127,6 +127,7 @@ flowchart LR
 | 能力 | 说明 |
 | --- | --- |
 | OpenAI 兼容 | `GET /v1/models`、`GET /v1/models/{id}`、`POST /v1/chat/completions`、`POST /v1/responses`、`GET /v1/responses/{response_id}`、`POST /v1/embeddings`、`POST /v1/files`、`GET /v1/files/{file_id}` |
+| ChatGPT/Codex 上游 | `provider: "codex"` 账号经 OAuth PKCE 接入 ChatGPT/Codex，支持自动刷新 token；`POST /codex/v1/responses` 为 Codex CLI 提供 Responses SSE 直通 |
 | Claude 兼容 | `GET /anthropic/v1/models`、`POST /anthropic/v1/messages`、`POST /anthropic/v1/messages/count_tokens`（及快捷路径 `/v1/messages`、`/messages`） |
 | Gemini 兼容 | `POST /v1beta/models/{model}:generateContent`、`POST /v1beta/models/{model}:streamGenerateContent`（及 `/v1/models/{model}:*` 路径） |
 | Ollama 兼容 | `GET /api/version`、`GET /api/tags`、`POST /api/show` |
@@ -135,9 +136,12 @@ flowchart LR
 | 并发队列控制 | 每账号 in-flight 上限 + 等待队列，动态计算建议并发值 |
 | DeepSeek PoW | 纯 Go 高性能实现（DeepSeekHashV1），毫秒级响应 |
 | Tool Calling | 防泄漏处理：非代码块高置信特征识别、`delta.tool_calls` 早发、结构化增量输出 |
-| Admin API | 配置管理、运行时设置热更新、代理管理、账号测试 / 批量测试、会话清理、导入导出、Vercel 同步、版本检查 |
-| WebUI 管理台 | `/admin` 单页应用（中英文双语、深色模式，支持查看服务器端对话记录） |
+| Admin API | 配置管理、运行时设置热更新、代理管理、账号测试 / 批量测试、会话清理、导入导出、Vercel 同步、版本检查、网络诊断、外部服务商管理、GitHub 图床 |
+| WebUI 管理台 | `/admin` 单页应用（中/英/越三语、深色模式，支持查看服务器端对话记录） |
 | 运维探针 | `GET /healthz`（存活）、`GET /readyz`（就绪） |
+
+> [!WARNING]
+> **使用 ChatGPT/Codex 账号接入存在封号风险。** 将 ChatGPT 订阅账号通过第三方网关转发流量，很可能违反 OpenAI 的服务条款，并可能导致账号被限制或永久封禁。请自行评估风险，仅在你拥有且愿意承担后果的账号上使用。DS2API 对 DeepSeek 的防封号处理**不适用于**该上游。
 
 OpenAI `/v1/*` 仍是推荐的规范路径；同时支持 `/models`、`/chat/completions`、`/responses`、`/embeddings`、`/files`、`/files/{file_id}` 等根路径快捷路由，方便只配置 DS2API 根地址的第三方客户端。
 

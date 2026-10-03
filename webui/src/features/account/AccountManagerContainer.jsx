@@ -11,11 +11,13 @@ import EditAccountModal from './EditAccountModal'
 import ElasticPoolModal from './ElasticPoolModal'
 import GeminiQuotaModal from './GeminiQuotaModal'
 import GeminiPoolQuotaCard from './GeminiPoolQuotaCard'
+import CodexLoginModal from './CodexLoginModal'
 
 export default function AccountManagerContainer({ config, onRefresh, onMessage, authFetch }) {
     const { t } = useI18n()
     const apiFetch = authFetch || fetch
     const [quotaAccount, setQuotaAccount] = useState(null)
+    const [showCodexLogin, setShowCodexLogin] = useState(false)
 
     const {
         queueStatus,
@@ -168,6 +170,7 @@ export default function AccountManagerContainer({ config, onRefresh, onMessage, 
                 onOpenElasticPool={openElasticPool}
                 onTestAll={testAllAccounts}
                 onShowAddAccount={openAddAccount}
+                onShowCodexLogin={() => setShowCodexLogin(true)}
                 onEditAccount={openEditAccount}
                 onTestAccount={testAccount}
                 onViewQuota={acc => setQuotaAccount(acc)}
@@ -246,6 +249,17 @@ export default function AccountManagerContainer({ config, onRefresh, onMessage, 
                     onClose={() => setQuotaAccount(null)}
                 />
             )}
+
+            <CodexLoginModal
+                isOpen={showCodexLogin}
+                onClose={() => setShowCodexLogin(false)}
+                authFetch={apiFetch}
+                onSuccess={() => {
+                    fetchAccounts()
+                    onRefresh?.()
+                }}
+                onMessage={onMessage}
+            />
         </div>
     )
 }

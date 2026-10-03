@@ -3,6 +3,7 @@ package responses
 import (
 	"ds2api/internal/toolcall"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -13,6 +14,7 @@ import (
 
 	"ds2api/internal/assistantturn"
 	"ds2api/internal/auth"
+	"ds2api/internal/codex"
 	"ds2api/internal/completionruntime"
 	"ds2api/internal/config"
 	dsprotocol "ds2api/internal/deepseek/protocol"
@@ -50,6 +52,27 @@ func (h *Handler) GetResponseByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Responses(w http.ResponseWriter, r *http.Request) {
+	// The body is read before auth so the requested model can select the target
+	// provider, matching the chat/Claude/Gemini entry points. Without this the
+	// resolver would default to DeepSeek and provider-specific models could
+	// never be reached through this endpoint.
+	r.Body = http.MaxBytesReader(w, r.Body, openAIGeneralMaxSize)
+	var req map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "too large") {
+			writeOpenAIError(w, http.StatusRequestEntityTooLarge, "request body too large")
+			return
+		}
+		writeOpenAIError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+
+	requestedModel, _ := req["model"].(string)
+	target, targetResolved := config.ResolveModelTarget(h.Store, requestedModel)
+	if targetResolved && target.Provider != "" {
+		r.Header.Set("X-Ds2-Target-Provider", target.Provider)
+	}
+
 	a, err := h.Auth.Determine(r)
 	if err != nil {
 		status, detail := auth.MapAuthStatus(err)
@@ -64,16 +87,6 @@ func (h *Handler) Responses(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, openAIGeneralMaxSize)
-	var req map[string]any
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		if strings.Contains(strings.ToLower(err.Error()), "too large") {
-			writeOpenAIError(w, http.StatusRequestEntityTooLarge, "request body too large")
-			return
-		}
-		writeOpenAIError(w, http.StatusBadRequest, "invalid json")
-		return
-	}
 	originalModel, rerouted := promptcompat.MaybeAutoRouteVision(req, h.Store)
 	if err := h.preprocessInlineFileInputs(r.Context(), a, req); err != nil {
 		writeOpenAIInlineFileError(w, err)
@@ -121,6 +134,49 @@ func (h *Handler) Responses(w http.ResponseWriter, r *http.Request) {
 		Surface:  "openai.responses",
 		Standard: stdReq,
 	})
+
+	if a.Provider == "codex" {
+		client, err := codex.DefaultRuntime().GetClient(r.Context(), a.Account, h.Store)
+		if err != nil {
+			if historySession != nil {
+				historySession.Error(http.StatusBadGateway, err.Error(), "upstream_error", "", "")
+			}
+			writeOpenAIError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+
+		if !stdReq.Stream {
+			turn, err := codex.ExecuteTurn(r.Context(), client, stdReq)
+			if err != nil {
+				if historySession != nil {
+					historySession.Error(http.StatusBadGateway, err.Error(), "upstream_error", "", "")
+				}
+				writeOpenAIError(w, http.StatusBadGateway, err.Error())
+				return
+			}
+			if historySession != nil {
+				historySession.SuccessTurn(http.StatusOK, turn, assistantturn.OpenAIResponsesUsage(turn))
+			}
+			responseObj := openaifmt.BuildResponseObjectWithToolCalls(responseID, stdReq.ResponseModel, turn.Prompt, turn.Thinking, turn.Text, turn.ToolCalls, stdReq.ToolsRaw)
+			responseObj["usage"] = assistantturn.OpenAIResponsesUsage(turn)
+			h.getResponseStore().put(owner, responseID, responseObj)
+			writeJSON(w, http.StatusOK, responseObj)
+			return
+		}
+
+		if err := codex.StreamResponsesAPI(r.Context(), client, stdReq, w); err != nil {
+			config.Logger.Warn("[codex] responses stream error", "error", err)
+			if historySession != nil {
+				historySession.Error(http.StatusBadGateway, err.Error(), "upstream_error", "", "")
+			}
+			return
+		}
+		if historySession != nil {
+			historySession.Success(http.StatusOK, "", "", "stop", nil)
+		}
+		return
+	}
+
 	if !stdReq.Stream {
 		result, outErr := completionruntime.ExecuteNonStreamWithRetry(r.Context(), h.DS, a, stdReq, completionruntime.Options{
 			RetryEnabled:        true,
@@ -301,4 +357,83 @@ func filteredRejectedToolNamesForLog(names []string) []string {
 		}
 	}
 	return out
+}
+
+func (h *Handler) CodexResponsesPassthrough(w http.ResponseWriter, r *http.Request) {
+	a, err := h.Auth.DetermineForProvider(r, "codex")
+	if err != nil {
+		status, detail := auth.MapAuthStatus(err)
+		writeOpenAIError(w, status, detail)
+		return
+	}
+	defer h.Auth.Release(a)
+
+	client, err := codex.DefaultRuntime().GetClient(r.Context(), a.Account, h.Store)
+	if err != nil {
+		writeOpenAIError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+
+	upstreamReq, err := http.NewRequestWithContext(r.Context(), http.MethodPost, codex.CodexResponsesURL, r.Body)
+	if err != nil {
+		writeOpenAIError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	upstreamReq.Header.Set("Content-Type", r.Header.Get("Content-Type"))
+	if reqID := r.Header.Get("X-Request-Id"); reqID != "" {
+		upstreamReq.Header.Set("X-Request-Id", reqID)
+	}
+	for k, vv := range r.Header {
+		if strings.HasPrefix(strings.ToLower(k), "x-codex-") {
+			for _, v := range vv {
+				upstreamReq.Header.Add(k, v)
+			}
+		}
+	}
+
+	resp, err := client.DoStream(upstreamReq)
+	if err != nil {
+		writeOpenAIError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil {
+			config.Logger.Warn("[codex] failed to close passthrough response body", "error", cerr)
+		}
+	}()
+
+	// Only relay the headers a client can act on. Copying the whole upstream
+	// response would also forward framing headers (Content-Length,
+	// Content-Encoding, Transfer-Encoding) that no longer describe the body we
+	// are about to write.
+	for k, vv := range resp.Header {
+		lower := strings.ToLower(k)
+		if lower == "content-type" || lower == "x-request-id" || strings.HasPrefix(lower, "x-codex-") {
+			for _, v := range vv {
+				w.Header().Add(k, v)
+			}
+		}
+	}
+	if w.Header().Get("Content-Type") == "" {
+		w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
+	}
+	w.WriteHeader(resp.StatusCode)
+
+	flusher, canFlush := w.(http.Flusher)
+	buf := make([]byte, 4096)
+	for {
+		n, rerr := resp.Body.Read(buf)
+		if n > 0 {
+			_, _ = w.Write(buf[:n])
+			if canFlush {
+				flusher.Flush()
+			}
+		}
+		if rerr != nil {
+			if !errors.Is(rerr, io.EOF) {
+				config.Logger.Warn("[codex] passthrough stream interrupted", "error", rerr)
+			}
+			break
+		}
+	}
 }

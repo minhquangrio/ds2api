@@ -48,10 +48,14 @@ DS2API 当前的核心思路，不是把客户端传来的 `messages`、`tools`�
      │   -> tool prompt 注入 / StyleDeepSeekWeb prompt 拼装 (<System>:<User>:<Assistant>:)
      │   -> current input file / expert prompt segment
      │   -> completionruntime 下游网页对话接口
-     └─ Google Gemini:
-         -> StyleGeminiWeb prompt 渲染（纯文本/无尾部伪标签）
-         -> internal/geminiweb 客户端 (httpcloak TLS/H2)
-         -> Gemini Web Session / Generate / StreamGenerate
+     ├─ Google Gemini:
+     │   -> StyleGeminiWeb prompt 渲染（纯文本/无尾部伪标签）
+     │   -> internal/geminiweb 客户端 (httpcloak TLS/H2)
+     │   -> Gemini Web Session / Generate / StreamGenerate
+     └─ OpenAI Codex (ChatGPT OAuth):
+         -> codex.BuildInput / Native Tools 映射 (chatgpt.com/backend-api/codex/responses)
+         -> OAuth PKCE Token 管理与自动刷新 (Offline Access)
+         -> SSE parser 解析 Responses 事件流归一为 Turn 结构 (Bypass webchat prompt injection & tool-sieve)
   -> assistantturn 输出语义归一（Turn 结构）
   -> 各协议 renderer（OpenAI / Responses / Claude / Gemini）
 ```
@@ -629,4 +633,21 @@ expert（pro）模型本身不会收到任何 `ref_file_ids` 或 inline 文件�
 4. **跨协议适配层一致性**：
    - OpenAI Chat、OpenAI Responses、Vercel Stream Prepare、Claude Messages、Gemini Generate 以及 Embeddings 各入口均接入统一的 `EnforceKeyModelQuota`。
    - 特别针对 Vercel 链路：在 `handleVercelStreamPrepare` 阶段即完成校验，杜绝在越权或超额情况下预先签发 Lease Token。
+
+## 16. Codex (ChatGPT OAuth) Upstream 链路适配与透传规则
+
+针对 OpenAI Codex（通过 OAuth PKCE 接入 ChatGPT Plus/Pro/Team 账号），DS2API 采用专用适配分支：
+
+1. **协议入口分流 (Router & Sieve Carve-Out)**：
+   - 目标判定：通过 `codex/` 前缀、Codex 系列原生模型（如 `gpt-6-luna`, `gpt-6-sol`, `gpt-6-astra`）或 `X-Ds2-Target-Provider: codex` 头识别。
+   - 绕过网页纯文本注入：Codex 原生支持多轮 `input` turns、`instructions`、以及原生的 `tools` JSON Schema。因此无需走 DeepSeek Web Chat 的纯文本 prompt 拼装 (`<System>:<User>:<Assistant>:`) 与 XML 工具提取筛网（tool sieve）。
+   - 保留全局统一标准模型：请求依然经由 `promptcompat.Normalize*` 形成 `StandardRequest`，保持参数校验、模型映射、Key 额度与审计日志的全局一致性。
+
+2. **输出流归一 (Turn Model)**：
+   - `internal/codex` 运行时监听 Codex 原生的 Server-Sent Events (`response.text.delta`, `response.function_call_arguments.delta` 等)。
+   - 增量事件转换为项目标准的 `assistantturn.Turn` 结构，然后由外层 OpenAI Chat、Claude Messages、Gemini Content 或 Responses renderer 按需渲染返回，实现“一次接入，四种协议通用”。
+
+3. **Vercel / Node 路径直通 (PoW Bypass)**：
+   - 在 Vercel 部署环境下，`/v1/chat/completions` 中的 Codex 请求在 Node 接入层即被识别并直通 Go 运行时 (`proxyToGo`)，完全避开针对 DeepSeek 网页端的 PoW 求解流程。
+
 

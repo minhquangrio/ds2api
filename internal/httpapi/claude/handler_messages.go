@@ -14,6 +14,7 @@ import (
 
 	"ds2api/internal/assistantturn"
 	"ds2api/internal/auth"
+	"ds2api/internal/codex"
 	"ds2api/internal/completionruntime"
 	"ds2api/internal/config"
 	claudefmt "ds2api/internal/format/claude"
@@ -139,6 +140,45 @@ func (h *Handler) handleClaudeDirect(w http.ResponseWriter, r *http.Request) boo
 			return true
 		}
 		turn, err := geminiweb.ExecuteTurn(r.Context(), client, stdReq)
+		if err != nil {
+			if historySession != nil {
+				historySession.Error(http.StatusBadGateway, err.Error(), "upstream_error", "", "")
+			}
+			writeClaudeError(w, http.StatusBadGateway, err.Error())
+			return true
+		}
+		if historySession != nil {
+			historySession.SuccessTurn(http.StatusOK, turn, responsehistory.GenericUsage(turn))
+		}
+		writeJSON(w, http.StatusOK, claudefmt.BuildMessageResponseFromTurn(
+			fmt.Sprintf("msg_%d", time.Now().UnixNano()),
+			stdReq.ResponseModel,
+			turn,
+			exposeThinking,
+		))
+		return true
+	}
+	if a.Provider == "codex" {
+		client, err := codex.DefaultRuntime().GetClient(r.Context(), a.Account, h.Store)
+		if err != nil {
+			writeClaudeError(w, http.StatusBadGateway, err.Error())
+			return true
+		}
+		if stdReq.Stream {
+			thinking, text, streamErr := codex.StreamClaudeMessages(r.Context(), client, stdReq, w)
+			if streamErr != nil {
+				config.Logger.Warn("[codex] stream error", "error", streamErr)
+				if historySession != nil {
+					historySession.Error(http.StatusBadGateway, streamErr.Error(), "upstream_error", thinking, text)
+				}
+				return true
+			}
+			if historySession != nil {
+				historySession.Success(http.StatusOK, thinking, text, "end_turn", nil)
+			}
+			return true
+		}
+		turn, err := codex.ExecuteTurn(r.Context(), client, stdReq)
 		if err != nil {
 			if historySession != nil {
 				historySession.Error(http.StatusBadGateway, err.Error(), "upstream_error", "", "")

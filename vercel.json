@@ -102,6 +102,30 @@
       "destination": "/api/index"
     },
     {
+      "source": "/admin/network-detect",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/admin/image-bed(.*)",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/admin/providers(.*)",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/admin/codex(.*)",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/codex/(.*)",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/v1/responses(.*)",
+      "destination": "/api/index"
+    },
+    {
       "source": "/admin",
       "destination": "/admin/index.html"
     },

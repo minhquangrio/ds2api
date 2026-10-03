@@ -29,6 +29,7 @@ const {
   isNodeStreamSupportedPath,
   extractPathname,
   trimContinuationOverlap,
+  isCodexRequest,
 } = handler.__test;
 
 function createMockResponse() {
@@ -1104,4 +1105,21 @@ test('vercel stream does not consume SSE body during mute detection', async () =
   } finally {
     global.fetch = originalFetch;
   }
+});
+
+test('codex requests bypass the Node DeepSeek stream path', () => {
+  // Explicit provider header wins.
+  assert.equal(isCodexRequest({ headers: { 'x-ds2-target-provider': 'codex' } }, {}), true);
+
+  // Codex catalog models are recognised by the shared prefix.
+  assert.equal(isCodexRequest({ headers: {} }, { model: 'gpt-6-luna' }), true);
+  assert.equal(isCodexRequest({ headers: {} }, { model: 'codex/gpt-6-sol' }), true);
+
+  // DeepSeek and Gemini models must stay on the Node path.
+  assert.equal(isCodexRequest({ headers: {} }, { model: 'deepseek-v4-flash' }), false);
+  assert.equal(isCodexRequest({ headers: {} }, { model: 'gemini-3.0-pro' }), false);
+
+  // Regression guard: an existing alias points gpt-5.3-codex at DeepSeek, so a
+  // bare "codex" substring must not be treated as a codex model.
+  assert.equal(isCodexRequest({ headers: {} }, { model: 'gpt-5.3-codex' }), false);
 });

@@ -76,3 +76,24 @@ func UsageLedgerPath() string {
 func StaticAdminDir() string {
 	return ResolvePath("DS2API_STATIC_ADMIN_DIR", "static/admin")
 }
+
+func ImageBedPath() string {
+	if IsVercel() && strings.TrimSpace(os.Getenv("DS2API_IMAGE_BED_PATH")) == "" {
+		return "/tmp/image_bed.json"
+	}
+	return ResolvePath("DS2API_IMAGE_BED_PATH", "data/image_bed.json")
+}
+
+func ImageBedHistoryPath() string {
+	if IsVercel() && strings.TrimSpace(os.Getenv("DS2API_IMAGE_BED_HISTORY_PATH")) == "" {
+		return "/tmp/image_bed_history.json"
+	}
+	return ResolvePath("DS2API_IMAGE_BED_HISTORY_PATH", "data/image_bed_history.json")
+}
+
+func ExternalProvidersPath() string {
+	if IsVercel() && strings.TrimSpace(os.Getenv("DS2API_EXTERNAL_PROVIDERS_PATH")) == "" {
+		return "/tmp/external_providers.json"
+	}
+	return ResolvePath("DS2API_EXTERNAL_PROVIDERS_PATH", "data/external_providers.json")
+}

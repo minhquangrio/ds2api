@@ -1539,6 +1539,69 @@ data: {"type":"message_stop"}
 
 手动触发从现有对话历史（`chat-history`）向持久化账本的一次性回填（需 Admin 鉴权）。该操作具备幂等性，已回填记录不会重复计入。
 
+---
+
+### `GET /admin/network-detect`
+
+探测网关节点的出口网络环境（需 Admin 鉴权）。
+
+**响应内容**：
+- `ipv4`: 公网 IPv4 地址、探测延迟及数据源。
+- `ipv6`: 公网 IPv6 地址及探测延迟。
+- `cloudflare`: 出口经过的 Cloudflare 数据中心代号（`colo`，如 `HKG`、`SJC`）、地理位置（`loc`）及 WARP 状态。
+- `dns`: 网关主机通过系统指令/配置文件解析出的当前可用 DNS 服务器列表。
+- `platforms`: 针对 DeepSeek API、Gemini API、Google 连接性（204）、Cloudflare Trace 的并发连通性检测与真实往返延迟。
+- `os`: 网关宿主操作系统类型（`windows`, `linux`, `darwin`）。
+
+---
+
+### GitHub 图床接口 (`/admin/image-bed/*`)
+
+基于个人 GitHub 仓库的轻量化图床服务（需 Admin 鉴权，配置保存于 `data/image_bed.json`）：
+
+- `GET /admin/image-bed/config`: 获取当前图床配置（Token 脱敏显示）。
+- `PUT /admin/image-bed/config`: 保存图床配置（`owner`, `repository`, `path_prefix`, `token`）。
+- `DELETE /admin/image-bed/config`: 清空图床配置。
+- `POST /admin/image-bed/validate`: 校验配置的 GitHub 仓库连通性与写入权限。
+- `POST /admin/image-bed/upload`: 上传图片（接收 Base64/Data URL），自动按年/月/日分目录存储，返回原始 GitHub URL 及 jsDelivr CDN 加速链接。
+- `GET /admin/image-bed/history`: 查询最近上传的图片历史（最多保留 100 条）。
+- `DELETE /admin/image-bed/history/{id}`: 删除单条历史记录（支持带参数 `?delete_remote=true` 同步删除 GitHub 仓库源文件）。
+- `DELETE /admin/image-bed/history`: 清空全部本地上传历史记录。
+
+---
+
+### 第三方上游服务商接口 (`/admin/providers/*`)
+
+管理兼容 OpenAI 协议的第三方 API 渠道（需 Admin 鉴权，配置保存于 `data/external_providers.json`）：
+
+- `GET /admin/providers`: 列出所有第三方服务商、已同步模型数及 Token 脱敏状态。
+- `POST /admin/providers`: 添加第三方服务商（`name`, `base_url`, `token`, `enabled`）。
+- `GET /admin/providers/{id}`: 查询单个服务商详情。
+- `PUT /admin/providers/{id}`: 更新服务商配置。
+- `DELETE /admin/providers/{id}`: 删除服务商配置。
+- `POST /admin/providers/{id}/sync`: 探测并自动拉取上游 `/models` 列表并规范化入库。
+- `POST /admin/providers/{id}/inspect`: 对上游模型实测工具调用（Tools）、深度推理（Reasoning）与视觉多模态（Vision）支持度。
+
+---
+
+### Codex / ChatGPT OAuth 接口 (`/admin/codex/*`)
+
+通过官方 OpenAI OAuth PKCE 接入 ChatGPT Plus / Pro / Team 账号：
+
+- `POST /admin/codex/login/start`: 发起 OAuth PKCE 登录会话，支持指定回调监听端口 `port`（默认 1455），返回 `session_id`、`authorize_url` 与 `state`。
+- `POST /admin/codex/login/poll`: 轮询登录状态。当用户完成授权跳转后，服务自动换取 Token 并添加或更新上游账号池。
+- `POST /admin/codex/login/complete`: 适用于无头环境或远程部署，手动提交浏览器授权回调链接（含 `code` 与 `state`）完成令牌交换。
+- `POST /admin/codex/login/cancel`: 取消正在进行的登录会话。
+- `GET /admin/codex/accounts`: 获取当前所有已接入的 Codex 账号状态、到期时间与套餐类型。
+- `POST /admin/codex/accounts/refresh`: 强制使用 Refresh Token 刷新账号的 Access Token 凭据。
+- `POST /admin/codex/accounts/test`: 向 Codex 上游发送轻量模型探测请求，测量延迟与凭据有效性。
+- `DELETE /admin/codex/accounts`: 从账号池中解绑并移除指定的 Codex 账号。
+
+### Codex 原生 Responses 协议透传 (`POST /codex/v1/responses`)
+
+支持直接以 OpenAI Responses 官方请求体格式调用 Codex 运行时，具备双向流式 SSE 与原生工具调用能力。
+
+
 **响应**：
 
 ```json

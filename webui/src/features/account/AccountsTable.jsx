@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Play, Plus, SlidersHorizontal, RefreshCw } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Play, Plus, SlidersHorizontal, RefreshCw, Zap } from 'lucide-react'
 import clsx from 'clsx'
 import AccountFiltersBar from './AccountFiltersBar'
 import AccountItemRow from './AccountItemRow'
@@ -25,6 +25,7 @@ export default function AccountsTable({
     onOpenElasticPool,
     onTestAll,
     onShowAddAccount,
+    onShowCodexLogin,
     onEditAccount,
     onTestAccount,
     onViewQuota,
@@ -89,6 +90,17 @@ export default function AccountsTable({
                         )}
                         <span>{t('accountManager.testAll')}</span>
                     </button>
+                    {onShowCodexLogin && (
+                        <button
+                            type="button"
+                            onClick={onShowCodexLogin}
+                            className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/25 rounded-lg transition-colors font-medium text-xs shadow-xs"
+                            title="OAuth PKCE Login with OpenAI / ChatGPT"
+                        >
+                            <Zap className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Codex OAuth</span>
+                        </button>
+                    )}
                     <button
                         type="button"
                         onClick={onShowAddAccount}

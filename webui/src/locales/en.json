@@ -18,6 +18,7 @@
         "groups": {
             "gateway": "Gateway Core",
             "upstream": "Upstream Nodes",
+            "tools": "Tools & Network",
             "system": "System"
         },
         "overview": {
@@ -30,11 +31,23 @@
         },
         "accounts": {
             "label": "Upstream Accounts",
-            "desc": "Manage DeepSeek & Gemini account pools"
+            "desc": "Manage DeepSeek, Gemini & Codex account pools"
+        },
+        "providers": {
+            "label": "Third-Party Providers",
+            "desc": "Manage OpenAI-compatible external upstream providers"
         },
         "proxies": {
             "label": "Proxy IPs",
             "desc": "Manage outbound proxy nodes for accounts"
+        },
+        "imageBed": {
+            "label": "GitHub Image Bed",
+            "desc": "Store and embed images using GitHub repository"
+        },
+        "network": {
+            "label": "Network Diagnostics",
+            "desc": "Inspect IPv4/IPv6, DNS and upstream platform matrix"
         },
         "test": {
             "label": "API Test",
@@ -771,5 +784,126 @@
         "confirmDelete": "Are you sure you want to delete this API key?",
         "integrationGuideTitle": "How to Use Your API Key",
         "integrationGuideText": "Pass this key in the Authorization: Bearer <KEY> header when configuring Cursor, NextChat, Claude Code, Cline, or the OpenAI SDK."
+    },
+    "netdiag": {
+        "title": "Network Diagnostics",
+        "subtitle": "Inspect public IP addresses, local DNS servers, and connectivity matrix to AI upstream platforms",
+        "lastCheck": "Last checked",
+        "refresh": "Run Diagnostics",
+        "probing": "Probing...",
+        "probingDetail": "Detecting IP address, DNS configuration, and platform latency...",
+        "ipv4": "IPv4 Address",
+        "ipv6": "IPv6 Address",
+        "routing": "Cloudflare Routing",
+        "latency": "Latency",
+        "source": "Source",
+        "unreachable": "Unreachable",
+        "country": "Country / Region",
+        "warp": "WARP Network",
+        "proxyUsed": "Proxy In Use",
+        "yes": "Yes",
+        "no": "No",
+        "gatewayOS": "Gateway Host OS",
+        "status": {
+            "online": "Online",
+            "degraded": "Degraded",
+            "offline": "Offline"
+        },
+        "platforms": {
+            "matrixTitle": "AI Platform Connectivity Matrix",
+            "matrixDesc": "Measures response status and round-trip time directly from the Gateway host"
+        },
+        "dns": {
+            "title": "DNS Resolvers",
+            "noServers": "No local DNS resolver detected"
+        },
+        "client": {
+            "title": "Client Browser Context",
+            "timezone": "Client Timezone",
+            "screen": "Screen Resolution",
+            "language": "Language",
+            "ua": "User-Agent String"
+        }
+    },
+    "imagebed": {
+        "title": "GitHub Image Bed",
+        "subtitle": "Host images on your personal GitHub repository and deliver via jsDelivr CDN",
+        "notConfigured": "Repository not configured",
+        "configureBtn": "Configure Repository",
+        "validateRepo": "Validate Repo",
+        "validating": "Validating...",
+        "uploadAreaTitle": "Upload Image",
+        "dragOrClick": "Drag & drop an image here, or click to browse",
+        "pasteSupport": "Supports direct clipboard pasting (Ctrl+V)",
+        "customFileNamePlaceholder": "Custom file name (optional)",
+        "uploadBtn": "Upload to GitHub",
+        "uploading": "Uploading...",
+        "historyTitle": "Gallery & Upload History",
+        "historyDesc": "Recent 100 uploads. One-click copy for Markdown or CDN URLs.",
+        "clearAll": "Clear History",
+        "noHistory": "No images uploaded yet.",
+        "delHistory": "Remove Record",
+        "delGitHub": "Delete from GitHub",
+        "modalTitle": "GitHub Repository Settings",
+        "tokenLabel": "GitHub Personal Access Token (PAT)",
+        "tokenHint": "Requires 'repo' scope (Classic) or 'Contents: Read & Write' (Fine-grained)",
+        "ownerLabel": "Owner (Username or Org)",
+        "repoLabel": "Repository Name",
+        "pathPrefixLabel": "Path Prefix in Repo",
+        "configSaved": "Image Bed settings saved successfully",
+        "validateSuccess": "GitHub repository validated and ready to use!",
+        "uploadSuccess": "Image uploaded to GitHub successfully!",
+        "deletedSuccess": "Deleted successfully",
+        "historyCleared": "Upload history cleared",
+        "confirmDeleteBoth": "Are you sure you want to delete both the GitHub file and this history record?",
+        "confirmDeleteRecord": "Are you sure you want to remove this record from history?",
+        "confirmClearAll": "Are you sure you want to clear all history records?",
+        "invalidImage": "The selected file is not a valid image format"
+    },
+    "providers": {
+        "title": "Third-Party Providers",
+        "subtitle": "Manage external OpenAI-compatible upstream endpoints, discover models and inspect capabilities",
+        "addBtn": "Add Provider",
+        "empty": "No external providers configured yet.",
+        "addFirst": "Add Your First Provider",
+        "noToken": "No token configured",
+        "syncModels": "Sync Models",
+        "syncing": "Syncing...",
+        "inspect": "Inspect Capabilities",
+        "inspecting": "Inspecting...",
+        "viewModels": "View Models Catalog",
+        "noModelsSynced": "No models discovered from this provider yet.",
+        "addTitle": "Add External Provider",
+        "editTitle": "Edit External Provider",
+        "nameLabel": "Provider Name",
+        "urlLabel": "Base URL",
+        "urlHint": "e.g., https://api.openai.com/v1 (Auto-normalized by gateway)",
+        "tokenLabel": "API Key / Token",
+        "enabledLabel": "Enable this provider",
+        "capabilitiesSource": "Capability source",
+        "savedSuccess": "Provider configuration saved",
+        "deletedSuccess": "Provider deleted successfully",
+        "confirmDelete": "Are you sure you want to delete this provider?",
+        "syncSuccess": "Models synchronized successfully",
+        "inspectSuccess": "Capabilities inspection completed successfully"
+    },
+    "codex": {
+        "loginModalTitle": "ChatGPT / Codex OAuth Login",
+        "loginModalDesc": "Direct authorization via official OpenAI OAuth PKCE without manual cookie extraction",
+        "loginInstructions": "The gateway initiates an official OpenAI authorization flow. Once granted, access and refresh tokens are securely stored in your local configuration.",
+        "oauthFeatures": "Supported Codex Features:",
+        "feature1": "Automatic offline token refresh cycle",
+        "feature2": "Supports ChatGPT Plus, Pro, and Team tiers",
+        "feature3": "Access gpt-6-luna, gpt-6-sol, gpt-6-astra via all 4 gateway protocols",
+        "startLoginBtn": "Start OAuth Login",
+        "waitingForAuth": "Waiting for authorization in OpenAI tab...",
+        "openAuthTab": "Open OpenAI Login Page",
+        "manualFallbackLabel": "Manual Callback URL (Headless / Remote):",
+        "manualFallbackHint": "If your browser cannot redirect back to localhost:1455, paste the entire callback URL here.",
+        "submitCode": "Submit Code",
+        "exchangingTokens": "Exchanging authorization code for secure tokens...",
+        "authSuccessTitle": "Codex Connected Successfully!",
+        "authSuccessDesc": "The account is now active and ready to handle model requests.",
+        "authFailedTitle": "Authorization Failed"
     }
 }

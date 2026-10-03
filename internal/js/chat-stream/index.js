@@ -70,7 +70,8 @@ async function handler(req, res) {
 
   // Keep all non-stream behavior and non-OpenAI-chat paths on Go side to avoid
   // protocol-shape regressions (e.g. Gemini/Claude clients expecting their own formats).
-  if (!toBool(payload.stream) || !isNodeStreamSupportedPath(req.url || '')) {
+  // Also pass Codex requests directly to Go to bypass DeepSeek PoW handling.
+  if (!toBool(payload.stream) || !isNodeStreamSupportedPath(req.url || '') || isCodexRequest(req, payload)) {
     await proxyToGo(req, res, rawBody);
     return;
   }
@@ -80,6 +81,32 @@ async function handler(req, res) {
 
 function toBool(v) {
   return v === true;
+}
+
+// Codex requests must reach Go: the Node path below implements the DeepSeek
+// web protocol (PoW, session, SSE sieve) and cannot serve the ChatGPT/Codex
+// Responses upstream.
+//
+// KEEP IN SYNC with `codexBaseModels` in internal/config/models.go as well as
+// `codexModels` in webui/src/features/providers. Model names cannot be inferred
+// across the language boundary, so a rename has to be applied in all three.
+const CODEX_MODEL_PREFIXES = ['gpt-6-'];
+const CODEX_MODEL_EXACT = ['gpt-6'];
+
+function isCodexRequest(req, payload) {
+  const headers = (req && req.headers) || {};
+  const targetProvider = asString(headers['x-ds2-target-provider'] || headers['x-provider']).toLowerCase();
+  if (targetProvider === 'codex') {
+    return true;
+  }
+  const model = asString(payload && payload.model).toLowerCase();
+  if (model.startsWith('codex/')) {
+    return true;
+  }
+  if (CODEX_MODEL_EXACT.includes(model)) {
+    return true;
+  }
+  return CODEX_MODEL_PREFIXES.some((prefix) => model.startsWith(prefix));
 }
 
 function isVercelRuntime() {
@@ -125,4 +152,5 @@ module.exports.__test = {
   isNodeStreamSupportedPath,
   extractPathname,
   trimContinuationOverlap,
+  isCodexRequest,
 };

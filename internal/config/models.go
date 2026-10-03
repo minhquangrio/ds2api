@@ -56,6 +56,23 @@ var geminiBaseModels = []ModelInfo{
 
 var GeminiModels = appendNoThinkingVariants(geminiBaseModels)
 
+var codexBaseModels = []ModelInfo{
+	{ID: "gpt-6-luna", Object: "model", Created: 1735689600, OwnedBy: "openai"},
+	{ID: "gpt-6-sol", Object: "model", Created: 1735689600, OwnedBy: "openai"},
+	{ID: "gpt-6-astra", Object: "model", Created: 1735689600, OwnedBy: "openai"},
+}
+
+var CodexModels = appendNoThinkingVariants(codexBaseModels)
+
+func IsSupportedCodexModel(model string) bool {
+	for _, m := range CodexModels {
+		if m.ID == model {
+			return true
+		}
+	}
+	return false
+}
+
 var OllamaCapabilitiesModels = []OllamaCapabilitiesModelInfo{
 	{ID: "deepseek-v4-flash", Capabilities: []string{"tools", "thinking"}},
 	{ID: "deepseek-v4-pro", Capabilities: []string{"tools", "thinking"}},
@@ -314,6 +331,26 @@ func ResolveModelTarget(store ModelAliasReader, requested string) (ModelTarget, 
 		}, true
 	}
 
+	// 2b. Direct Codex models and codex/ prefix
+	if strings.HasPrefix(model, "codex/") {
+		canonical := strings.TrimPrefix(model, "codex/")
+		return ModelTarget{
+			Provider:  "codex",
+			Canonical: canonical,
+		}, true
+	}
+	if IsSupportedCodexModel(baseModel) {
+		variant := ""
+		if noThinking {
+			variant = "nothinking"
+		}
+		return ModelTarget{
+			Provider:  "codex",
+			Canonical: model,
+			Variant:   variant,
+		}, true
+	}
+
 	// 3. Alias lookup
 	aliases := loadModelAliases(store)
 	if mapped, ok := aliases[model]; ok {
@@ -340,6 +377,13 @@ func ResolveModelTarget(store ModelAliasReader, requested string) (ModelTarget, 
 				Provider:  "gemini",
 				Canonical: mapped,
 				Variant:   variant,
+			}, true
+		}
+		if IsSupportedCodexModel(mappedBase) || strings.HasPrefix(mapped, "codex/") {
+			canonical := strings.TrimPrefix(mapped, "codex/")
+			return ModelTarget{
+				Provider:  "codex",
+				Canonical: canonical,
 			}, true
 		}
 	}
@@ -373,6 +417,13 @@ func ResolveModelTarget(store ModelAliasReader, requested string) (ModelTarget, 
 				Variant:   variant,
 			}, true
 		}
+		if IsSupportedCodexModel(mappedBase) || strings.HasPrefix(mapped, "codex/") {
+			canon := strings.TrimPrefix(canonical, "codex/")
+			return ModelTarget{
+				Provider:  "codex",
+				Canonical: canon,
+			}, true
+		}
 	}
 
 	return ModelTarget{}, false
@@ -397,9 +448,10 @@ func lower(s string) string {
 }
 
 func OpenAIModelsResponse() map[string]any {
-	all := make([]ModelInfo, 0, len(DeepSeekModels)+len(GeminiModels))
+	all := make([]ModelInfo, 0, len(DeepSeekModels)+len(GeminiModels)+len(CodexModels))
 	all = append(all, DeepSeekModels...)
 	all = append(all, GeminiModels...)
+	all = append(all, CodexModels...)
 	return map[string]any{"object": "list", "data": all}
 }
 
@@ -408,13 +460,21 @@ func OpenAIModelByID(store ModelAliasReader, id string) (ModelInfo, bool) {
 	if !ok {
 		return ModelInfo{}, false
 	}
-	if target.Provider == "gemini" {
+	switch target.Provider {
+	case "gemini":
 		for _, model := range GeminiModels {
 			if model.ID == target.Canonical {
 				return model, true
 			}
 		}
-	} else {
+	case "codex":
+		for _, model := range CodexModels {
+			if model.ID == target.Canonical {
+				return model, true
+			}
+		}
+		return ModelInfo{ID: target.Canonical, Object: "model", OwnedBy: "openai"}, true
+	default:
 		for _, model := range DeepSeekModels {
 			if model.ID == target.Canonical {
 				return model, true

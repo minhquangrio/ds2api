@@ -8,9 +8,13 @@ import (
 	"ds2api/internal/chathistory"
 	adminaccounts "ds2api/internal/httpapi/admin/accounts"
 	adminauth "ds2api/internal/httpapi/admin/auth"
+	admincodex "ds2api/internal/httpapi/admin/codex"
 	adminconfig "ds2api/internal/httpapi/admin/configmgmt"
 	admindevcapture "ds2api/internal/httpapi/admin/devcapture"
+	adminextprovider "ds2api/internal/httpapi/admin/extprovider"
 	adminhistory "ds2api/internal/httpapi/admin/history"
+	adminimagebed "ds2api/internal/httpapi/admin/imagebed"
+	adminnetdiag "ds2api/internal/httpapi/admin/netdiag"
 	adminproxies "ds2api/internal/httpapi/admin/proxies"
 	adminrawsamples "ds2api/internal/httpapi/admin/rawsamples"
 	adminsettings "ds2api/internal/httpapi/admin/settings"
@@ -48,6 +52,10 @@ func RegisterRoutes(r chi.Router, h *Handler) {
 	usageHandler := &adminusage.Handler{Store: deps.Store, Pool: deps.Pool, DS: deps.DS, OpenAI: deps.OpenAI, ChatHistory: deps.ChatHistory, UsageLedger: deps.UsageLedger}
 	devCaptureHandler := &admindevcapture.Handler{Store: deps.Store, Pool: deps.Pool, DS: deps.DS, OpenAI: deps.OpenAI, ChatHistory: deps.ChatHistory}
 	versionHandler := &adminversion.Handler{Store: deps.Store, Pool: deps.Pool, DS: deps.DS, OpenAI: deps.OpenAI, ChatHistory: deps.ChatHistory}
+	netdiagHandler := &adminnetdiag.Handler{Store: deps.Store}
+	imagebedHandler := &adminimagebed.Handler{Store: deps.Store}
+	extproviderHandler := &adminextprovider.Handler{Store: deps.Store}
+	codexHandler := &admincodex.Handler{Store: deps.Store, Pool: deps.Pool}
 
 	adminauth.RegisterPublicRoutes(r, authHandler)
 	r.Group(func(pr chi.Router) {
@@ -63,6 +71,10 @@ func RegisterRoutes(r chi.Router, h *Handler) {
 		adminhistory.RegisterRoutes(pr, historyHandler)
 		adminusage.RegisterRoutes(pr, usageHandler)
 		adminversion.RegisterRoutes(pr, versionHandler)
+		adminnetdiag.RegisterRoutes(pr, netdiagHandler)
+		adminimagebed.RegisterRoutes(pr, imagebedHandler)
+		adminextprovider.RegisterRoutes(pr, extproviderHandler)
+		admincodex.RegisterRoutes(pr, codexHandler)
 	})
 }
 

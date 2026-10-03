@@ -198,6 +198,10 @@ func (r *Resolver) acquireManagedRequestAuthByProvider(ctx context.Context, call
 		}
 	}
 
+	if effectiveProvider == "codex" && !r.Store.CodexEnabled() {
+		return nil, ErrNoProviderAccount
+	}
+
 	tried := map[string]bool{}
 	var lastEnsureErr error
 	filter := account.AccountFilter(func(acc config.Account) bool {
@@ -527,6 +531,9 @@ func (r *Resolver) ensureManagedToken(ctx context.Context, a *RequestAuth) error
 			return errors.New("gemini account missing cookies")
 		}
 		return nil
+	}
+	if a.Account.IsCodex() || a.Provider == "codex" {
+		return ensureCodexToken(ctx, a, r.Store)
 	}
 	if strings.TrimSpace(a.Account.Token) != "" {
 		cleaned := config.CleanWrappedToken(a.Account.Token)

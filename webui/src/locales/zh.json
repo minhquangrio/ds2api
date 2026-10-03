@@ -18,6 +18,7 @@
         "groups": {
             "gateway": "网关核心",
             "upstream": "上游资源",
+            "tools": "实用工具",
             "system": "系统设置"
         },
         "overview": {
@@ -30,11 +31,23 @@
         },
         "accounts": {
             "label": "上游账号",
-            "desc": "管理 DeepSeek 与 Gemini 账号池"
+            "desc": "管理 DeepSeek、Gemini 与 Codex 账号池"
+        },
+        "providers": {
+            "label": "第三方渠道",
+            "desc": "管理兼容 OpenAI 协议的第三方上游服务商"
         },
         "proxies": {
             "label": "代理 IP",
             "desc": "管理账号可用的代理出口"
+        },
+        "imageBed": {
+            "label": "GitHub 图床",
+            "desc": "基于 GitHub 仓库的轻量化图片托管与 CDN 分发"
+        },
+        "network": {
+            "label": "网络诊断",
+            "desc": "探测 IPv4/IPv6、DNS 及各大平台连通性"
         },
         "test": {
             "label": "API 测试",
@@ -771,5 +784,126 @@
         "confirmDelete": "确定要删除此 API 密钥吗？",
         "integrationGuideTitle": "API 密钥使用指南",
         "integrationGuideText": "在 Cursor、NextChat、Claude Code、Cline 或 OpenAI 官方 SDK 中，将此密钥填入 Authorization: Bearer <KEY> 请求头中即可直接调用。"
+    },
+    "netdiag": {
+        "title": "网络环境诊断",
+        "subtitle": "探测出口公共 IP、本地 DNS 解析服务器及至各大 AI 平台的连通性质量",
+        "lastCheck": "上次检测",
+        "refresh": "重新检测",
+        "probing": "检测中...",
+        "probingDetail": "正在探测出口 IP、DNS 解析及跨平台链路质量...",
+        "ipv4": "IPv4 地址",
+        "ipv6": "IPv6 地址",
+        "routing": "Cloudflare 路由节点",
+        "latency": "往返延迟",
+        "source": "数据来源",
+        "unreachable": "无法连接",
+        "country": "所在国家/地区",
+        "warp": "WARP 状态",
+        "proxyUsed": "是否使用代理",
+        "yes": "是",
+        "no": "否",
+        "gatewayOS": "网关主机系统",
+        "status": {
+            "online": "正常",
+            "degraded": "劣化",
+            "offline": "离线"
+        },
+        "platforms": {
+            "matrixTitle": "AI 上游连通性矩阵",
+            "matrixDesc": "直接从网关服务节点测试目标上游平台的响应状态码与往返延迟"
+        },
+        "dns": {
+            "title": "DNS 解析服务器",
+            "noServers": "未检测到本地 DNS 解析器"
+        },
+        "client": {
+            "title": "当前浏览器客户端环境",
+            "timezone": "客户端时区",
+            "screen": "屏幕分辨率",
+            "language": "界面语言",
+            "ua": "User-Agent 标识"
+        }
+    },
+    "imagebed": {
+        "title": "GitHub 图床托管",
+        "subtitle": "基于您的私有或公开 GitHub 仓库存储图片，并自动通过 jsDelivr CDN 全球加速分发",
+        "notConfigured": "尚未配置仓库",
+        "configureBtn": "配置图床仓库",
+        "validateRepo": "校验仓库权限",
+        "validating": "校验中...",
+        "uploadAreaTitle": "上传图片",
+        "dragOrClick": "将图片拖拽至此处，或点击浏览本地文件",
+        "pasteSupport": "支持直接从剪贴板粘贴 (Ctrl+V) 图片",
+        "customFileNamePlaceholder": "自定义文件名 (可选)",
+        "uploadBtn": "上传到 GitHub",
+        "uploading": "上传中...",
+        "historyTitle": "图片库与上传记录",
+        "historyDesc": "最多保留最近100张上传记录，支持一键复制 Markdown 或 CDN 链接。",
+        "clearAll": "清空历史",
+        "noHistory": "暂无已上传的图片记录。",
+        "delHistory": "仅删记录",
+        "delGitHub": "连同 GitHub 一并删除",
+        "modalTitle": "GitHub 仓库配置",
+        "tokenLabel": "GitHub 访问令牌 (PAT)",
+        "tokenHint": "需要勾选 'repo' 权限（经典版）或 'Contents: Read & Write'（细粒度）",
+        "ownerLabel": "仓库所有者 (Owner/Org)",
+        "repoLabel": "仓库名称 (Repository)",
+        "pathPrefixLabel": "存储路径前缀 (Path Prefix)",
+        "configSaved": "图床配置已成功保存",
+        "validateSuccess": "GitHub 仓库连接校验通过，准备就绪！",
+        "uploadSuccess": "图片已成功上传至 GitHub！",
+        "deletedSuccess": "删除成功",
+        "historyCleared": "图床历史记录已清空",
+        "confirmDeleteBoth": "确定要同时删除 GitHub 上的源文件及此条历史记录吗？",
+        "confirmDeleteRecord": "确定要从此记录列表中移除该条目吗？",
+        "confirmClearAll": "确定要清空全部上传历史记录吗？",
+        "invalidImage": "所选文件不是有效的图片格式"
+    },
+    "providers": {
+        "title": "第三方渠道服务商",
+        "subtitle": "接入兼容 OpenAI 协议的第三方 API 节点，自动拉取模型目录并实测工具/推理/视觉能力",
+        "addBtn": "添加服务商",
+        "empty": "尚未配置任何第三方上游服务商。",
+        "addFirst": "添加首个服务商",
+        "noToken": "未设置令牌",
+        "syncModels": "拉取模型",
+        "syncing": "拉取中...",
+        "inspect": "实测能力",
+        "inspecting": "测试中...",
+        "viewModels": "查看模型列表",
+        "noModelsSynced": "尚未从该服务商拉取到可用模型。",
+        "addTitle": "添加第三方服务商",
+        "editTitle": "编辑第三方服务商",
+        "nameLabel": "服务商名称",
+        "urlLabel": "Base URL",
+        "urlHint": "例如: https://api.openai.com/v1（网关将自动规范化路径）",
+        "tokenLabel": "API 密钥 (Token)",
+        "enabledLabel": "启用此服务商",
+        "capabilitiesSource": "能力来源",
+        "savedSuccess": "服务商配置已保存",
+        "deletedSuccess": "服务商已成功删除",
+        "confirmDelete": "确定要删除此服务商吗？",
+        "syncSuccess": "模型列表同步成功",
+        "inspectSuccess": "模型能力实测完成"
+    },
+    "codex": {
+        "loginModalTitle": "ChatGPT / Codex OAuth 登录",
+        "loginModalDesc": "通过 OpenAI 官方 OAuth PKCE 授权安全接入，无需繁琐提取 Cookie",
+        "loginInstructions": "网关将发起 OpenAI 官方授权流。授权完成后，Access Token 与 Refresh Token 将自动加密保存至网关配置中。",
+        "oauthFeatures": "Codex 接入特性：",
+        "feature1": "离线 Refresh Token 自动轮转续期机制",
+        "feature2": "全面支持 ChatGPT Plus、Pro 及 Team 账号类型",
+        "feature3": "支持通过网关4种协议直接访问 gpt-6-luna, gpt-6-sol, gpt-6-astra",
+        "startLoginBtn": "发起 OAuth 登录",
+        "waitingForAuth": "正在等待您在 OpenAI 页面完成授权...",
+        "openAuthTab": "打开 OpenAI 登录页面",
+        "manualFallbackLabel": "手动回贴回调链接 (无头环境 / 远程部署)：",
+        "manualFallbackHint": "若浏览器无法自动跳转至 localhost:1455，请将地址栏中完整的回调链接粘贴至此处。",
+        "submitCode": "提交完成",
+        "exchangingTokens": "正在用授权码换取安全令牌...",
+        "authSuccessTitle": "Codex 账号绑定成功！",
+        "authSuccessDesc": "该账号已成功加入上游调度池，并可开始接收推理请求。",
+        "authFailedTitle": "授权登录失败"
     }
 }

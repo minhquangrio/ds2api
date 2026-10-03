@@ -63,6 +63,10 @@ func (c Config) MarshalJSON() ([]byte, error) {
 	if c.ElasticPool.Enabled || c.ElasticPool.PerPool || c.ElasticPool.GlobalCount != 0 || c.ElasticPool.DefaultCount != 0 || c.ElasticPool.NoToolsCount != 0 || c.ElasticPool.ToolsOnlyCount != 0 {
 		m["elastic_pool"] = c.ElasticPool
 	}
+	// Written back only when set, so an untouched config keeps omitting the block.
+	if c.Codex.Enabled != nil || strings.TrimSpace(c.Codex.DefaultModel) != "" || c.Codex.RefreshSkewSeconds != 0 {
+		m["codex"] = c.Codex
+	}
 	if strings.TrimSpace(c.Vercel.Token) != "" || strings.TrimSpace(c.Vercel.ProjectID) != "" || strings.TrimSpace(c.Vercel.TeamID) != "" {
 		m["vercel"] = NormalizeVercelConfig(c.Vercel)
 	}
@@ -163,6 +167,13 @@ func (c *Config) UnmarshalJSON(b []byte) error {
 			if err := json.Unmarshal(v, &c.ElasticPool); err != nil {
 				return fmt.Errorf("invalid field %q: %w", k, err)
 			}
+		case "codex":
+			// Without this case the whole block falls into AdditionalFields and
+			// is silently dropped, leaving codex.enabled/default_model/
+			// refresh_skew_seconds with no effect.
+			if err := json.Unmarshal(v, &c.Codex); err != nil {
+				return fmt.Errorf("invalid field %q: %w", k, err)
+			}
 		case "vercel":
 			if err := json.Unmarshal(v, &c.Vercel); err != nil {
 				return fmt.Errorf("invalid field %q: %w", k, err)
@@ -219,7 +230,12 @@ func (c Config) Clone() Config {
 		AutoRouteVision: AutoRouteVisionConfig{
 			Enabled: cloneBoolPtr(c.AutoRouteVision.Enabled),
 		},
-		ElasticPool:      c.ElasticPool,
+		ElasticPool: c.ElasticPool,
+		Codex: CodexConfig{
+			Enabled:            cloneBoolPtr(c.Codex.Enabled),
+			DefaultModel:       c.Codex.DefaultModel,
+			RefreshSkewSeconds: c.Codex.RefreshSkewSeconds,
+		},
 		Vercel:           c.Vercel,
 		VercelSyncHash:   c.VercelSyncHash,
 		VercelSyncTime:   c.VercelSyncTime,
