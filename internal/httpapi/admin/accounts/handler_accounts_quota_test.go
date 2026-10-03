@@ -43,3 +43,23 @@ func TestGetAccountQuota_MissingCookies(t *testing.T) {
 		t.Fatalf("expected 400 for Gemini account with empty cookies, got %d body=%s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestGetAllGeminiQuotas_NoGeminiAccounts(t *testing.T) {
+	router := newHTTPAdminHarness(t, `{"accounts":[{"email":"u@example.com","password":"pwd"}]}`, &testingDSMock{})
+
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, adminReq(http.MethodGet, "/accounts/gemini/quotas", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for 0 Gemini accounts, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	var res struct {
+		Total    int   `json:"total"`
+		Accounts []any `json:"accounts"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+	if res.Total != 0 || len(res.Accounts) != 0 {
+		t.Fatalf("expected total 0 and empty accounts, got total=%d accounts=%v", res.Total, res.Accounts)
+	}
+}

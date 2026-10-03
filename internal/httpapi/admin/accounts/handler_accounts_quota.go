@@ -15,6 +15,11 @@ import (
 	"ds2api/internal/geminiweb"
 )
 
+const (
+	allQuotasTimeout = 30 * time.Second
+	allQuotasWorkers = 8
+)
+
 func (h *Handler) getAccountQuota(w http.ResponseWriter, r *http.Request) {
 	identifier := chi.URLParam(r, "identifier")
 	if decoded, err := url.PathUnescape(identifier); err == nil {
@@ -84,9 +89,11 @@ func (h *Handler) getAllGeminiQuotas(w http.ResponseWriter, r *http.Request) {
 
 	results := make([]itemResult, len(geminiAccounts))
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, 5)
+	// Note: Each account performs 3 sequential RPCs, so concurrency and timeout
+	// depend on the total number of Gemini accounts.
+	sem := make(chan struct{}, allQuotasWorkers)
 
-	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), allQuotasTimeout)
 	defer cancel()
 
 	for i, acc := range geminiAccounts {

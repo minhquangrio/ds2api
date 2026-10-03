@@ -44,14 +44,14 @@ type ExtraQuotaInfo struct {
 }
 
 type GeminiAccountQuotaSummary struct {
-	Identifier    string            `json:"identifier"`
-	Provider      string            `json:"provider"`
-	Tier          TierInfo          `json:"tier"`
-	Usage         UsageInfo         `json:"usage"`
-	Quotas        map[int]QuotaInfo `json:"quotas"`
-	ExtraFeatures ExtraQuotaInfo    `json:"extra_features"`
-	PartialErrors []string          `json:"partial_errors,omitempty"`
-	FetchedAt     string            `json:"fetched_at"`
+	Identifier    string               `json:"identifier"`
+	Provider      string               `json:"provider"`
+	Tier          TierInfo             `json:"tier"`
+	Usage         UsageInfo            `json:"usage"`
+	Quotas        map[string]QuotaInfo `json:"quotas"`
+	ExtraFeatures ExtraQuotaInfo       `json:"extra_features"`
+	PartialErrors []string             `json:"partial_errors,omitempty"`
+	FetchedAt     string               `json:"fetched_at"`
 }
 
 func parseRPCBody(raw, targetRPC string) ([]any, bool) {
@@ -235,20 +235,22 @@ func (c *Client) FetchExtraQuota(ctx context.Context) (*ExtraQuotaInfo, error) {
 	return info, nil
 }
 
+const quotaCacheTTL = 45 * time.Second
+
 func (c *Client) GetFullQuota(ctx context.Context, forceRefresh bool) (*GeminiAccountQuotaSummary, error) {
 	if !forceRefresh {
 		c.mu.RLock()
 		cached := c.quotaCache
 		cachedTime := c.quotaCached
 		c.mu.RUnlock()
-		if cached != nil && time.Since(cachedTime) < 45*time.Second {
-			return cached, nil
+		if cached != nil && time.Since(cachedTime) < quotaCacheTTL {
+			return cloneQuotaSummary(cached), nil
 		}
 	}
 
 	var (
 		usage      *UsageInfo
-		quotas     map[int]QuotaInfo
+		quotas     map[string]QuotaInfo
 		extra      *ExtraQuotaInfo
 		partErrors []string
 	)
@@ -273,7 +275,7 @@ func (c *Client) GetFullQuota(ctx context.Context, forceRefresh bool) (*GeminiAc
 		Quotas:        quotas,
 	}
 	if summary.Quotas == nil {
-		summary.Quotas = make(map[int]QuotaInfo)
+		summary.Quotas = make(map[string]QuotaInfo)
 	}
 	if usage != nil {
 		summary.Tier = usage.Tier
@@ -283,10 +285,12 @@ func (c *Client) GetFullQuota(ctx context.Context, forceRefresh bool) (*GeminiAc
 		summary.ExtraFeatures = *extra
 	}
 
-	c.mu.Lock()
-	c.quotaCache = summary
-	c.quotaCached = time.Now()
-	c.mu.Unlock()
+	if len(partErrors) == 0 {
+		c.mu.Lock()
+		c.quotaCache = summary
+		c.quotaCached = time.Now()
+		c.mu.Unlock()
+	}
 
-	return summary, nil
+	return cloneQuotaSummary(summary), nil
 }

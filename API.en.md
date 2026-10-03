@@ -967,22 +967,70 @@ Queries compute usage (5-hour and weekly windows) and per-model quotas for a Gem
     "ai_credits_remaining": 15
   },
   "quotas": {
-    "4": {
+    "1-4": {
       "action_id": 4,
-      "label": "Gemini Pro",
+      "quota_id": "1-4",
+      "label": "Gemini Pro [1-4]",
       "remaining": 45,
       "total": 50,
       "reset_time": 1741234567,
       "usage_percentage": 10.0,
+      "usage_level": 0.1,
       "is_unlimited": false
     },
-    "11": {
+    "1-11": {
       "action_id": 11,
-      "label": "Gemini Flash",
+      "quota_id": "1-11",
+      "label": "Gemini Flash [1-11]",
       "remaining": 100,
       "total": 100,
       "reset_time": 1741234567,
       "usage_percentage": 0.0,
+      "usage_level": 0.0,
+      "is_unlimited": false
+    },
+    "2-11": {
+      "action_id": 11,
+      "quota_id": "2-11",
+      "label": "Gemini Flash [2-11]",
+      "remaining": 100,
+      "total": 100,
+      "reset_time": 1741234567,
+      "usage_percentage": 0.0,
+      "usage_level": 0.0,
+      "is_unlimited": false
+    },
+    "6-11": {
+      "action_id": 11,
+      "quota_id": "6-11",
+      "label": "Gemini Flash [6-11]",
+      "remaining": 100,
+      "total": 100,
+      "reset_time": 1741234567,
+      "usage_percentage": 0.0,
+      "usage_level": 0.0,
+      "is_unlimited": false
+    },
+    "6-6": {
+      "action_id": 6,
+      "quota_id": "6-6",
+      "label": "Gemini Pro [6-6]",
+      "remaining": 50,
+      "total": 50,
+      "reset_time": 1741234567,
+      "usage_percentage": 0.0,
+      "usage_level": 0.0,
+      "is_unlimited": false
+    },
+    "1-15": {
+      "action_id": 15,
+      "quota_id": "1-15",
+      "label": "Gemini Flash Thinking [1-15]",
+      "remaining": 50,
+      "total": 50,
+      "reset_time": 1741234567,
+      "usage_percentage": 0.0,
+      "usage_level": 0.0,
       "is_unlimited": false
     }
   },
@@ -993,6 +1041,92 @@ Queries compute usage (5-hour and weekly windows) and per-model quotas for a Gem
     "reset_at": ""
   },
   "fetched_at": "2026-09-21T20:30:00Z"
+}
+```
+
+### `GET /admin/accounts/gemini/quotas`
+
+Query quota and usage summaries for all Gemini accounts in batch.
+
+**Permission**: Admin
+
+**Query Parameters**:
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `refresh` | boolean | Whether to force refresh (bypassing server-side cache). Pass `true` to immediately query upstream. |
+
+**Response Example**:
+
+```json
+{
+  "total": 2,
+  "accounts": [
+    {
+      "identifier": "gemini-account-1",
+      "name": "Gemini 1",
+      "email": "user1@gmail.com",
+      "enabled": true,
+      "muted": false,
+      "quota": {
+        "identifier": "gemini-account-1",
+        "provider": "gemini",
+        "tier": {
+          "id": 2,
+          "label": "PRO"
+        },
+        "usage": {
+          "tier": { "id": 2, "label": "PRO" },
+          "use_overage_ai_credits": false,
+          "current_5h": {
+            "type": 1,
+            "window": "5h",
+            "remaining_credits": 45,
+            "usage_percentage": 10,
+            "reset_at": "2026-09-21T18:00:00Z",
+            "reset_timestamp": 1741234567
+          },
+          "weekly": {
+            "type": 2,
+            "window": "weekly",
+            "remaining_credits": 200,
+            "usage_percentage": 25,
+            "reset_at": "2026-09-28T00:00:00Z",
+            "reset_timestamp": 1741839000
+          },
+          "ai_credits_remaining": 15
+        },
+        "quotas": {
+          "1-4": {
+            "action_id": 4,
+            "quota_id": "1-4",
+            "label": "Gemini Pro [1-4]",
+            "remaining": 45,
+            "total": 50,
+            "reset_time": 1741234567,
+            "usage_percentage": 10.0,
+            "usage_level": 0.1,
+            "is_unlimited": false
+          }
+        },
+        "extra_features": {
+          "is_blocked": false,
+          "usage_percentage": 0.0,
+          "reset_time": 0,
+          "reset_at": ""
+        },
+        "fetched_at": "2026-09-21T20:30:00Z"
+      }
+    },
+    {
+      "identifier": "gemini-account-2",
+      "name": "Gemini 2",
+      "email": "user2@gmail.com",
+      "enabled": true,
+      "muted": false,
+      "error": "cookies not configured"
+    }
+  ]
 }
 ```
 

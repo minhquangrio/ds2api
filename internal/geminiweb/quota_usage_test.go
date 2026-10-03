@@ -119,15 +119,21 @@ func TestParseQuotaUnlimited(t *testing.T) {
 120
 [["wrb.fr","qpEbW","[[[[\"1\",11],1,0.0,[1741234567],0,0]]]",null,null,null,"generic"]]
 `
-	quotas := ParseQuotaResponse(sample)
+	quotas := ParseQuotaResponse(sample, "Flash")
 	if len(quotas) != 1 {
 		t.Fatalf("expected 1 quota, got %d", len(quotas))
 	}
-	q := quotas[QuotaActionFlash]
+	q, ok := quotas["1-11"]
+	if !ok {
+		t.Fatalf("expected quota for 1-11")
+	}
 	if !q.IsUnlimited {
 		t.Errorf("expected IsUnlimited to be true for 0/0 quota")
 	}
 	if q.Remaining != 0 || q.Total != 0 {
 		t.Errorf("expected 0/0 remaining/total, got %d/%d", q.Remaining, q.Total)
+	}
+	if q.UsagePercentage != 0 {
+		t.Errorf("expected 0 usage percentage, got %f", q.UsagePercentage)
 	}
 }
