@@ -326,3 +326,17 @@ func isChatHistoryMissingError(err error) bool {
 	}
 	return strings.Contains(strings.ToLower(err.Error()), "not found")
 }
+
+func (s *chatHistorySession) updateAccountID(accountID string) {
+	if s == nil {
+		return
+	}
+	accountID = strings.TrimSpace(accountID)
+	s.startParams.AccountID = accountID
+	if s.store != nil && s.entryID != "" {
+		s.persistUpdate(chathistory.UpdateParams{AccountID: accountID})
+	}
+	if s.ledger != nil {
+		s.ledger.SetAccountID(accountID)
+	}
+}

@@ -665,3 +665,14 @@ go run ./cmd/ds2api-tests \
 - ✅ 全量请求与响应日志落盘（用于故障复盘）
 
 详细测试集说明参阅 [TESTING.md](TESTING.md)。PR 前的固定本地门禁以 [TESTING.md](TESTING.md#pr-门禁--pr-gates) 为准。
+
+---
+
+## 九、Gemini Web 代理分流配置建议
+
+若在系统中配置了多个 Google Gemini Web 账号（`provider: "gemini"`）：
+
+- Google 对网页端流量的防刷限流（`BardErrorInfo [1095]`）不仅针对单个账号，也可能基于**出口代理 IP** 进行频次控制。
+- 若所有 Gemini 账号共用相同的出口代理 IP，高频并发下可能导致同一 IP 下的多个账号连带触发 1095 流控。
+- **最佳实践**：在 `config.json` 中配置多个独立节点（在 `proxies` 数组中定义），并通过 `proxy_id` 为各个 Gemini 账号分配合适的独立代理，实现出口 IP 隔离，确保触发 1095 时自动切号能够切换到不同出口 IP 上的健康账号。
+

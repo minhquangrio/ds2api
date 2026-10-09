@@ -21,14 +21,19 @@ type ParsedChunk struct {
 }
 
 type StreamParser struct {
-	buffer      string
-	prefixDone  bool
-	lastText    string
-	lastThought string
-	CID         string
-	RID         string
-	RCID        string
+	buffer        string
+	prefixDone    bool
+	lastText      string
+	lastThought   string
+	CID           string
+	RID           string
+	RCID          string
+	lastErrorCode int
+	hasErrorInfo  bool
 }
+
+func (p *StreamParser) LastErrorCode() int { return p.lastErrorCode }
+func (p *StreamParser) HasErrorInfo() bool { return p.hasErrorInfo }
 
 func NewStreamParser() *StreamParser {
 	return &StreamParser{}
@@ -93,6 +98,25 @@ func (p *StreamParser) Feed(data []byte) ([]ParsedChunk, error) {
 	return results, nil
 }
 
+const bardErrorInfoType = "type.googleapis.com/assistant.boq.bard.application.BardErrorInfo"
+
+func (p *StreamParser) detectBardError(env []any) {
+	if len(env) < 6 {
+		return
+	}
+	info, ok := nestedValue(env, 5, 2, 0).([]any)
+	if !ok {
+		return
+	}
+	if typ, _ := nestedValue(info, 0).(string); typ != bardErrorInfoType {
+		return
+	}
+	if code, ok := toInt(nestedValue(info, 1, 0)); ok {
+		p.lastErrorCode = code
+		p.hasErrorInfo = true
+	}
+}
+
 func (p *StreamParser) parseFrame(payload string) (*ParsedChunk, error) {
 	var envelopes [][]any
 	if err := json.Unmarshal([]byte(payload), &envelopes); err != nil || len(envelopes) == 0 {
@@ -103,6 +127,8 @@ func (p *StreamParser) parseFrame(payload string) (*ParsedChunk, error) {
 		if len(env) < 3 {
 			continue
 		}
+		p.detectBardError(env)
+
 		innerStr, ok := env[2].(string)
 		if !ok || innerStr == "" {
 			continue

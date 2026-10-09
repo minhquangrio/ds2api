@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -107,21 +108,24 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 	historySession := startChatHistory(h.ChatHistory, h.UsageLedger, r, a, stdReq)
 
 	if a.Provider == "gemini" {
-		client, err := geminiweb.DefaultRuntime().GetClient(r.Context(), a.Account, h.Store)
-		if err != nil {
+		onSwitched := func(newAccountID string) {
 			if historySession != nil {
-				historySession.error(http.StatusBadGateway, err.Error(), "upstream_error", "", "")
+				historySession.updateAccountID(newAccountID)
 			}
-			writeOpenAIError(w, http.StatusBadGateway, err.Error())
-			return
 		}
 		if !stdReq.Stream {
-			turn, err := geminiweb.ExecuteTurn(r.Context(), client, stdReq)
+			turn, err := geminiweb.ExecuteTurnWithRetry(r.Context(), a, h.Store, stdReq, onSwitched)
 			if err != nil {
-				if historySession != nil {
-					historySession.error(http.StatusBadGateway, err.Error(), "upstream_error", "", "")
+				statusCode := http.StatusBadGateway
+				errCode := "upstream_error"
+				if errors.Is(err, geminiweb.ErrAllGeminiAccountsCoolingDown) {
+					statusCode = http.StatusTooManyRequests
+					errCode = "all_gemini_accounts_cooling_down"
 				}
-				writeOpenAIError(w, http.StatusBadGateway, err.Error())
+				if historySession != nil {
+					historySession.error(statusCode, err.Error(), errCode, "", "")
+				}
+				writeOpenAIErrorWithCode(w, statusCode, err.Error(), errCode)
 				return
 			}
 			respBody := openaifmt.BuildChatCompletionWithToolCalls("gemini-"+time.Now().Format("20060102150405"), stdReq.ResponseModel, turn.Prompt, turn.Thinking, turn.Text, turn.ToolCalls, stdReq.ToolsRaw)
@@ -136,11 +140,22 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 		// History is recorded only after the stream finishes, so a failed or
 		// truncated stream is not logged as a successful reply. SSE bytes are
 		// already on the wire by then, so the error is recorded, not written.
-		thinking, text, streamErr := geminiweb.StreamOpenAIChat(r.Context(), client, stdReq, w)
+		thinking, text, streamErr := geminiweb.ExecuteStreamWithRetry(
+			r.Context(), a, h.Store, stdReq, w, geminiweb.StreamOpenAIChatBuffered, onSwitched,
+		)
 		if streamErr != nil {
 			config.Logger.Warn("[gemini] stream error", "error", streamErr)
+			statusCode := http.StatusBadGateway
+			errCode := "upstream_error"
+			if errors.Is(streamErr, geminiweb.ErrAllGeminiAccountsCoolingDown) {
+				statusCode = http.StatusTooManyRequests
+				errCode = "all_gemini_accounts_cooling_down"
+			}
 			if historySession != nil {
-				historySession.error(http.StatusBadGateway, streamErr.Error(), "upstream_error", thinking, text)
+				historySession.error(statusCode, streamErr.Error(), errCode, thinking, text)
+			}
+			if thinking == "" && text == "" {
+				writeOpenAIErrorWithCode(w, statusCode, streamErr.Error(), errCode)
 			}
 			return
 		}

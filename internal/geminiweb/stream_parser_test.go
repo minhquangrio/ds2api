@@ -141,3 +141,34 @@ func TestCleanGeminiText(t *testing.T) {
 		t.Errorf("plain text must survive cleaning")
 	}
 }
+
+func TestStreamParserBardErrorInfo1095(t *testing.T) {
+	parser := NewStreamParser()
+
+	// Real Google error frame when throttled:
+	errorPayload := `[["wrb.fr",null,null,null,null,[8,null,[["type.googleapis.com/assistant.boq.bard.application.BardErrorInfo",[1095]]]]]]`
+	chunks, err := parser.Feed([]byte(buildFrame(errorPayload, true)))
+	if err != nil {
+		t.Fatalf("Feed error frame should not return Go error, got: %v", err)
+	}
+	if len(chunks) != 0 {
+		t.Errorf("error frame should not produce content chunks, got %d", len(chunks))
+	}
+	if !parser.HasErrorInfo() {
+		t.Errorf("expected HasErrorInfo == true")
+	}
+	if parser.LastErrorCode() != 1095 {
+		t.Errorf("expected LastErrorCode == 1095, got %d", parser.LastErrorCode())
+	}
+
+	// Negative case: regular frame does not set error info
+	regularParser := NewStreamParser()
+	regPayload := `[["wrb.fr",null,"[null,[\"cid\",\"rid\"],null,null,[[\"rcid\",[\"Hi\"]]]]"]]`
+	_, _ = regularParser.Feed([]byte(buildFrame(regPayload, true)))
+	if regularParser.HasErrorInfo() {
+		t.Errorf("regular frame should not have HasErrorInfo")
+	}
+	if regularParser.LastErrorCode() != 0 {
+		t.Errorf("regular frame should have LastErrorCode 0, got %d", regularParser.LastErrorCode())
+	}
+}

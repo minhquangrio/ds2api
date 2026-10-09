@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	"ds2api/internal/assistantturn"
 	"ds2api/internal/config"
@@ -47,6 +48,30 @@ func (r *Runtime) InvalidateClient(id string) {
 			config.Logger.Warn("[geminiweb] failed to close invalidated client", "id", id, "error", err)
 		}
 		delete(r.clients, id)
+	}
+}
+
+// EvictClient xoá client khỏi cache và đóng TRỄ sau 30s, để các request đồng thời
+// khác đang giữ con trỏ client đọc hết body an toàn mà không rò rỉ connection pool.
+// Khác InvalidateClient: InvalidateClient gọi Close() ngay → cắt ngang stream đang chạy.
+func (r *Runtime) EvictClient(id string) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		id = "default"
+	}
+	r.mu.Lock()
+	existing, found := r.clients[id]
+	if found {
+		delete(r.clients, id)
+	}
+	r.mu.Unlock()
+
+	if found && existing != nil {
+		time.AfterFunc(30*time.Second, func() {
+			if err := existing.Close(); err != nil {
+				config.Logger.Warn("[geminiweb] deferred client close failed", "id", id, "error", err)
+			}
+		})
 	}
 }
 

@@ -634,6 +634,18 @@ Returns SSE (`text/event-stream`), each chunk as `data: <json>`:
 - final chunk: includes `finishReason: "STOP"` and `usageMetadata`
 - Token counting is calculated via normalized local estimation (estimating prompt, completion, and reasoning tokens based on character/word counts)
 
+### Gemini Web Upstream Throttling Protection and Auto-Retry Mechanism
+
+When using Google Gemini Web upstream (`gemini` provider), rapid concurrent requests may trigger temporary anti-spam/rate-limiting:
+
+- **Error Detection**: The parser automatically identifies upstream `BardErrorInfo: [1095]` envelopes.
+- **Auto Cooldown**: The affected account is temporarily placed into cooldown. The duration is configured via `DS2API_GEMINI_COOLDOWN_SECONDS` (default `60` seconds). Cooled-down accounts are temporarily skipped from scheduling.
+- **Auto-Switch Retry**:
+  - Non-streaming requests: Automatically switches to the next available Gemini account in the pool, retrying up to `min(available_accounts, 5)` times.
+  - Streaming requests: Uses buffer-until-first-chunk protection. If error 1095 occurs before the first chunk is sent to the client, it safely switches accounts and retries.
+  - **Mid-stream Truncation Behavior**: If 1095 occurs after SSE bytes have already started streaming, the stream terminates with an explicit truncation error (`gemini upstream throttled mid-stream (BardErrorInfo 1095); output truncated`) rather than finishing cleanly with `finishReason: "STOP"`, preventing clients from treating truncated text as complete.
+- **Exhaustion Mapping**: If all Gemini accounts in the pool are currently cooling down, the endpoint responds with HTTP `429 Too Many Requests` and error code `all_gemini_accounts_cooling_down`.
+
 ---
 
 ## Ollama API

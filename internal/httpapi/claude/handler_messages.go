@@ -118,19 +118,28 @@ func (h *Handler) handleClaudeDirect(w http.ResponseWriter, r *http.Request) boo
 		Standard: stdReq,
 	})
 	if a.Provider == "gemini" {
-		client, err := geminiweb.DefaultRuntime().GetClient(r.Context(), a.Account, h.Store)
-		if err != nil {
-			writeClaudeError(w, http.StatusBadGateway, err.Error())
-			return true
+		onSwitched := func(newAccountID string) {
+			if historySession != nil {
+				historySession.SetAccountID(newAccountID)
+			}
 		}
 		if stdReq.Stream {
-			// Recorded after the stream finishes: SSE bytes are already sent, so a
-			// mid-stream failure is logged to history rather than written to the body.
-			thinking, text, streamErr := geminiweb.StreamClaudeMessages(r.Context(), client, stdReq, w)
+			thinking, text, streamErr := geminiweb.ExecuteStreamWithRetry(
+				r.Context(), a, h.Store, stdReq, w, geminiweb.StreamClaudeMessagesBuffered, onSwitched,
+			)
 			if streamErr != nil {
 				config.Logger.Warn("[gemini] stream error", "error", streamErr)
+				statusCode := http.StatusBadGateway
+				errCode := "upstream_error"
+				if errors.Is(streamErr, geminiweb.ErrAllGeminiAccountsCoolingDown) {
+					statusCode = http.StatusTooManyRequests
+					errCode = "all_gemini_accounts_cooling_down"
+				}
 				if historySession != nil {
-					historySession.Error(http.StatusBadGateway, streamErr.Error(), "upstream_error", thinking, text)
+					historySession.Error(statusCode, streamErr.Error(), errCode, thinking, text)
+				}
+				if thinking == "" && text == "" {
+					writeClaudeError(w, statusCode, streamErr.Error())
 				}
 				return true
 			}
@@ -139,12 +148,18 @@ func (h *Handler) handleClaudeDirect(w http.ResponseWriter, r *http.Request) boo
 			}
 			return true
 		}
-		turn, err := geminiweb.ExecuteTurn(r.Context(), client, stdReq)
+		turn, err := geminiweb.ExecuteTurnWithRetry(r.Context(), a, h.Store, stdReq, onSwitched)
 		if err != nil {
-			if historySession != nil {
-				historySession.Error(http.StatusBadGateway, err.Error(), "upstream_error", "", "")
+			statusCode := http.StatusBadGateway
+			errCode := "upstream_error"
+			if errors.Is(err, geminiweb.ErrAllGeminiAccountsCoolingDown) {
+				statusCode = http.StatusTooManyRequests
+				errCode = "all_gemini_accounts_cooling_down"
 			}
-			writeClaudeError(w, http.StatusBadGateway, err.Error())
+			if historySession != nil {
+				historySession.Error(statusCode, err.Error(), errCode, "", "")
+			}
+			writeClaudeError(w, statusCode, err.Error())
 			return true
 		}
 		if historySession != nil {

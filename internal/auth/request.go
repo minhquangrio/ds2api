@@ -399,6 +399,42 @@ func (r *Resolver) SetAccountMutedUntil(a *RequestAuth, muteUntil float64) {
 	config.Logger.Info("[muted_account] account muted until", "account", identifier, "mute_until", muteUntil)
 }
 
+// SetAccountCooldownUntil ghi cooldown_until vào config store. Mirror đúng
+// persistCooldownUntil của deepseek/client/client_auth.go.
+func (r *Resolver) SetAccountCooldownUntil(a *RequestAuth, d time.Duration) {
+	if r == nil || a == nil || !a.UseConfigToken || a.AccountID == "" || d <= 0 {
+		return
+	}
+	until := float64(time.Now().Add(d).Unix())
+	identifier := a.AccountID
+
+	if err := r.Store.Update(func(c *config.Config) error {
+		for i := range c.Accounts {
+			if c.Accounts[i].Identifier() == identifier {
+				c.Accounts[i].CooldownUntil = until
+				break
+			}
+		}
+		if c.ElasticPool.Enabled {
+			account.ReconcileElasticPool(c)
+		}
+		return nil
+	}); err != nil {
+		config.Logger.Error("[gemini_cooldown] failed to persist cooldown_until",
+			"account", identifier, "error", err)
+		return
+	}
+
+	a.Account.CooldownUntil = until
+
+	// KHÔNG gọi r.Pool.Reset() ở đây.
+	// Pool.Reset() xoá p.inUse (phá vỡ đếm lease đang in-flight) và
+	// drainWaitersLocked() (thundering herd). Không cần thiết: Pool.tryAcquire()
+	// đọc store.FindAccount() tươi ở mỗi lần acquire rồi tự kiểm tra IsSchedulable().
+	config.Logger.Warn("[gemini_cooldown] account cooling down after upstream throttle",
+		"account", identifier, "duration", d.String(), "until", until)
+}
+
 // SetAccountBanned 将账号标记为被上游停用（USER_IS_BANNED）。
 // 手动启用或启用全部账号不会解除该状态；只有成功刷新 token 后才会在 Login 中清除。
 func (r *Resolver) SetAccountBanned(a *RequestAuth, reason string) {
@@ -480,6 +516,16 @@ func (a *RequestAuth) SwitchAccount(ctx context.Context) bool {
 		return false
 	}
 	return a.resolver.SwitchAccount(ctx, a)
+}
+
+// CoolDown đặt cooldown cho account hiện tại. Đối xứng với SwitchAccount,
+// để package geminiweb không cần chạm vào resolver (trường unexported).
+func (a *RequestAuth) CoolDown(d time.Duration) bool {
+	if a == nil || a.resolver == nil || !a.UseConfigToken || a.AccountID == "" || d <= 0 {
+		return false
+	}
+	a.resolver.SetAccountCooldownUntil(a, d)
+	return true
 }
 
 func (r *Resolver) Release(a *RequestAuth) {

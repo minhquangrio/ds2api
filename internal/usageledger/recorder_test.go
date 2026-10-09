@@ -86,3 +86,32 @@ func TestRecorderErrorStatusWithEmptyText(t *testing.T) {
 		t.Fatalf("expected 0 tokens for empty error, got %d", store.totals.TotalTokens)
 	}
 }
+
+func TestRecorderSetAccountID(t *testing.T) {
+	dir := t.TempDir()
+	storePath := filepath.Join(dir, "usage_ledger.json")
+	store := New(storePath)
+	defer func() {
+		_ = store.Close()
+	}()
+
+	rec := Begin(store, Meta{
+		Model:     "gemini-2.5-flash",
+		AccountID: "old@example.com",
+	})
+	rec.SetAccountID("switched@example.com")
+	rec.Record(Outcome{
+		Status:     "success",
+		StatusCode: 200,
+		Content:    "hello",
+	})
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if len(store.recent) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(store.recent))
+	}
+	if store.recent[0].AccountID != "switched@example.com" {
+		t.Errorf("expected entry AccountID 'switched@example.com', got %q", store.recent[0].AccountID)
+	}
+}

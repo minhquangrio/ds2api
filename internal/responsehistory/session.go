@@ -347,3 +347,17 @@ func asString(v any) string {
 		return strings.TrimSpace(prompt.NormalizeContent(x))
 	}
 }
+
+func (s *Session) SetAccountID(accountID string) {
+	if s == nil {
+		return
+	}
+	accountID = strings.TrimSpace(accountID)
+	s.startParams.AccountID = accountID
+	if s.store != nil && s.entryID != "" {
+		s.persistUpdate(chathistory.UpdateParams{AccountID: accountID})
+	}
+	if s.ledger != nil {
+		s.ledger.SetAccountID(accountID)
+	}
+}

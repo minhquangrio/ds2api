@@ -684,3 +684,39 @@ func TestExtractTokenCountsAndSummaryTokens(t *testing.T) {
 		t.Fatalf("unexpected token metrics in summary entry: %#v", item)
 	}
 }
+
+func TestStoreUpdateAccountID(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "chat_history.json")
+	store := New(path)
+
+	started, err := store.Start(StartParams{
+		CallerID:  "caller:test",
+		AccountID: "initial@example.com",
+		Model:     "gemini-2.5-flash",
+		UserInput: "Hello",
+	})
+	if err != nil {
+		t.Fatalf("start entry failed: %v", err)
+	}
+
+	updated, err := store.Update(started.ID, UpdateParams{
+		AccountID: "switched@example.com",
+		Status:    "success",
+		Content:   "World",
+	})
+	if err != nil {
+		t.Fatalf("update entry failed: %v", err)
+	}
+
+	if updated.AccountID != "switched@example.com" {
+		t.Errorf("expected updated AccountID 'switched@example.com', got %q", updated.AccountID)
+	}
+
+	snap, err := store.Snapshot()
+	if err != nil {
+		t.Fatalf("snapshot failed: %v", err)
+	}
+	if len(snap.Items) != 1 || snap.Items[0].AccountID != "switched@example.com" {
+		t.Errorf("expected snapshot item AccountID 'switched@example.com', got %q", snap.Items[0].AccountID)
+	}
+}

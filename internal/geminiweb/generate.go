@@ -230,6 +230,9 @@ func (c *Client) Generate(ctx context.Context, prompt string, opts GenerateOptio
 		}
 	}
 
+	if reader.parser.LastErrorCode() == 1095 && (lastChunk == nil || !lastChunk.IsFinished) {
+		return nil, ErrGeminiThrottled
+	}
 	if lastChunk == nil {
 		return nil, errors.New("empty response from gemini generate")
 	}

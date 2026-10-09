@@ -638,6 +638,18 @@ data: {"type":"message_stop"}
 - 结束 chunk：包含 `finishReason: "STOP"` 与 `usageMetadata`
 - token 计数基于本地标准化估算（通过字符/词长估算 prompt/completion/reasoning token 数）
 
+### Gemini Web 上游流控保护与自动切号重试机制
+
+当使用 Google Gemini Web 上游（`gemini` 提供商）时，若高频并发请求触发 Google 临时流控：
+
+- **错误识别**：解析器会自动识别上游返回的 `BardErrorInfo: [1095]` 状态码。
+- **自动冷却 (Cooldown)**：触发流控的账号将自动进入冷却状态，时长由环境变量 `DS2API_GEMINI_COOLDOWN_SECONDS` 控制（默认 `60` 秒）。冷却期间该账号暂停调度。
+- **自动切号重试 (Auto-switch Retry)**：
+  - 非流式请求：自动切换至账号池中的下一个可用 Gemini 账号重试，上限为 `min(可用账号数, 5)` 次。
+  - 流式请求：采用首块缓冲机制（Buffer-until-first-chunk），在向下游客户端发送首个 SSE 数据块前发生 1095 错误时，安全切换账号重试。
+  - **流式中途截断处理**：若 1095 错误发生在数据已开始向客户端传输的中途，连接会中止并返回截断错误 `gemini upstream throttled mid-stream (BardErrorInfo 1095); output truncated`，避免客户端误将残缺内容当作完整回复。
+- **全冷却错误映射**：若账号池中所有 Gemini 账号均在冷却中，接口返回 HTTP `429 Too Many Requests`，OpenAI 兼容错误码为 `all_gemini_accounts_cooling_down`。
+
 ---
 
 ## Ollama 兼容接口

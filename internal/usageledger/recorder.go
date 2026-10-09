@@ -33,9 +33,19 @@ type Outcome struct {
 
 type Recorder struct {
 	store     *Store
+	mu        sync.Mutex
 	meta      Meta
 	startedAt time.Time
 	once      sync.Once
+}
+
+func (r *Recorder) SetAccountID(id string) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.meta.AccountID = strings.TrimSpace(id)
 }
 
 func Begin(store *Store, meta Meta) *Recorder {
@@ -86,10 +96,14 @@ func (r *Recorder) Record(out Outcome) {
 			model = "unknown"
 		}
 
+		r.mu.Lock()
+		accountID := strings.TrimSpace(r.meta.AccountID)
+		r.mu.Unlock()
+
 		rec := Record{
 			ID:               generateRecordID(nowMs),
 			CallerID:         strings.TrimSpace(r.meta.CallerID),
-			AccountID:        strings.TrimSpace(r.meta.AccountID),
+			AccountID:        accountID,
 			Surface:          strings.TrimSpace(r.meta.Surface),
 			Model:            model,
 			At:               nowMs,

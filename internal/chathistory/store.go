@@ -108,6 +108,7 @@ type StartParams struct {
 }
 
 type UpdateParams struct {
+	AccountID        string
 	Status           string
 	ReasoningContent string
 	Content          string
@@ -315,6 +316,9 @@ func (s *Store) Update(id string, params UpdateParams) (Entry, error) {
 	now := time.Now().UnixMilli()
 	item.Revision = s.nextRevisionLocked()
 	item.UpdatedAt = now
+	if id := strings.TrimSpace(params.AccountID); id != "" {
+		item.AccountID = id
+	}
 	if params.Status != "" {
 		item.Status = params.Status
 	}

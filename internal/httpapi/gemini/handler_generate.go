@@ -114,22 +114,28 @@ func (h *Handler) handleGeminiDirect(w http.ResponseWriter, r *http.Request, str
 		Standard: stdReq,
 	})
 	if a.Provider == "gemini" {
-		client, err := geminiweb.DefaultRuntime().GetClient(r.Context(), a.Account, h.Store)
-		if err != nil {
+		onSwitched := func(newAccountID string) {
 			if historySession != nil {
-				historySession.Error(http.StatusBadGateway, err.Error(), "upstream_error", "", "")
+				historySession.SetAccountID(newAccountID)
 			}
-			writeGeminiError(w, http.StatusBadGateway, err.Error())
-			return true
 		}
 		if stream {
-			// Recorded after the stream finishes: SSE bytes are already sent, so a
-			// mid-stream failure is logged to history rather than written to the body.
-			thinking, text, streamErr := geminiweb.StreamGeminiContent(r.Context(), client, stdReq, w)
+			thinking, text, streamErr := geminiweb.ExecuteStreamWithRetry(
+				r.Context(), a, h.Store, stdReq, w, geminiweb.StreamGeminiContentBuffered, onSwitched,
+			)
 			if streamErr != nil {
 				config.Logger.Warn("[gemini] stream error", "error", streamErr)
+				statusCode := http.StatusBadGateway
+				errCode := "upstream_error"
+				if errors.Is(streamErr, geminiweb.ErrAllGeminiAccountsCoolingDown) {
+					statusCode = http.StatusTooManyRequests
+					errCode = "all_gemini_accounts_cooling_down"
+				}
 				if historySession != nil {
-					historySession.Error(http.StatusBadGateway, streamErr.Error(), "upstream_error", thinking, text)
+					historySession.Error(statusCode, streamErr.Error(), errCode, thinking, text)
+				}
+				if thinking == "" && text == "" {
+					writeGeminiError(w, statusCode, streamErr.Error())
 				}
 				return true
 			}
@@ -138,12 +144,18 @@ func (h *Handler) handleGeminiDirect(w http.ResponseWriter, r *http.Request, str
 			}
 			return true
 		}
-		turn, err := geminiweb.ExecuteTurn(r.Context(), client, stdReq)
+		turn, err := geminiweb.ExecuteTurnWithRetry(r.Context(), a, h.Store, stdReq, onSwitched)
 		if err != nil {
-			if historySession != nil {
-				historySession.Error(http.StatusBadGateway, err.Error(), "upstream_error", "", "")
+			statusCode := http.StatusBadGateway
+			errCode := "upstream_error"
+			if errors.Is(err, geminiweb.ErrAllGeminiAccountsCoolingDown) {
+				statusCode = http.StatusTooManyRequests
+				errCode = "all_gemini_accounts_cooling_down"
 			}
-			writeGeminiError(w, http.StatusBadGateway, err.Error())
+			if historySession != nil {
+				historySession.Error(statusCode, err.Error(), errCode, "", "")
+			}
+			writeGeminiError(w, statusCode, err.Error())
 			return true
 		}
 		if historySession != nil {

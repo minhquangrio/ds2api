@@ -720,3 +720,39 @@ func TestEnforceKeyModelQuota(t *testing.T) {
 		}
 	}
 }
+
+func TestRequestAuthCoolDown(t *testing.T) {
+	t.Setenv("DS2API_CONFIG_JSON", `{
+		"keys":["managed-key"],
+		"accounts":[{"email":"acc@example.com","password":"pwd","token":"seed-token"}]
+	}`)
+	store := config.LoadStore()
+	pool := account.NewPool(store)
+	resolver := NewResolver(store, pool, func(_ context.Context, _ config.Account) (string, error) {
+		return "token", nil
+	})
+
+	req, _ := http.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	req.Header.Set("x-api-key", "managed-key")
+
+	authCtx, err := resolver.Determine(req)
+	if err != nil {
+		t.Fatalf("determine failed: %v", err)
+	}
+	defer resolver.Release(authCtx)
+
+	if !authCtx.CoolDown(60 * time.Second) {
+		t.Fatalf("expected CoolDown to return true for managed account")
+	}
+
+	acc, ok := store.FindAccount("acc@example.com")
+	if !ok {
+		t.Fatalf("account not found in store")
+	}
+	if !acc.IsCoolingDown() {
+		t.Errorf("expected acc.IsCoolingDown() == true")
+	}
+	if acc.IsSchedulable() {
+		t.Errorf("expected acc.IsSchedulable() == false")
+	}
+}
