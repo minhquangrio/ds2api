@@ -2,6 +2,7 @@ package geminiweb
 
 import (
 	"testing"
+	"time"
 )
 
 func TestParseCookiesSemicolonString(t *testing.T) {
@@ -51,4 +52,34 @@ func TestParseCookiesInvalid(t *testing.T) {
 	if err == nil {
 		t.Errorf("expected error for empty cookies")
 	}
+}
+
+func TestGeminiClientTimeout(t *testing.T) {
+	t.Run("DefaultTimeoutIs300s", func(t *testing.T) {
+		t.Setenv("DS2API_GEMINI_TIMEOUT_SECONDS", "")
+		if got := geminiClientTimeout(); got != 300*time.Second {
+			t.Fatalf("expected 300s, got %v", got)
+		}
+	})
+
+	t.Run("EnvTimeoutCustom", func(t *testing.T) {
+		t.Setenv("DS2API_GEMINI_TIMEOUT_SECONDS", "180")
+		if got := geminiClientTimeout(); got != 180*time.Second {
+			t.Fatalf("expected 180s, got %v", got)
+		}
+	})
+
+	t.Run("EnvTimeoutInvalidFallsBack", func(t *testing.T) {
+		t.Setenv("DS2API_GEMINI_TIMEOUT_SECONDS", "abc")
+		if got := geminiClientTimeout(); got != 300*time.Second {
+			t.Fatalf("expected 300s, got %v", got)
+		}
+	})
+
+	t.Run("EnvTimeoutZeroFallsBack", func(t *testing.T) {
+		t.Setenv("DS2API_GEMINI_TIMEOUT_SECONDS", "0")
+		if got := geminiClientTimeout(); got != 300*time.Second {
+			t.Fatalf("expected 300s, got %v", got)
+		}
+	})
 }

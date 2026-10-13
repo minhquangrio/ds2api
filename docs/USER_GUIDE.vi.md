@@ -228,6 +228,13 @@ DS2API_DEV_PACKET_CAPTURE=true go run ./cmd/ds2api
 ```
 Sau đó truy cập Bảng quản trị WebUI để xem chi tiết gói tin request/response giữa DS2API và máy chủ DeepSeek.
 
+### 7.5 Lỗi Gemini `context deadline exceeded` (Timeout khi dịch văn bản dài)
+- **Nguyên nhân**: Khi gửi các prompt dịch văn bản hoặc xử lý tài liệu dài (> 10.000 tokens), Gemini Web cần từ 1 - 3 phút để sinh câu trả lời. Nếu hết thời gian chờ của client hoặc Nginx, request sẽ bị hủy ngang với lỗi `context deadline exceeded`.
+- **Khắc phục**:
+  1. Mặc định ds2api đặt timeout kết nối Gemini Web là **300 giây (5 phút)**. Bạn có thể tùy chỉnh thời gian này qua biến môi trường `DS2API_GEMINI_TIMEOUT_SECONDS` (ví dụ `DS2API_GEMINI_TIMEOUT_SECONDS=600` cho 10 phút).
+  2. Nếu chạy sau Nginx, cấu hình thêm `proxy_read_timeout 300s;` trong file cấu hình site Nginx.
+  3. Khuyến nghị bật chế độ **Streaming (`"stream": true`)** trong phần mềm gọi API để nhận dữ liệu tức thì và tránh kết nối bị im lặng kéo dài.
+
 ---
 
 ## 8. Mục Luc Tài Liệu Tham Khảo

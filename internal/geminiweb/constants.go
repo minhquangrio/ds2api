@@ -1,8 +1,25 @@
 package geminiweb
 
 import (
+	"os"
 	"regexp"
+	"strconv"
+	"time"
 )
+
+// DefaultGeminiTimeout is the baseline timeout for Gemini Web upstream requests.
+// 300s (5 minutes) accommodates long generation turns (e.g. 16k-32k token prompts)
+// that exceed the previous 60s hardcoded limit.
+const DefaultGeminiTimeout = 300 * time.Second
+
+func geminiClientTimeout() time.Duration {
+	if raw := os.Getenv("DS2API_GEMINI_TIMEOUT_SECONDS"); raw != "" {
+		if sec, err := strconv.Atoi(raw); err == nil && sec > 0 {
+			return time.Duration(sec) * time.Second
+		}
+	}
+	return DefaultGeminiTimeout
+}
 
 const (
 	BaseURL           = "https://gemini.google.com"

@@ -649,6 +649,7 @@ data: {"type":"message_stop"}
   - 流式请求：采用首块缓冲机制（Buffer-until-first-chunk），在向下游客户端发送首个 SSE 数据块前发生 1095 错误时，安全切换账号重试。
   - **流式中途截断处理**：若 1095 错误发生在数据已开始向客户端传输的中途，连接会中止并返回截断错误 `gemini upstream throttled mid-stream (BardErrorInfo 1095); output truncated`，避免客户端误将残缺内容当作完整回复。
 - **全冷却错误映射**：若账号池中所有 Gemini 账号均在冷却中，接口返回 HTTP `429 Too Many Requests`，OpenAI 兼容错误码为 `all_gemini_accounts_cooling_down`。
+- **请求超时时间 (Timeout)**：Gemini Web 客户端请求超时由环境变量 `DS2API_GEMINI_TIMEOUT_SECONDS` 控制（默认 `300` 秒 / 5 分钟），有效支持大长文本提示词（如小说翻译/长文处理）所需的耗时生成，避免触发 `context deadline exceeded`。
 
 ---
 

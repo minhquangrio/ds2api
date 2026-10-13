@@ -50,13 +50,15 @@ func NewClient(rawCookies string, opts ...ClientOptions) (*Client, error) {
 		return nil, fmt.Errorf("invalid gemini cookies: %w", err)
 	}
 
+	timeout := opt.Timeout
+	if timeout <= 0 {
+		timeout = geminiClientTimeout()
+	}
+
 	cloakOpts := []httpcloak.Option{
-		httpcloak.WithTimeout(60 * time.Second),
+		httpcloak.WithTimeout(timeout),
 		httpcloak.WithForceHTTP2(),
 		httpcloak.WithTLSOnly(),
-	}
-	if opt.Timeout > 0 {
-		cloakOpts = append(cloakOpts, httpcloak.WithTimeout(opt.Timeout))
 	}
 	if opt.Proxy != "" {
 		cloakOpts = append(cloakOpts, httpcloak.WithTCPProxy(opt.Proxy))

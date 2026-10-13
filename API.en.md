@@ -645,6 +645,7 @@ When using Google Gemini Web upstream (`gemini` provider), rapid concurrent requ
   - Streaming requests: Uses buffer-until-first-chunk protection. If error 1095 occurs before the first chunk is sent to the client, it safely switches accounts and retries.
   - **Mid-stream Truncation Behavior**: If 1095 occurs after SSE bytes have already started streaming, the stream terminates with an explicit truncation error (`gemini upstream throttled mid-stream (BardErrorInfo 1095); output truncated`) rather than finishing cleanly with `finishReason: "STOP"`, preventing clients from treating truncated text as complete.
 - **Exhaustion Mapping**: If all Gemini accounts in the pool are currently cooling down, the endpoint responds with HTTP `429 Too Many Requests` and error code `all_gemini_accounts_cooling_down`.
+- **Request Timeout**: Upstream Gemini Web client timeout is configured via `DS2API_GEMINI_TIMEOUT_SECONDS` (default `300` seconds / 5 minutes), accommodating lengthy generations (such as novel translation or long document synthesis) without prematurely firing `context deadline exceeded`.
 
 ---
 
