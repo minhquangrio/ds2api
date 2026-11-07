@@ -110,21 +110,28 @@ echo -e "  ${GREEN}✓${NC} Mã nguồn mới nhất: ${YELLOW}$LATEST_COMMIT${N
 echo ""
 echo -e "${BLUE}[3/5] Kiểm tra giao diện WebUI...${NC}"
 
-# Nạp Node.js phiên bản mới (v20+) nếu có nvm hoặc aaPanel nodejs
-if [ -s "$HOME/.nvm/nvm.sh" ]; then
-    . "$HOME/.nvm/nvm.sh" 2>/dev/null || true
-    nvm use 20 >/dev/null 2>&1 || nvm use default >/dev/null 2>&1 || true
-elif [ -d "/www/server/nodejs/v22.21.1/bin" ]; then
-    export PATH="/www/server/nodejs/v22.21.1/bin:$PATH"
-fi
+# Nạp Node.js phiên bản mới (v20+) nếu có sẵn trên hệ thống
+for NODE_CANDIDATE in \
+    /root/.nvm/versions/node/v20*/bin \
+    /root/.nvm/versions/node/v22*/bin \
+    /root/.nvm/versions/node/v24*/bin \
+    /www/server/nodejs/v22*/bin \
+    /www/server/nodejs/v20*/bin; do
+    if [ -d "$NODE_CANDIDATE" ]; then
+        export PATH="$NODE_CANDIDATE:$PATH"
+        break
+    fi
+done
 
-if command -v npm >/dev/null 2>&1 && [ -d "webui" ]; then
-    echo -e "  Phát hiện npm, đang biên dịch lại WebUI từ mã nguồn..."
+NODE_MAJOR=$(node -v 2>/dev/null | sed -E 's/^v([0-9]+).*/\1/' || echo "0")
+if [ "$NODE_MAJOR" -ge 20 ] && command -v npm >/dev/null 2>&1 && [ -d "webui" ]; then
+    echo -e "  Phát hiện Node.js $(node -v) & npm, đang biên dịch lại WebUI từ mã nguồn..."
     cd "$PROJECT_DIR/webui"
-    npm ci --prefer-offline --no-audit 2>/dev/null || npm install --prefer-offline 2>/dev/null
-    npm run build
+    (npm ci --prefer-offline --no-audit 2>/dev/null || npm install --prefer-offline 2>/dev/null) && npm run build || {
+        echo -e "  ${YELLOW}! Không thể build WebUI, sử dụng bản static/admin có sẵn trong repo.${NC}"
+    }
     cd "$PROJECT_DIR"
-    echo -e "  ${GREEN}✓${NC} WebUI đã được biên dịch thành công vào static/admin/!"
+    echo -e "  ${GREEN}✓${NC} WebUI đã sẵn sàng tại static/admin/!"
 elif [ -f "static/admin/index.html" ]; then
     echo -e "  ${GREEN}✓${NC} Đã có sẵn giao diện WebUI mới nhất từ kho mã nguồn (static/admin/)."
 else
