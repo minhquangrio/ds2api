@@ -32,6 +32,23 @@ func (h *Handler) handleVercelStreamPrepare(w http.ResponseWriter, r *http.Reque
 		writeOpenAIError(w, http.StatusUnauthorized, "unauthorized internal request")
 		return
 	}
+	var req map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeOpenAIError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+	requestedModel, _ := req["model"].(string)
+	target, resolved := config.ResolveModelTarget(h.Store, requestedModel)
+	if resolved && target.Provider != "" {
+		r.Header.Set("X-Ds2-Target-Provider", target.Provider)
+	}
+	provider := strings.ToLower(strings.TrimSpace(r.Header.Get("X-Ds2-Target-Provider")))
+	if provider == "muse" || provider == "codex" || provider == "gemini" {
+		// The actual Go request performs auth/quota checks. Do not acquire a
+		// DeepSeek account, upload files, or create a lease just to route it.
+		writeJSON(w, http.StatusOK, map[string]any{"route": "proxy_to_go", "provider": provider})
+		return
+	}
 
 	a, err := h.Auth.Determine(r)
 	if err != nil {
@@ -47,11 +64,6 @@ func (h *Handler) handleVercelStreamPrepare(w http.ResponseWriter, r *http.Reque
 	}()
 	r = r.WithContext(auth.WithAuth(r.Context(), a))
 
-	var req map[string]any
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeOpenAIError(w, http.StatusBadRequest, "invalid json")
-		return
-	}
 	originalModel, rerouted := promptcompat.MaybeAutoRouteVision(req, h.Store)
 	if err := h.preprocessInlineFileInputs(r.Context(), a, req); err != nil {
 		writeOpenAIInlineFileError(w, err)

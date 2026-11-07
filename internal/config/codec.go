@@ -67,6 +67,9 @@ func (c Config) MarshalJSON() ([]byte, error) {
 	if c.Codex.Enabled != nil || strings.TrimSpace(c.Codex.DefaultModel) != "" || c.Codex.RefreshSkewSeconds != 0 {
 		m["codex"] = c.Codex
 	}
+	if c.Muse.Enabled != nil || strings.TrimSpace(c.Muse.WorkerURL) != "" || strings.TrimSpace(c.Muse.Secret) != "" {
+		m["muse"] = c.Muse
+	}
 	if strings.TrimSpace(c.Vercel.Token) != "" || strings.TrimSpace(c.Vercel.ProjectID) != "" || strings.TrimSpace(c.Vercel.TeamID) != "" {
 		m["vercel"] = NormalizeVercelConfig(c.Vercel)
 	}
@@ -172,6 +175,10 @@ func (c *Config) UnmarshalJSON(b []byte) error {
 			// is silently dropped, leaving codex.enabled/default_model/
 			// refresh_skew_seconds with no effect.
 			if err := json.Unmarshal(v, &c.Codex); err != nil {
+				return fmt.Errorf("invalid field %q: %w", k, err)
+			}
+		case "muse":
+			if err := json.Unmarshal(v, &c.Muse); err != nil {
 				return fmt.Errorf("invalid field %q: %w", k, err)
 			}
 		case "vercel":

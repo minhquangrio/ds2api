@@ -70,8 +70,8 @@ async function handler(req, res) {
 
   // Keep all non-stream behavior and non-OpenAI-chat paths on Go side to avoid
   // protocol-shape regressions (e.g. Gemini/Claude clients expecting their own formats).
-  // Also pass Codex requests directly to Go to bypass DeepSeek PoW handling.
-  if (!toBool(payload.stream) || !isNodeStreamSupportedPath(req.url || '') || isCodexRequest(req, payload)) {
+  // Also pass Codex and Muse requests directly to Go to bypass DeepSeek PoW handling.
+  if (!toBool(payload.stream) || !isNodeStreamSupportedPath(req.url || '') || isCodexRequest(req, payload) || isMuseRequest(req, payload)) {
     await proxyToGo(req, res, rawBody);
     return;
   }
@@ -107,6 +107,19 @@ function isCodexRequest(req, payload) {
     return true;
   }
   return CODEX_MODEL_PREFIXES.some((prefix) => model.startsWith(prefix));
+}
+
+function isMuseRequest(req, payload) {
+  const headers = (req && req.headers) || {};
+  const targetProvider = asString(headers['x-ds2-target-provider'] || headers['x-provider']).toLowerCase();
+  if (targetProvider === 'muse') {
+    return true;
+  }
+  const model = asString(payload && payload.model).toLowerCase();
+  if (model.startsWith('muse/') || model.startsWith('muse-')) {
+    return true;
+  }
+  return false;
 }
 
 function isVercelRuntime() {
@@ -153,4 +166,5 @@ module.exports.__test = {
   extractPathname,
   trimContinuationOverlap,
   isCodexRequest,
+  isMuseRequest,
 };

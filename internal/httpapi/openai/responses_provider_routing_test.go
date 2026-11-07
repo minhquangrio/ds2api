@@ -20,7 +20,7 @@ type providerCapturingAuth struct {
 
 func (s *providerCapturingAuth) resolve(r *http.Request) (*auth.RequestAuth, error) {
 	s.seenProvider = r.Header.Get("X-Ds2-Target-Provider")
-	if s.seenProvider != "codex" {
+	if s.seenProvider != "codex" && s.seenProvider != "muse" {
 		// Stop before the DeepSeek completion path; this stub only exists to
 		// observe which provider the handler selected.
 		return nil, auth.ErrUnauthorized
@@ -62,6 +62,8 @@ func TestResponsesResolvesProviderFromModel(t *testing.T) {
 	}{
 		{name: "codex catalogue model", model: "gpt-6-luna", provider: "codex"},
 		{name: "codex prefix escape hatch", model: "codex/any-model", provider: "codex"},
+		{name: "muse catalogue model", model: "muse-spark", provider: "muse"},
+		{name: "muse prefix escape hatch", model: "muse/any-model", provider: "muse"},
 		{name: "deepseek model", model: "deepseek-v4-flash", provider: "deepseek"},
 		{name: "gemini model", model: "gemini-3.0-pro"},
 	}
@@ -86,21 +88,21 @@ func TestResponsesResolvesProviderFromModel(t *testing.T) {
 
 			if tc.provider == "" {
 				// A provider we do not serve must not be claimed.
-				if capture.seenProvider == "codex" {
-					t.Fatalf("model %q must not resolve to codex", tc.model)
+				if capture.seenProvider == "codex" || capture.seenProvider == "muse" {
+					t.Fatalf("model %q must not resolve to %s", tc.model, capture.seenProvider)
 				}
 				return
 			}
 			if capture.seenProvider != tc.provider {
 				t.Fatalf("model %q resolved provider %q; want %q", tc.model, capture.seenProvider, tc.provider)
 			}
-			if tc.provider == "codex" {
-				// The codex branch must actually be entered: the stub has no
-				// usable codex account, so it fails with a gateway error rather
+			if tc.provider == "codex" || tc.provider == "muse" {
+				// The provider branch must actually be entered: the stub has no
+				// usable account, so it fails with a gateway error rather
 				// than falling through to the DeepSeek path (which would 401).
 				if rec.Code != http.StatusBadGateway {
-					t.Fatalf("codex model reached status %d; want %d (branch not taken?)",
-						rec.Code, http.StatusBadGateway)
+					t.Fatalf("%s model reached status %d; want %d (branch not taken?)",
+						tc.provider, rec.Code, http.StatusBadGateway)
 				}
 			}
 		})

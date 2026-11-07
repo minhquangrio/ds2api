@@ -151,6 +151,9 @@ func (r *Resolver) DetermineForProvider(req *http.Request, provider string) (*Re
 	}
 
 	if !r.Store.HasAPIKey(callerKey) {
+		if effectiveProvider == "muse" {
+			return nil, ErrUnauthorized
+		}
 		return &RequestAuth{
 			UseConfigToken: false,
 			Provider:       effectiveProvider,
@@ -202,6 +205,15 @@ func (r *Resolver) acquireManagedRequestAuthByProvider(ctx context.Context, call
 		return nil, ErrNoProviderAccount
 	}
 
+	if effectiveProvider == "muse" {
+		if !r.Store.MuseEnabled() {
+			return nil, ErrNoProviderAccount
+		}
+		if countConfiguredAccountsForProvider(r.Store.Accounts(), "muse") == 0 {
+			return nil, ErrNoProviderAccount
+		}
+	}
+
 	tried := map[string]bool{}
 	var lastEnsureErr error
 	filter := account.AccountFilter(func(acc config.Account) bool {
@@ -216,7 +228,7 @@ func (r *Resolver) acquireManagedRequestAuthByProvider(ctx context.Context, call
 			if lastEnsureErr != nil {
 				return nil, lastEnsureErr
 			}
-			if effectiveProvider == "gemini" {
+			if effectiveProvider == "gemini" || effectiveProvider == "muse" {
 				if totalAccounts == 0 {
 					return nil, ErrNoProviderAccount
 				}
@@ -229,7 +241,7 @@ func (r *Resolver) acquireManagedRequestAuthByProvider(ctx context.Context, call
 			if lastEnsureErr != nil {
 				return nil, lastEnsureErr
 			}
-			if effectiveProvider == "gemini" {
+			if effectiveProvider == "gemini" || effectiveProvider == "muse" {
 				if totalAccounts == 0 {
 					return nil, ErrNoProviderAccount
 				}
@@ -575,6 +587,12 @@ func (r *Resolver) ensureManagedToken(ctx context.Context, a *RequestAuth) error
 	if a.Account.IsGemini() || a.Provider == "gemini" {
 		if strings.TrimSpace(a.Account.Cookies) == "" {
 			return errors.New("gemini account missing cookies")
+		}
+		return nil
+	}
+	if a.Account.IsMuse() || a.Provider == "muse" {
+		if strings.TrimSpace(a.Account.Cookies) == "" {
+			return errors.New("muse account missing cookies")
 		}
 		return nil
 	}

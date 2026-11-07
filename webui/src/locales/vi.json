@@ -31,7 +31,7 @@
         },
         "accounts": {
             "label": "Tài khoản Upstream",
-            "desc": "Quản lý nhóm tài khoản DeepSeek, Gemini & Codex"
+            "desc": "Quản lý nhóm tài khoản DeepSeek, Gemini, Codex & Muse"
         },
         "providers": {
             "label": "Nhà cung cấp ngoài",
@@ -217,11 +217,13 @@
         "deleteKeyTitle": "Xóa khoá",
         "noApiKeys": "Không tìm thấy khoá API nào.",
         "accountsTitle": "Tài khoản Upstream",
-        "accountsDesc": "Quản lý và điều phối các nhóm tài khoản DeepSeek & Google Gemini.",
+        "accountsDesc": "Quản lý và điều phối các nhóm tài khoản DeepSeek, Google Gemini, Codex & Muse.",
         "filterProvider": "Nhà cung cấp",
         "filterProviderAll": "Tất cả",
         "filterProviderDeepSeek": "DeepSeek",
         "filterProviderGemini": "Gemini",
+        "filterProviderCodex": "Codex",
+        "filterProviderMuse": "Muse",
         "filterPoolType": "Loại Pool",
         "filterPoolTypeAll": "Tất cả Pool",
         "filterPoolTypeDefault": "Mặc định",
@@ -243,7 +245,10 @@
         "statActive": "Hoạt động",
         "statDeepSeek": "DeepSeek",
         "statGemini": "Gemini",
+        "statCodex": "Codex",
+        "statMuse": "Muse",
         "statIssues": "Cần chú ý",
+        "museCookieHint": "Nhập chuỗi cookie chứa hatch_sess trích xuất từ phiên đăng nhập muse.ai.",
         "searchAccountsPlaceholder": "Tìm theo email, tên, ghi chú, SĐT...",
         "clearSearch": "Xóa tìm kiếm",
         "clearFilterAction": "Xóa bộ lọc",

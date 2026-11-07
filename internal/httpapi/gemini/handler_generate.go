@@ -21,6 +21,7 @@ import (
 	"ds2api/internal/httpapi/openai/history"
 	"ds2api/internal/httpapi/openai/shared"
 	"ds2api/internal/httpapi/requestbody"
+	"ds2api/internal/muse"
 	"ds2api/internal/promptcompat"
 	"ds2api/internal/responsehistory"
 	"ds2api/internal/sse"
@@ -193,6 +194,45 @@ func (h *Handler) handleGeminiDirect(w http.ResponseWriter, r *http.Request, str
 				historySession.Error(http.StatusBadGateway, err.Error(), "upstream_error", "", "")
 			}
 			writeGeminiError(w, http.StatusBadGateway, err.Error())
+			return true
+		}
+		if historySession != nil {
+			historySession.SuccessTurn(http.StatusOK, turn, responsehistory.GenericUsage(turn))
+		}
+		writeJSON(w, http.StatusOK, buildGeminiGenerateContentResponseFromTurn(turn))
+		return true
+	}
+	if a.Provider == "muse" {
+		onSwitched := func(id string) {
+			if historySession != nil {
+				historySession.SetAccountID(id)
+			}
+		}
+		if stream {
+			turn, streamErr := muse.ExecuteStreamTurnWithRetry(r.Context(), a, h.Store, stdReq, w, muse.StreamGeminiContentWithTurn, onSwitched)
+			if streamErr != nil {
+				status, code := muse.ErrorDetail(turn, streamErr)
+				config.Logger.Warn("[muse] stream error", "error", streamErr)
+				if historySession != nil {
+					historySession.ErrorTurn(status, streamErr.Error(), code, turn)
+				}
+				if !muse.StreamCommitted(streamErr) {
+					writeGeminiError(w, status, streamErr.Error())
+				}
+				return true
+			}
+			if historySession != nil {
+				historySession.SuccessTurn(http.StatusOK, turn, responsehistory.GenericUsage(turn))
+			}
+			return true
+		}
+		turn, err := muse.ExecuteTurnWithRetry(r.Context(), a, h.Store, stdReq, onSwitched)
+		if err != nil {
+			status, code := muse.ErrorDetail(turn, err)
+			if historySession != nil {
+				historySession.ErrorTurn(status, err.Error(), code, turn)
+			}
+			writeGeminiError(w, status, err.Error())
 			return true
 		}
 		if historySession != nil {

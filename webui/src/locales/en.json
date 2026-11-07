@@ -31,7 +31,7 @@
         },
         "accounts": {
             "label": "Upstream Accounts",
-            "desc": "Manage DeepSeek, Gemini & Codex account pools"
+            "desc": "Manage DeepSeek, Gemini, Codex & Muse account pools"
         },
         "providers": {
             "label": "Third-Party Providers",
@@ -217,11 +217,13 @@
         "deleteKeyTitle": "Delete key",
         "noApiKeys": "No API keys found.",
         "accountsTitle": "Upstream Accounts",
-        "accountsDesc": "Manage and orchestrate DeepSeek & Google Gemini account pools.",
+        "accountsDesc": "Manage and orchestrate DeepSeek, Google Gemini, Codex & Muse account pools.",
         "filterProvider": "Provider",
         "filterProviderAll": "All",
         "filterProviderDeepSeek": "DeepSeek",
         "filterProviderGemini": "Gemini",
+        "filterProviderCodex": "Codex",
+        "filterProviderMuse": "Muse",
         "filterPoolType": "Pool Type",
         "filterPoolTypeAll": "All Pools",
         "filterPoolTypeDefault": "Default",
@@ -243,7 +245,10 @@
         "statActive": "Active",
         "statDeepSeek": "DeepSeek",
         "statGemini": "Gemini",
+        "statCodex": "Codex",
+        "statMuse": "Muse",
         "statIssues": "Issues",
+        "museCookieHint": "Enter the complete cookie string containing hatch_sess from your muse.ai session.",
         "searchAccountsPlaceholder": "Search by email, name, remark, phone...",
         "clearSearch": "Clear search",
         "clearFilterAction": "Clear filters",

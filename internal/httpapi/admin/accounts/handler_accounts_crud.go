@@ -13,6 +13,7 @@ import (
 	"ds2api/internal/config"
 	dsclient "ds2api/internal/deepseek/client"
 	"ds2api/internal/geminiweb"
+	"ds2api/internal/muse"
 )
 
 func (h *Handler) listAccounts(w http.ResponseWriter, r *http.Request) {
@@ -41,14 +42,21 @@ func (h *Handler) listAccounts(w http.ResponseWriter, r *http.Request) {
 	activeCount := 0
 	deepseekCount := 0
 	geminiCount := 0
+	codexCount := 0
+	museCount := 0
 	disabledCount := 0
 	issuesCount := 0
 
 	for _, acc := range allAccounts {
 		provider := acc.AccountProvider()
-		if provider == "gemini" {
+		switch provider {
+		case "gemini":
 			geminiCount++
-		} else {
+		case "codex":
+			codexCount++
+		case "muse":
+			museCount++
+		default:
 			deepseekCount++
 		}
 
@@ -202,6 +210,8 @@ func (h *Handler) listAccounts(w http.ResponseWriter, r *http.Request) {
 			"active":   activeCount,
 			"deepseek": deepseekCount,
 			"gemini":   geminiCount,
+			"codex":    codexCount,
+			"muse":     museCount,
 			"disabled": disabledCount,
 			"issues":   issuesCount,
 		},
@@ -218,6 +228,10 @@ func (h *Handler) addAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	if acc.IsGemini() && strings.TrimSpace(acc.Cookies) == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"detail": "Gemini 账号必须配置 cookies"})
+		return
+	}
+	if acc.IsMuse() && strings.TrimSpace(acc.Cookies) == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"detail": "Muse 账号必须配置 cookies (hatch_sess)"})
 		return
 	}
 	if acc.IsDeepSeek() && strings.TrimSpace(acc.Cookies) != "" {
@@ -248,7 +262,7 @@ func (h *Handler) addAccount(w http.ResponseWriter, r *http.Request) {
 			if mobileKey != "" && config.CanonicalMobileKey(a.Mobile) == mobileKey {
 				return fmt.Errorf("手机号已存在")
 			}
-			if (acc.IsGemini() || acc.IsDeepSeek()) && acc.Name != "" && a.Name == acc.Name && acc.Email == "" && acc.Mobile == "" {
+			if (acc.IsGemini() || acc.IsDeepSeek() || acc.IsMuse()) && acc.Name != "" && a.Name == acc.Name && acc.Email == "" && acc.Mobile == "" {
 				return fmt.Errorf("账号名称已存在")
 			}
 		}
@@ -332,8 +346,10 @@ func (h *Handler) updateAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	h.Pool.Reset()
 	geminiweb.DefaultRuntime().InvalidateClient(identifier)
+	muse.DefaultRuntime().EvictClient(identifier)
 	if canonicalID != "" && canonicalID != identifier {
 		geminiweb.DefaultRuntime().InvalidateClient(canonicalID)
+		muse.DefaultRuntime().EvictClient(canonicalID)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "total_accounts": len(h.Store.Snapshot().Accounts)})
 }
@@ -365,8 +381,10 @@ func (h *Handler) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	h.Pool.Reset()
 	geminiweb.DefaultRuntime().InvalidateClient(identifier)
+	muse.DefaultRuntime().EvictClient(identifier)
 	if canonicalID != "" && canonicalID != identifier {
 		geminiweb.DefaultRuntime().InvalidateClient(canonicalID)
+		muse.DefaultRuntime().EvictClient(canonicalID)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "total_accounts": len(h.Store.Snapshot().Accounts)})
 }

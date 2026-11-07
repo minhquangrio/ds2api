@@ -26,6 +26,7 @@ type Config struct {
 	AutoRouteVision         AutoRouteVisionConfig      `json:"auto_route_vision,omitempty"`
 	ElasticPool             ElasticPoolConfig          `json:"elastic_pool,omitempty"`
 	Codex                   CodexConfig                `json:"codex,omitempty"`
+	Muse                    MuseConfig                 `json:"muse,omitempty"`
 	Vercel                  VercelConfig               `json:"vercel,omitempty"`
 	VercelSyncHash          string                     `json:"_vercel_sync_hash,omitempty"`
 	VercelSyncTime          int64                      `json:"_vercel_sync_time,omitempty"`
@@ -38,6 +39,12 @@ type CodexConfig struct {
 	Enabled            *bool  `json:"enabled,omitempty"`
 	DefaultModel       string `json:"default_model,omitempty"`
 	RefreshSkewSeconds int64  `json:"refresh_skew_seconds,omitempty"`
+}
+
+type MuseConfig struct {
+	Enabled   *bool  `json:"enabled,omitempty"`
+	WorkerURL string `json:"worker_url,omitempty"`
+	Secret    string `json:"secret,omitempty"`
 }
 
 type Account struct {
@@ -148,6 +155,13 @@ func (c *Config) NormalizeCredentials() {
 			c.Accounts[i].CodexIDToken = strings.TrimSpace(c.Accounts[i].CodexIDToken)
 			if c.Accounts[i].Email == "" && c.Accounts[i].Name == "" && c.Accounts[i].CodexAccountID != "" {
 				c.Accounts[i].Name = "codex:" + c.Accounts[i].CodexAccountID
+			}
+		}
+		if c.Accounts[i].IsMuse() {
+			c.Accounts[i].Provider = "muse"
+			c.Accounts[i].Cookies = strings.TrimSpace(c.Accounts[i].Cookies)
+			if c.Accounts[i].Email == "" && c.Accounts[i].Name == "" {
+				c.Accounts[i].Name = fmt.Sprintf("muse_%d", i+1)
 			}
 		}
 	}

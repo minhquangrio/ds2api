@@ -1,6 +1,7 @@
 package responses
 
 import (
+	"context"
 	"ds2api/internal/toolcall"
 	"encoding/json"
 	"errors"
@@ -19,6 +20,7 @@ import (
 	"ds2api/internal/config"
 	dsprotocol "ds2api/internal/deepseek/protocol"
 	openaifmt "ds2api/internal/format/openai"
+	"ds2api/internal/muse"
 	"ds2api/internal/promptcompat"
 	"ds2api/internal/responsehistory"
 	"ds2api/internal/sse"
@@ -174,6 +176,59 @@ func (h *Handler) Responses(w http.ResponseWriter, r *http.Request) {
 		if historySession != nil {
 			historySession.Success(http.StatusOK, "", "", "stop", nil)
 		}
+		return
+	}
+
+	if a.Provider == "muse" {
+		onSwitched := func(id string) {
+			if historySession != nil {
+				historySession.SetAccountID(id)
+			}
+		}
+
+		if !stdReq.Stream {
+			turn, err := muse.ExecuteTurnWithRetry(r.Context(), a, h.Store, stdReq, onSwitched)
+			if err != nil {
+				status, code := muse.ErrorDetail(turn, err)
+				if historySession != nil {
+					historySession.ErrorTurn(status, err.Error(), code, turn)
+				}
+				writeOpenAIErrorWithCode(w, status, err.Error(), code)
+				return
+			}
+			if historySession != nil {
+				historySession.SuccessTurn(http.StatusOK, turn, assistantturn.OpenAIResponsesUsage(turn))
+			}
+			responseObj := openaifmt.BuildResponseObjectWithToolCalls(responseID, stdReq.ResponseModel, turn.Prompt, turn.Thinking, turn.Text, turn.ToolCalls, stdReq.ToolsRaw)
+			responseObj["usage"] = assistantturn.OpenAIResponsesUsage(turn)
+			h.getResponseStore().put(owner, responseID, responseObj)
+			writeJSON(w, http.StatusOK, responseObj)
+			return
+		}
+
+		var responseObj map[string]any
+		turn, err := muse.ExecuteStreamTurnWithRetry(r.Context(), a, h.Store, stdReq, w,
+			func(ctx context.Context, client *muse.Client, req promptcompat.StandardRequest, writer http.ResponseWriter) (assistantturn.Turn, error) {
+				var turn assistantturn.Turn
+				var err error
+				turn, responseObj, err = muse.StreamResponsesWithID(ctx, client, req, writer, responseID)
+				return turn, err
+			}, onSwitched)
+		if err != nil {
+			config.Logger.Warn("[muse] responses stream error", "error", err)
+			status, code := muse.ErrorDetail(turn, err)
+			if historySession != nil {
+				historySession.ErrorTurn(status, err.Error(), code, turn)
+			}
+			if !muse.StreamCommitted(err) {
+				writeOpenAIErrorWithCode(w, status, err.Error(), code)
+			}
+			return
+		}
+		if historySession != nil {
+			historySession.SuccessTurn(http.StatusOK, turn, assistantturn.OpenAIResponsesUsage(turn))
+		}
+		h.getResponseStore().put(owner, responseID, responseObj)
 		return
 	}
 

@@ -45,6 +45,11 @@ async function handleVercelStream(req, res, rawBody, payload) {
     relayPreparedFailure(res, prep);
     return;
   }
+  if (prep.body && prep.body.route === 'proxy_to_go') {
+    const { proxyToGo } = require('./proxy_go');
+    await proxyToGo(req, res, rawBody);
+    return;
+  }
 
   const model = asString(prep.body.model) || asString(payload.model);
   const responseID = asString(prep.body.session_id) || `chatcmpl-${Date.now()}`;

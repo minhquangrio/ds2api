@@ -74,6 +74,9 @@ func (a Account) AccountProvider() string {
 	if p == "gemini" {
 		return "gemini"
 	}
+	if p == "muse" {
+		return "muse"
+	}
 	if p == "" {
 		return "deepseek"
 	}
@@ -88,6 +91,11 @@ func (a Account) IsGemini() bool {
 // IsCodex reports whether the account is a Codex account.
 func (a Account) IsCodex() bool {
 	return a.AccountProvider() == "codex"
+}
+
+// IsMuse reports whether the account is a Muse.ai account.
+func (a Account) IsMuse() bool {
+	return a.AccountProvider() == "muse"
 }
 
 // IsDeepSeek reports whether the account is a DeepSeek account.
@@ -130,6 +138,9 @@ func (a Account) IsCoolingDown() bool {
 // IsSchedulable reports whether the pool may hand this account to a request.
 func (a Account) IsSchedulable() bool {
 	if a.IsCodex() && strings.TrimSpace(a.CodexRefreshToken) == "" {
+		return false
+	}
+	if a.IsMuse() && strings.TrimSpace(a.Cookies) == "" {
 		return false
 	}
 	return a.IsEnabled() && !a.IsMuted() && !a.IsBanned() && !a.IsCoolingDown()

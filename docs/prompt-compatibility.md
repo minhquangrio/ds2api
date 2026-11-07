@@ -52,10 +52,15 @@ DS2API 当前的核心思路，不是把客户端传来的 `messages`、`tools`�
      │   -> StyleGeminiWeb prompt 渲染（纯文本/无尾部伪标签）
      │   -> internal/geminiweb 客户端 (httpcloak TLS/H2)
      │   -> Gemini Web Session / Generate / StreamGenerate
-     └─ OpenAI Codex (ChatGPT OAuth):
-         -> codex.BuildInput / Native Tools 映射 (chatgpt.com/backend-api/codex/responses)
-         -> OAuth PKCE Token 管理与自动刷新 (Offline Access)
-         -> SSE parser 解析 Responses 事件流归一为 Turn 结构 (Bypass webchat prompt injection & tool-sieve)
+     ├─ OpenAI Codex (ChatGPT OAuth):
+     │   -> codex.BuildInput / Native Tools 映射 (chatgpt.com/backend-api/codex/responses)
+     │   -> OAuth PKCE Token 管理与自动刷新 (Offline Access)
+     │   -> SSE parser 解析 Responses 事件流归一为 Turn 结构 (Bypass webchat prompt injection & tool-sieve)
+     └─ Muse.ai (Python worker / CDP Automation):
+         -> 统一 StandardRequest / PromptMessages 消息序列
+         -> internal/muse Go 客户端通过 HTTP/SSE 调用 Python worker (workers/muse)
+         -> Python worker 维持 Chromium CDP 会话自动化与单账号并发锁 (1 operation per account lock)
+         -> SSE 事件流归一为 assistantturn.Turn 结构
   -> assistantturn 输出语义归一（Turn 结构）
   -> 各协议 renderer（OpenAI / Responses / Claude / Gemini）
 ```
@@ -86,6 +91,10 @@ DS2API 当前的核心思路，不是把客户端传来的 `messages`、`tools`�
   [internal/assistantturn/turn.go](../internal/assistantturn/turn.go)
 - Go completion runtime：
   [internal/completionruntime/nonstream.go](../internal/completionruntime/nonstream.go)
+- Muse Go 客户端与运行时：
+  [internal/muse/client.go](../internal/muse/client.go)
+- Muse Python automation worker：
+  [workers/muse/server.py](../workers/muse/server.py)
 
 ## 4. 下游真正收到的东西
 
@@ -650,4 +659,38 @@ expert（pro）模型本身不会收到任何 `ref_file_ids` 或 inline 文件�
 3. **Vercel / Node 路径直通 (PoW Bypass)**：
    - 在 Vercel 部署环境下，`/v1/chat/completions` 中的 Codex 请求在 Node 接入层即被识别并直通 Go 运行时 (`proxyToGo`)，完全避开针对 DeepSeek 网页端的 PoW 求解流程。
 
+## 17. Muse.ai Upstream 链路适配与透传规则
 
+针对 Muse.ai（通过 Session Cookie `hatch_sess` 与 Python Chromium CDP Worker 接入）：
+
+1. **协议入口分流 (Router & Protocol Boundary)**：
+   - 目标判定：通过 `muse/` 前缀、Muse 系列原生模型（`muse-spark`, `muse-chat`, `muse-image`, `muse-video`）或 `X-Ds2-Target-Provider: muse` 标头识别。
+   - 统一转译与全局业务逻辑：请求依然经由 `promptcompat.Normalize*` 形成 `StandardRequest`，并在 Go 核心层统一执行 Key 额度校验、模型映射、历史记录与审计日志。
+   - 工具与提示词策略：遵照 Project Standard Turn model，不进行重复 prompt 注入，直接将标准化后的 messages / prompt 传给 worker。
+
+2. **Python Worker 隔离与并发控制 (1 Operation Per Account Lock)**：
+   - Go 服务通过 HTTP/SSE 协议与内部 Python Worker (`workers/muse/server.py`) 通信，传递 `prompt`, `messages`, `cookies`, `proxy` 以及可选的 `X-Worker-Secret`。
+   - Worker 维持 Chromium CDP 实例，并对每个账号实施严格的单并发锁（Account Lock），避免多请求并发破坏同一浏览器 session 的状态。
+   - Chat / Responses / Claude / Gemini 统一调用 `internal/muse/retry.go`；429 只在尚未向客户端发送响应时轮换账号，且保留 caller account allowlist / 指定账号约束。已发送内容后保留 partial turn 并返回失败，不拼接另一账号的答案。
+
+3. **输出流归一 (Turn Model & Multi-Protocol Rendering)**：
+   - Python Worker 产生标准 Server-Sent Events 流 (`delta`, `completed`, `error`)。
+   - Stream / non-stream 都使用 `assistantturn.BuildTurnFromStreamSnapshot` 检测 EPSE 工具调用、校验 `tool_choice` 和完成 turn。关闭 thinking 时保留 raw reasoning 供工具检测，但不对客户端输出 reasoning。
+   - 普通文本保留增量输出；包含 tools 的请求先缓冲至 completed，完成 shared detection 后输出各协议的 tool_calls / function_call / tool_use / functionCall，避免将工具 XML 当正文发送。
+   - 空输出按 shared policy 最多重试一次，并使用 shared retry prompt suffix。content_filter、不完整 stream、worker error、或已发送内容的请求不作为空输出重试。
+   - 必须解析到有效 completed；JSON 损坏或提前 EOF 都是失败。SSE 单行限制为 10 MiB，completed-only 响应也会输出完整文本。
+   - 所有协议使用最终 Turn 记录历史、stop reason 和 usage；completion_tokens 已包含 reasoning_tokens，不重复累加。Responses 存储并返回同一个 completed 对象，保持 response ID 和 output item ID 一致。
+
+4. **文件与上下文**：
+   - Muse 不调用 DeepSeek uploader，不接收 DeepSeek ref_file_ids。current_input_file 不压缩 Muse 历史；完整历史和 tools context 保留在纯文本 prompt。
+   - 本地可读取文本文件通过现有 text-file 解码/大小限制转为正文；不支持或不可读取的 attachment 返回错误，不静默丢弃。
+
+5. **Vercel / Node 路径直通 (PoW Bypass)**：
+   - 显式 Muse 请求可直通 Go；自定义 alias 在 Go prepare 入口先解析 provider，返回 proxy_to_go。此路由判定发生在账号获取、文件上传、session/PoW 和 lease 创建之前。最终 Go 请求完成 auth / quota 校验。
+
+6. **Browser driver 与当前范围**：
+   - 默认 driver 为 engine；mock 必须显式选择。Engine 使用独立 browser context，检查 /api/session 的 assigned 状态，必要时唤醒 VM 并确认 RUNNING，打开 /thread/new 后发送完整 prompt、读取新的 assistant bubble。
+   - Stop 按钮仍可见时不报告 completed；取消/断连关闭 producer 与 context、释放账号锁。probe 不根据 Cookie 字符串或首页未跳转推断账号有效，也不伪造 quota。
+   - Worker completed 返回更新后的 cookies，由 Go store 写回。HTTP/HTTPS proxy 与无认证 SOCKS5 可用；认证 SOCKS5 必须先提供 relay，失败时不回退直连。
+   - 当前实现仅支持 muse-spark / muse-chat（及 spark / chat canonical names）的文本聊天。图片、视频及任意 muse/ 模型不由 chat 接口执行。
+   - Engine 的 DOM/session/cancellation 已覆盖 offline fixtures；尚未用真实 Muse 账号验证，不能把 offline pass 当作 live 可用性证明。

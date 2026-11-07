@@ -1,4 +1,4 @@
-import { Search, X, RotateCcw, Bot, Sparkles, Layers, CheckCircle2, AlertTriangle, Globe, Zap } from 'lucide-react'
+import { Search, X, RotateCcw, Bot, Sparkles, Layers, CheckCircle2, AlertTriangle, Globe, Zap, Palette } from 'lucide-react'
 import clsx from 'clsx'
 
 export default function AccountFiltersBar({
@@ -190,6 +190,19 @@ export default function AccountFiltersBar({
                         >
                             <Zap className="w-3 h-3" />
                             <span>Codex</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => onFilterProviderChange('muse')}
+                            className={clsx(
+                                "flex items-center gap-1 px-2.5 py-1 rounded-md font-medium transition-colors",
+                                filterProvider === 'muse'
+                                    ? "bg-purple-500/15 text-purple-400 shadow-xs"
+                                    : "text-muted-foreground hover:text-foreground"
+                            )}
+                        >
+                            <Palette className="w-3 h-3" />
+                            <span>Muse</span>
                         </button>
                     </div>
 

@@ -22,6 +22,7 @@ import (
 	"ds2api/internal/httpapi/openai/history"
 	"ds2api/internal/httpapi/openai/shared"
 	"ds2api/internal/httpapi/requestbody"
+	"ds2api/internal/muse"
 	"ds2api/internal/promptcompat"
 	"ds2api/internal/responsehistory"
 	streamengine "ds2api/internal/stream"
@@ -199,6 +200,50 @@ func (h *Handler) handleClaudeDirect(w http.ResponseWriter, r *http.Request) boo
 				historySession.Error(http.StatusBadGateway, err.Error(), "upstream_error", "", "")
 			}
 			writeClaudeError(w, http.StatusBadGateway, err.Error())
+			return true
+		}
+		if historySession != nil {
+			historySession.SuccessTurn(http.StatusOK, turn, responsehistory.GenericUsage(turn))
+		}
+		writeJSON(w, http.StatusOK, claudefmt.BuildMessageResponseFromTurn(
+			fmt.Sprintf("msg_%d", time.Now().UnixNano()),
+			stdReq.ResponseModel,
+			turn,
+			exposeThinking,
+		))
+		return true
+	}
+	if a.Provider == "muse" {
+		onSwitched := func(id string) {
+			if historySession != nil {
+				historySession.SetAccountID(id)
+			}
+		}
+		if stdReq.Stream {
+			turn, streamErr := muse.ExecuteStreamTurnWithRetry(r.Context(), a, h.Store, stdReq, w, muse.StreamClaudeMessagesWithTurn, onSwitched)
+			if streamErr != nil {
+				config.Logger.Warn("[muse] stream error", "error", streamErr)
+				status, code := muse.ErrorDetail(turn, streamErr)
+				if historySession != nil {
+					historySession.ErrorTurn(status, streamErr.Error(), code, turn)
+				}
+				if !muse.StreamCommitted(streamErr) {
+					writeClaudeError(w, status, streamErr.Error())
+				}
+				return true
+			}
+			if historySession != nil {
+				historySession.SuccessTurn(http.StatusOK, turn, responsehistory.GenericUsage(turn))
+			}
+			return true
+		}
+		turn, err := muse.ExecuteTurnWithRetry(r.Context(), a, h.Store, stdReq, onSwitched)
+		if err != nil {
+			status, code := muse.ErrorDetail(turn, err)
+			if historySession != nil {
+				historySession.ErrorTurn(status, err.Error(), code, turn)
+			}
+			writeClaudeError(w, status, err.Error())
 			return true
 		}
 		if historySession != nil {

@@ -109,6 +109,15 @@ echo -e "  ${GREEN}✓${NC} Mã nguồn mới nhất: ${YELLOW}$LATEST_COMMIT${N
 # ------------------------------------------------------------------------------
 echo ""
 echo -e "${BLUE}[3/5] Kiểm tra giao diện WebUI...${NC}"
+
+# Nạp Node.js phiên bản mới (v20+) nếu có nvm hoặc aaPanel nodejs
+if [ -s "$HOME/.nvm/nvm.sh" ]; then
+    . "$HOME/.nvm/nvm.sh" 2>/dev/null || true
+    nvm use 20 >/dev/null 2>&1 || nvm use default >/dev/null 2>&1 || true
+elif [ -d "/www/server/nodejs/v22.21.1/bin" ]; then
+    export PATH="/www/server/nodejs/v22.21.1/bin:$PATH"
+fi
+
 if command -v npm >/dev/null 2>&1 && [ -d "webui" ]; then
     echo -e "  Phát hiện npm, đang biên dịch lại WebUI từ mã nguồn..."
     cd "$PROJECT_DIR/webui"

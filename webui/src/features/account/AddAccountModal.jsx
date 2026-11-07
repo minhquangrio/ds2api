@@ -26,6 +26,7 @@ export default function AddAccountModal({
     }
 
     const isGemini = newAccount.provider === 'gemini'
+    const isMuse = newAccount.provider === 'muse'
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
@@ -46,10 +47,11 @@ export default function AddAccountModal({
                         >
                             <option value="deepseek">DeepSeek</option>
                             <option value="gemini">Google Gemini Web</option>
+                            <option value="muse">Muse.ai</option>
                         </select>
                     </div>
 
-                    {!isGemini && (
+                    {!isGemini && !isMuse && (
                         <div>
                             <label className="block text-sm font-medium mb-1.5">{t('accountManager.authModeLabel')}</label>
                             <div className="grid grid-cols-2 gap-2">
@@ -82,7 +84,7 @@ export default function AddAccountModal({
                     <div>
                         <label className="block text-sm font-medium mb-1.5">
                             {t('accountManager.nameOptional')}
-                            {(isGemini || dsAuthMode === 'cookie') && (
+                            {(isGemini || isMuse || dsAuthMode === 'cookie') && (
                                 <span className="text-xs text-muted-foreground font-normal ml-1">
                                     ({t('accountManager.geminiNameOrEmailHint')})
                                 </span>
@@ -127,6 +129,32 @@ export default function AddAccountModal({
                                     value={newAccount.cookies || ''}
                                     onChange={e => setNewAccount({ ...newAccount, cookies: e.target.value })}
                                 />
+                            </div>
+                        </>
+                    ) : isMuse ? (
+                        <>
+                            <div>
+                                <label className="block text-sm font-medium mb-1.5">{t('accountManager.emailOptional')}</label>
+                                <input
+                                    type="email"
+                                    className="input-field"
+                                    placeholder="user@example.com"
+                                    value={newAccount.email || ''}
+                                    onChange={e => setNewAccount({ ...newAccount, email: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium mb-1.5">Muse Session Cookies (hatch_sess) <span className="text-destructive">*</span></label>
+                                <textarea
+                                    className="input-field bg-background font-mono text-xs h-24"
+                                    placeholder="hatch_sess=... hoặc chuỗi cookie hoàn chỉnh từ muse.ai"
+                                    value={newAccount.cookies || ''}
+                                    onChange={e => setNewAccount({ ...newAccount, cookies: e.target.value })}
+                                />
+                            </div>
+                            <div className="rounded-lg border border-border/60 bg-secondary/30 p-2.5 text-xs text-muted-foreground flex gap-2">
+                                <Info className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                                <div>{t('accountManager.museCookieHint')}</div>
                             </div>
                         </>
                     ) : dsAuthMode === 'cookie' ? (

@@ -30,6 +30,7 @@ const {
   extractPathname,
   trimContinuationOverlap,
   isCodexRequest,
+  isMuseRequest,
 } = handler.__test;
 
 function createMockResponse() {
@@ -1122,4 +1123,52 @@ test('codex requests bypass the Node DeepSeek stream path', () => {
   // Regression guard: an existing alias points gpt-5.3-codex at DeepSeek, so a
   // bare "codex" substring must not be treated as a codex model.
   assert.equal(isCodexRequest({ headers: {} }, { model: 'gpt-5.3-codex' }), false);
+});
+
+test('muse requests bypass the Node DeepSeek stream path', () => {
+  // Explicit provider header wins.
+  assert.equal(isMuseRequest({ headers: { 'x-ds2-target-provider': 'muse' } }, {}), true);
+  assert.equal(isMuseRequest({ headers: { 'x-provider': 'muse' } }, {}), true);
+
+  // Muse catalog models are recognised by prefix.
+  assert.equal(isMuseRequest({ headers: {} }, { model: 'muse-spark' }), true);
+  assert.equal(isMuseRequest({ headers: {} }, { model: 'muse/chat' }), true);
+
+  // DeepSeek models stay on Node path.
+  assert.equal(isMuseRequest({ headers: {} }, { model: 'deepseek-chat' }), false);
+});
+
+test('prepare proxy_to_go route forwards request to Go directly', async () => {
+  const originalFetch = global.fetch;
+  let proxied = false;
+  try {
+    global.fetch = async (url) => {
+      const urlStr = String(url);
+      if (urlStr.includes('__stream_prepare=1')) {
+        return {
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          text: async () => JSON.stringify({ route: 'proxy_to_go', provider: 'muse' }),
+        };
+      }
+      if (urlStr.includes('__go=1')) {
+        proxied = true;
+        return {
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'text/event-stream' }),
+          arrayBuffer: async () => Buffer.from('data: [DONE]\n\n'),
+        };
+      }
+      return { ok: false, status: 500, text: async () => '' };
+    };
+
+    const req = new MockStreamRequest();
+    const res = new MockStreamResponse();
+    await handleVercelStream(req, res, Buffer.from('{}'), { model: 'custom-muse-alias', stream: true });
+    assert.equal(proxied, true);
+  } finally {
+    global.fetch = originalFetch;
+  }
 });

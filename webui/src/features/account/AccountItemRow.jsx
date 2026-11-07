@@ -17,6 +17,7 @@ import {
     FileText,
     Wrench,
     Zap,
+    Palette,
 } from 'lucide-react'
 import clsx from 'clsx'
 
@@ -44,6 +45,7 @@ export default function AccountItemRow({
     const id = resolveAccountIdentifier(acc)
     const isGemini = acc.provider === 'gemini'
     const isCodex = acc.provider === 'codex' || Boolean(acc.codex_account_id)
+    const isMuse = acc.provider === 'muse'
 
     const assignedProxy = proxies.find(proxy => proxy.id === acc.proxy_id)
     const runtimeUnknown = envBacked && !acc.test_status
@@ -86,11 +88,13 @@ export default function AccountItemRow({
                                 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/25"
                                 : isGemini
                                     ? "bg-blue-500/10 text-blue-400 border-blue-500/25"
-                                    : "bg-primary/10 text-primary border-primary/25"
+                                    : isMuse
+                                        ? "bg-purple-500/10 text-purple-400 border-purple-500/25"
+                                        : "bg-primary/10 text-primary border-primary/25"
                         )}
-                        title={isCodex ? 'OpenAI ChatGPT / Codex' : isGemini ? 'Google Gemini' : 'DeepSeek'}
+                        title={isCodex ? 'OpenAI ChatGPT / Codex' : isGemini ? 'Google Gemini' : isMuse ? 'Muse.ai' : 'DeepSeek'}
                     >
-                        {isCodex ? <Zap className="w-5 h-5" /> : isGemini ? <Sparkles className="w-5 h-5" /> : <Bot className="w-5 h-5" />}
+                        {isCodex ? <Zap className="w-5 h-5" /> : isGemini ? <Sparkles className="w-5 h-5" /> : isMuse ? <Palette className="w-5 h-5" /> : <Bot className="w-5 h-5" />}
                     </div>
                     {/* Status Dot */}
                     <span
@@ -139,6 +143,10 @@ export default function AccountItemRow({
                         ) : isGemini ? (
                             <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/15 text-indigo-400 border border-indigo-500/25">
                                 Gemini
+                            </span>
+                        ) : isMuse ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-purple-500/15 text-purple-400 border border-purple-500/25">
+                                Muse
                             </span>
                         ) : (
                             <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-sky-500/15 text-sky-400 border border-sky-500/25">
@@ -236,15 +244,17 @@ export default function AccountItemRow({
                             </span>
                         )}
 
-                        {/* Auth Mode Badge (DeepSeek) */}
-                        {!isGemini && (
+                        {/* Auth Mode Badge */}
+                        {!isGemini && !isCodex && (
                             <span className={clsx(
                                 "font-mono text-[10px] px-1.5 py-0.5 rounded border",
-                                (acc.has_cookies || !acc.has_password)
-                                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                                    : "bg-slate-500/10 text-slate-400 border-slate-500/20"
+                                isMuse
+                                    ? "bg-purple-500/10 text-purple-400 border-purple-500/20"
+                                    : (acc.has_cookies || !acc.has_password)
+                                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                                        : "bg-slate-500/10 text-slate-400 border-slate-500/20"
                             )}>
-                                {(acc.has_cookies || !acc.has_password) ? t('accountManager.cookieAuthBadge') : t('accountManager.passwordAuthBadge')}
+                                {isMuse ? 'Session Cookie' : (acc.has_cookies || !acc.has_password) ? t('accountManager.cookieAuthBadge') : t('accountManager.passwordAuthBadge')}
                             </span>
                         )}
 

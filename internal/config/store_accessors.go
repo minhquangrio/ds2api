@@ -267,3 +267,31 @@ func (s *Store) CodexDefaultModel() string {
 	defer s.mu.RUnlock()
 	return strings.TrimSpace(s.cfg.Codex.DefaultModel)
 }
+
+// MuseEnabled reports whether the Muse provider may serve requests.
+// An unset value counts as enabled so existing configs keep working.
+func (s *Store) MuseEnabled() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.cfg.Muse.Enabled == nil {
+		return true
+	}
+	return *s.cfg.Muse.Enabled
+}
+
+// MuseWorkerURL returns the configured worker URL for Muse requests.
+func (s *Store) MuseWorkerURL() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if url := strings.TrimSpace(s.cfg.Muse.WorkerURL); url != "" {
+		return url
+	}
+	return "http://127.0.0.1:8765"
+}
+
+// MuseWorkerSecret returns the configured worker secret for Muse requests.
+func (s *Store) MuseWorkerSecret() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return strings.TrimSpace(s.cfg.Muse.Secret)
+}

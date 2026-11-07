@@ -73,6 +73,24 @@ func IsSupportedCodexModel(model string) bool {
 	return false
 }
 
+var museBaseModels = []ModelInfo{
+	{ID: "muse-spark", Object: "model", Created: 1735689600, OwnedBy: "muse"},
+	{ID: "muse-chat", Object: "model", Created: 1735689600, OwnedBy: "muse"},
+	{ID: "muse-image", Object: "model", Created: 1735689600, OwnedBy: "muse"},
+	{ID: "muse-video", Object: "model", Created: 1735689600, OwnedBy: "muse"},
+}
+
+var MuseModels = appendNoThinkingVariants(museBaseModels)
+
+func IsSupportedMuseModel(model string) bool {
+	for _, m := range MuseModels {
+		if m.ID == model {
+			return true
+		}
+	}
+	return false
+}
+
 var OllamaCapabilitiesModels = []OllamaCapabilitiesModelInfo{
 	{ID: "deepseek-v4-flash", Capabilities: []string{"tools", "thinking"}},
 	{ID: "deepseek-v4-pro", Capabilities: []string{"tools", "thinking"}},
@@ -351,6 +369,26 @@ func ResolveModelTarget(store ModelAliasReader, requested string) (ModelTarget, 
 		}, true
 	}
 
+	// 2c. Direct Muse models and muse/ prefix
+	if strings.HasPrefix(model, "muse/") {
+		canonical := strings.TrimPrefix(model, "muse/")
+		return ModelTarget{
+			Provider:  "muse",
+			Canonical: canonical,
+		}, true
+	}
+	if IsSupportedMuseModel(baseModel) {
+		variant := ""
+		if noThinking {
+			variant = "nothinking"
+		}
+		return ModelTarget{
+			Provider:  "muse",
+			Canonical: model,
+			Variant:   variant,
+		}, true
+	}
+
 	// 3. Alias lookup
 	aliases := loadModelAliases(store)
 	if mapped, ok := aliases[model]; ok {
@@ -383,6 +421,13 @@ func ResolveModelTarget(store ModelAliasReader, requested string) (ModelTarget, 
 			canonical := strings.TrimPrefix(mapped, "codex/")
 			return ModelTarget{
 				Provider:  "codex",
+				Canonical: canonical,
+			}, true
+		}
+		if IsSupportedMuseModel(mappedBase) || strings.HasPrefix(mapped, "muse/") {
+			canonical := strings.TrimPrefix(mapped, "muse/")
+			return ModelTarget{
+				Provider:  "muse",
 				Canonical: canonical,
 			}, true
 		}
@@ -424,6 +469,13 @@ func ResolveModelTarget(store ModelAliasReader, requested string) (ModelTarget, 
 				Canonical: canon,
 			}, true
 		}
+		if IsSupportedMuseModel(mappedBase) || strings.HasPrefix(mapped, "muse/") {
+			canon := strings.TrimPrefix(canonical, "muse/")
+			return ModelTarget{
+				Provider:  "muse",
+				Canonical: canon,
+			}, true
+		}
 	}
 
 	return ModelTarget{}, false
@@ -448,10 +500,11 @@ func lower(s string) string {
 }
 
 func OpenAIModelsResponse() map[string]any {
-	all := make([]ModelInfo, 0, len(DeepSeekModels)+len(GeminiModels)+len(CodexModels))
+	all := make([]ModelInfo, 0, len(DeepSeekModels)+len(GeminiModels)+len(CodexModels)+len(MuseModels))
 	all = append(all, DeepSeekModels...)
 	all = append(all, GeminiModels...)
 	all = append(all, CodexModels...)
+	all = append(all, MuseModels...)
 	return map[string]any{"object": "list", "data": all}
 }
 
@@ -474,6 +527,13 @@ func OpenAIModelByID(store ModelAliasReader, id string) (ModelInfo, bool) {
 			}
 		}
 		return ModelInfo{ID: target.Canonical, Object: "model", OwnedBy: "openai"}, true
+	case "muse":
+		for _, model := range MuseModels {
+			if model.ID == target.Canonical {
+				return model, true
+			}
+		}
+		return ModelInfo{ID: target.Canonical, Object: "model", OwnedBy: "muse"}, true
 	default:
 		for _, model := range DeepSeekModels {
 			if model.ID == target.Canonical {

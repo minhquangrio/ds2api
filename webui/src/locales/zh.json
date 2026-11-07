@@ -31,7 +31,7 @@
         },
         "accounts": {
             "label": "上游账号",
-            "desc": "管理 DeepSeek、Gemini 与 Codex 账号池"
+            "desc": "管理 DeepSeek、Gemini、Codex 与 Muse 账号池"
         },
         "providers": {
             "label": "第三方渠道",
@@ -217,11 +217,13 @@
         "deleteKeyTitle": "删除密钥",
         "noApiKeys": "未找到 API 密钥",
         "accountsTitle": "上游账号池",
-        "accountsDesc": "管理与调度 DeepSeek 及 Google Gemini 上游账号池",
+        "accountsDesc": "管理与调度 DeepSeek、Google Gemini、Codex 及 Muse 上游账号池",
         "filterProvider": "提供商",
         "filterProviderAll": "全部",
         "filterProviderDeepSeek": "DeepSeek",
         "filterProviderGemini": "Gemini",
+        "filterProviderCodex": "Codex",
+        "filterProviderMuse": "Muse",
         "filterPoolType": "池类型",
         "filterPoolTypeAll": "全部池类型",
         "filterPoolTypeDefault": "默认池",
@@ -243,7 +245,10 @@
         "statActive": "可用账号",
         "statDeepSeek": "DeepSeek",
         "statGemini": "Gemini",
+        "statCodex": "Codex",
+        "statMuse": "Muse",
         "statIssues": "需关注",
+        "museCookieHint": "请输入包含 hatch_sess 的完整 Muse.ai 登录 Cookie。",
         "searchAccountsPlaceholder": "搜索邮箱、名称、备注、手机号...",
         "clearSearch": "清除搜索",
         "clearFilterAction": "清除筛选条件",

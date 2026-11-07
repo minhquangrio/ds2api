@@ -44,6 +44,8 @@ ds2api-tests
 .env.*.local
 
 # Testing
+__pycache__/
+*.pyc
 .coverage
 htmlcov/
 .pytest_cache/

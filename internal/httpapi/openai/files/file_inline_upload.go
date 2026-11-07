@@ -57,6 +57,9 @@ type inlineDecodedFile struct {
 }
 
 func (h *Handler) PreprocessInlineFileInputs(ctx context.Context, a *auth.RequestAuth, req map[string]any) error {
+	if h != nil && isMuseFileRequest(h, a, req) {
+		return h.preprocessMuseTextInputs(ctx, a, req)
+	}
 	if h == nil || h.DS == nil || len(req) == 0 {
 		return nil
 	}

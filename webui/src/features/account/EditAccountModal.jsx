@@ -26,6 +26,7 @@ export default function EditAccountModal({
     }
 
     const isGemini = editingAccount.provider === 'gemini'
+    const isMuse = editingAccount.provider === 'muse'
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in">
@@ -68,9 +69,9 @@ export default function EditAccountModal({
                     <div>
                         <div className="flex items-center justify-between mb-1.5">
                             <label className="block text-sm font-medium">
-                                {isGemini ? 'Gemini Cookies' : t('accountManager.deepseekCookiesLabel')}
+                                {isGemini ? 'Gemini Cookies' : isMuse ? 'Muse Session Cookies (hatch_sess)' : t('accountManager.deepseekCookiesLabel')}
                             </label>
-                            {!isGemini && (
+                            {!isGemini && !isMuse && (
                                 <button
                                     type="button"
                                     onClick={handleCopyScript}
@@ -83,7 +84,7 @@ export default function EditAccountModal({
                         </div>
                         <textarea
                             className="input-field bg-background font-mono text-xs h-24"
-                            placeholder={isGemini ? t('accountManager.cookiesEditPlaceholder') : t('accountManager.deepseekCookiesPlaceholder')}
+                            placeholder={isGemini ? t('accountManager.cookiesEditPlaceholder') : isMuse ? 'hatch_sess=... hoặc chuỗi cookie hoàn chỉnh từ muse.ai' : t('accountManager.deepseekCookiesPlaceholder')}
                             value={editAccount.cookies || ''}
                             onChange={e => setEditAccount({ ...editAccount, cookies: e.target.value })}
                         />

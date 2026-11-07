@@ -17,6 +17,7 @@ import (
 	dsprotocol "ds2api/internal/deepseek/protocol"
 	openaifmt "ds2api/internal/format/openai"
 	"ds2api/internal/geminiweb"
+	"ds2api/internal/muse"
 	"ds2api/internal/promptcompat"
 	"ds2api/internal/sse"
 	streamengine "ds2api/internal/stream"
@@ -84,6 +85,7 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 	if !h.Auth.ToolsEnabledForRequest(r) {
 		delete(req, "tools")
+		delete(req, "tool_choice")
 	}
 	stdReq, err := promptcompat.NormalizeOpenAIChatRequest(h.Store, req, requestTraceID(r))
 	if err != nil {
@@ -202,6 +204,60 @@ func (h *Handler) ChatCompletions(w http.ResponseWriter, r *http.Request) {
 		}
 		if historySession != nil {
 			historySession.success(http.StatusOK, thinking, text, "stop", nil)
+		}
+		return
+	}
+
+	if a.Provider == "muse" {
+		onSwitched := func(newAccountID string) {
+			if historySession != nil {
+				historySession.updateAccountID(newAccountID)
+			}
+		}
+		if !stdReq.Stream {
+			turn, err := muse.ExecuteTurnWithRetry(r.Context(), a, h.Store, stdReq, onSwitched)
+			if err != nil {
+				statusCode, errCode := muse.ErrorDetail(turn, err)
+				if errors.Is(err, muse.ErrAllMuseAccountsCoolingDown) {
+					statusCode = http.StatusTooManyRequests
+					errCode = "all_muse_accounts_cooling_down"
+				}
+				if historySession != nil {
+					historySession.error(statusCode, err.Error(), errCode, historyThinkingForArchive(turn.RawThinking, turn.DetectionThinking, turn.Thinking), historyTextForArchive(turn.RawText, turn.Text))
+				}
+				writeOpenAIErrorWithCode(w, statusCode, err.Error(), errCode)
+				return
+			}
+			respBody := openaifmt.BuildChatCompletionWithToolCalls("muse-"+time.Now().Format("20060102150405"), stdReq.ResponseModel, turn.Prompt, turn.Thinking, turn.Text, turn.ToolCalls, stdReq.ToolsRaw)
+			respBody["usage"] = assistantturn.OpenAIChatUsage(turn)
+			respBody["choices"].([]map[string]any)[0]["finish_reason"] = assistantturn.FinishReason(turn)
+			if historySession != nil {
+				historySession.success(http.StatusOK, historyThinkingForArchive(turn.RawThinking, turn.DetectionThinking, turn.Thinking), historyTextForArchive(turn.RawText, turn.Text), assistantturn.FinishReason(turn), assistantturn.OpenAIChatUsage(turn))
+			}
+			writeJSON(w, http.StatusOK, respBody)
+			return
+		}
+
+		turn, streamErr := muse.ExecuteStreamTurnWithRetry(
+			r.Context(), a, h.Store, stdReq, w, muse.StreamOpenAIChatWithTurn, onSwitched,
+		)
+		if streamErr != nil {
+			config.Logger.Warn("[muse] stream error", "error", streamErr)
+			statusCode, errCode := muse.ErrorDetail(turn, streamErr)
+			if errors.Is(streamErr, muse.ErrAllMuseAccountsCoolingDown) {
+				statusCode = http.StatusTooManyRequests
+				errCode = "all_muse_accounts_cooling_down"
+			}
+			if historySession != nil {
+				historySession.error(statusCode, streamErr.Error(), errCode, historyThinkingForArchive(turn.RawThinking, turn.DetectionThinking, turn.Thinking), historyTextForArchive(turn.RawText, turn.Text))
+			}
+			if !muse.StreamCommitted(streamErr) {
+				writeOpenAIErrorWithCode(w, statusCode, streamErr.Error(), errCode)
+			}
+			return
+		}
+		if historySession != nil {
+			historySession.success(http.StatusOK, historyThinkingForArchive(turn.RawThinking, turn.DetectionThinking, turn.Thinking), historyTextForArchive(turn.RawText, turn.Text), assistantturn.FinishReason(turn), assistantturn.OpenAIChatUsage(turn))
 		}
 		return
 	}

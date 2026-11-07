@@ -40,7 +40,7 @@ func (s Service) ApplyCurrentInputFile(ctx context.Context, a *auth.RequestAuth,
 	if stdReq.CurrentInputFileApplied || s.DS == nil || s.Store == nil || a == nil || !s.Store.CurrentInputFileEnabled() {
 		return stdReq, nil
 	}
-	if isGeminiCurrentInputRequest(a) {
+	if isNonDeepSeekCurrentInputRequest(a) {
 		return stdReq, nil
 	}
 	if modelType, ok := config.GetModelType(stdReq.ResolvedModel); ok && modelType == "expert" {
@@ -124,7 +124,7 @@ func (s Service) ApplyCurrentInputFile(ctx context.Context, a *auth.RequestAuth,
 }
 
 func (s Service) ReuploadAppliedCurrentInputFile(ctx context.Context, a *auth.RequestAuth, stdReq promptcompat.StandardRequest) (promptcompat.StandardRequest, error) {
-	if !stdReq.CurrentInputFileApplied || s.DS == nil || a == nil {
+	if !stdReq.CurrentInputFileApplied || s.DS == nil || a == nil || isNonDeepSeekCurrentInputRequest(a) {
 		return stdReq, nil
 	}
 	fileText := strings.TrimSpace(stdReq.HistoryText)
@@ -264,6 +264,16 @@ func replaceGeneratedCurrentInputRefs(existing []string, oldHistoryID, oldToolsI
 	return prependUniqueRefFileIDs(filtered, newHistoryID, newToolsID)
 }
 
-func isGeminiCurrentInputRequest(a *auth.RequestAuth) bool {
-	return a != nil && (a.Provider == "gemini" || a.Account.IsGemini())
+func isNonDeepSeekCurrentInputRequest(a *auth.RequestAuth) bool {
+	if a == nil {
+		return true
+	}
+	p := strings.ToLower(strings.TrimSpace(a.Provider))
+	if p == "gemini" || p == "codex" || p == "muse" {
+		return true
+	}
+	if a.Account.IsGemini() || a.Account.IsCodex() || a.Account.IsMuse() {
+		return true
+	}
+	return p != "" && p != "deepseek"
 }
