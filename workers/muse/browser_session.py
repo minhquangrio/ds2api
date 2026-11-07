@@ -129,7 +129,7 @@ class BrowserSessions:
         cookies = parse_cookies(account.cookies)
         options = proxy_options(account.proxy)
         await self._ensure_browser()
-        context = await self._browser.new_context(**options)
+        context = await self._browser.new_context(bypass_csp=True, **options)
         try:
             await context.add_cookies(cookies)
             state = await self._session_state(context)
