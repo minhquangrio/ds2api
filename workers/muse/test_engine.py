@@ -3,6 +3,11 @@
 import asyncio
 from contextlib import aclosing
 
+try:
+    from asyncio import timeout as async_timeout
+except ImportError:
+    from async_timeout import timeout as async_timeout
+
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
 
@@ -108,7 +113,7 @@ async def test_engine_does_not_complete_while_stop_button_is_visible():
             async for event in stream:
                 events.append(event)
     with pytest.raises(TimeoutError):
-        async with asyncio.timeout(1.2):
+        async with async_timeout(1.2):
             await consume()
     assert not any(isinstance(e, ChatCompletedEvent) for e in events)
     assert context.closed and not driver.account_lock(req.account).locked()

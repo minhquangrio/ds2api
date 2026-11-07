@@ -11,6 +11,11 @@ import logging
 import time
 from typing import AsyncIterator
 
+try:
+    from asyncio import timeout as async_timeout
+except ImportError:
+    from async_timeout import timeout as async_timeout
+
 from .browser_session import BrowserSessions, DriverFailure
 from .driver_base import MuseDriver, DriverEvent
 from .protocol import AccountInfo, ChatCompletedEvent, ChatDeltaEvent, ChatErrorEvent, ChatRequest, ProbeResult
@@ -61,7 +66,7 @@ class EngineMuseDriver(BrowserSessions, MuseDriver):
             return
         async with self.account_lock(request.account):
             try:
-                async with asyncio.timeout(100):
+                async with async_timeout(100):
                     async with self.session(request.account, wake=True) as (context, _):
                         page = await context.new_page()
                         await page.goto("https://muse.ai/thread/new", wait_until="domcontentloaded", timeout=20000)
@@ -109,13 +114,13 @@ class EngineMuseDriver(BrowserSessions, MuseDriver):
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                logger.warning("Muse browser operation failed (%s)", type(exc).__name__)
+                logger.warning("Muse browser operation failed (%s)", type(exc).__name__, exc_info=True)
                 yield ChatErrorEvent("Muse browser operation failed", "browser_error", 502)
 
     async def probe_account(self, account: AccountInfo) -> ProbeResult:
         async with self.account_lock(account):
             try:
-                async with asyncio.timeout(30):
+                async with async_timeout(30):
                     async with self.session(account) as (_, state):
                         return ProbeResult("ok", account.account_id, quota={
                             "session_status": state["status"], "vm_state": state.get("vm_state")})

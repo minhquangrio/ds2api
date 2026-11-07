@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
+import json
 from contextlib import asynccontextmanager
 from urllib.parse import unquote, urlsplit
 
@@ -20,15 +21,35 @@ class DriverFailure(Exception):
 
 
 def parse_cookies(raw: str) -> list[dict]:
-    cookies = {}
-    for item in raw.split(";"):
-        name, separator, value = item.strip().partition("=")
-        if separator and name.strip() and value.strip():
-            cookies[name.strip()] = value.strip()
-    if not cookies.get("hatch_sess"):
+    raw = str(raw or "").strip()
+    cookie_map: dict[str, str] = {}
+    if raw.startswith("[") or raw.startswith("{"):
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                for item in parsed:
+                    if isinstance(item, dict) and item.get("name") and item.get("value") is not None:
+                        cookie_map[str(item["name"]).strip()] = str(item["value"]).strip()
+            elif isinstance(parsed, dict):
+                for k, v in parsed.items():
+                    if k and v is not None:
+                        cookie_map[str(k).strip()] = str(v).strip()
+        except Exception:
+            pass
+    if not cookie_map:
+        for item in raw.split(";"):
+            name, separator, value = item.strip().partition("=")
+            if separator and name.strip() and value.strip():
+                cookie_map[name.strip()] = value.strip()
+    if not cookie_map.get("hatch_sess"):
         raise DriverFailure("hatch_sess session cookie is required", "missing_credentials", 401)
-    return [{"name": name, "value": value, "domain": ".muse.ai", "path": "/", "secure": True}
-            for name, value in cookies.items()]
+    result = []
+    for name, value in cookie_map.items():
+        if name.startswith("__Host-"):
+            result.append({"name": name, "value": value, "url": "https://muse.ai"})
+        else:
+            result.append({"name": name, "value": value, "domain": ".muse.ai", "path": "/"})
+    return result
 
 
 def proxy_options(raw: str | None) -> dict:
