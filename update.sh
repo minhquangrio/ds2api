@@ -223,6 +223,18 @@ if [ "$RESTARTED" = false ]; then
     RESTARTED=true
 fi
 
+# Khởi động lại Muse Worker nếu được cấu hình
+if [ -d "workers/muse" ]; then
+    if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files 2>/dev/null | grep -q "ds2api-muse-worker.service"; then
+        systemctl restart ds2api-muse-worker
+        echo -e "  ${GREEN}✓${NC} Systemd: Đã khởi động lại dịch vụ Muse Worker (cổng 8765)!"
+    elif [ -d ".venv-muse" ]; then
+        pkill -f "workers.muse.server" 2>/dev/null || true
+        nohup .venv-muse/bin/python -m workers.muse.server --driver engine --host 127.0.0.1 --port 8765 > muse_worker.log 2>&1 &
+        echo -e "  ${GREEN}✓${NC} Đã khởi động lại Muse Worker ở chế độ nền (cổng 8765)!"
+    fi
+fi
+
 # ------------------------------------------------------------------------------
 # Kiểm tra sức khỏe dịch vụ (Health Check)
 # ------------------------------------------------------------------------------
