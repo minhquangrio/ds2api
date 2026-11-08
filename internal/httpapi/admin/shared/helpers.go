@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
 
 	"ds2api/internal/config"
+	"ds2api/internal/proxyrotate"
 	"ds2api/internal/util"
 )
 
@@ -68,11 +70,203 @@ func AccountMatchesIdentifier(acc config.Account, identifier string) bool {
 func NormalizeAccountForStorage(acc config.Account) config.Account {
 	return normalizeAccountForStorage(acc)
 }
-func ToProxy(m map[string]any) config.Proxy {
-	return toProxy(m)
+func ToProxy(m map[string]any) config.Proxy { return toProxy(m) }
+
+func toProxy(m map[string]any) config.Proxy {
+	proxy := config.Proxy{
+		ID:       fieldString(m, "id"),
+		Name:     fieldString(m, "name"),
+		Type:     fieldString(m, "type"),
+		Host:     fieldString(m, "host"),
+		Port:     intFrom(m["port"]),
+		Username: fieldString(m, "username"),
+		Password: fieldString(m, "password"),
+	}
+	if raw, ok := m["rotate"]; ok {
+		proxy.Rotate = ToRotateProxyConfig(raw)
+	}
+	if proxy.Rotate == nil {
+		proxy.Rotate = toFlatRotateProxyConfig(m)
+	}
+	return config.NormalizeProxy(proxy)
 }
+
+// ToRotateProxyConfig builds a rotate block from a request value. It returns
+// nil for null/empty payloads so callers can distinguish "clear rotation".
+func ToRotateProxyConfig(v any) *config.RotateProxyConfig {
+	obj, ok := v.(map[string]any)
+	if !ok {
+		return nil
+	}
+	rotate := &config.RotateProxyConfig{
+		Provider:  fieldString(obj, "provider"),
+		Endpoint:  fieldString(obj, "endpoint"),
+		Key:       fieldString(obj, "key"),
+		Network:   fieldString(obj, "network"),
+		Province:  fieldString(obj, "province"),
+		Protocol:  fieldString(obj, "protocol"),
+		Whitelist: fieldString(obj, "whitelist"),
+	}
+	if ttl, ok := fieldInt64Optional(obj, "ttl_seconds"); ok {
+		rotate.TTLSeconds = int(ttl)
+	}
+	if minRemaining, ok := fieldInt64Optional(obj, "min_remaining_seconds"); ok {
+		rotate.MinRemainingSeconds = int(minRemaining)
+	}
+	if rotateConfigEmpty(rotate) {
+		return nil
+	}
+	return rotate
+}
+
+// toFlatRotateProxyConfig accepts the flat `rotate_*` spelling so a curl call
+// does not need a nested object.
+func toFlatRotateProxyConfig(m map[string]any) *config.RotateProxyConfig {
+	flat := map[string]any{}
+	for target, source := range map[string]string{
+		"provider":              "rotate_provider",
+		"endpoint":              "rotate_endpoint",
+		"key":                   "rotate_key",
+		"network":               "rotate_network",
+		"province":              "rotate_province",
+		"protocol":              "rotate_protocol",
+		"whitelist":             "rotate_whitelist",
+		"ttl_seconds":           "rotate_ttl_seconds",
+		"min_remaining_seconds": "rotate_min_remaining_seconds",
+	} {
+		if value, ok := m[source]; ok {
+			flat[target] = value
+		}
+	}
+	if len(flat) == 0 {
+		return nil
+	}
+	return ToRotateProxyConfig(flat)
+}
+
+func rotateConfigEmpty(rotate *config.RotateProxyConfig) bool {
+	if rotate == nil {
+		return true
+	}
+	return strings.TrimSpace(rotate.Provider) == "" &&
+		strings.TrimSpace(rotate.Endpoint) == "" &&
+		strings.TrimSpace(rotate.Key) == "" &&
+		strings.TrimSpace(rotate.Network) == "" &&
+		strings.TrimSpace(rotate.Province) == "" &&
+		strings.TrimSpace(rotate.Protocol) == "" &&
+		strings.TrimSpace(rotate.Whitelist) == "" &&
+		rotate.TTLSeconds == 0 &&
+		rotate.MinRemainingSeconds == 0
+}
+
+// HasRotatePayload reports whether a request body mentioned rotation at all.
+// Absent means "keep the stored block"; present-but-blank means "clear it".
+func HasRotatePayload(m map[string]any) bool {
+	if _, ok := m["rotate"]; ok {
+		return true
+	}
+	for _, key := range []string{
+		"rotate_provider", "rotate_endpoint", "rotate_key", "rotate_network",
+		"rotate_province", "rotate_protocol", "rotate_whitelist",
+		"rotate_ttl_seconds", "rotate_min_remaining_seconds",
+	} {
+		if _, ok := m[key]; ok {
+			return true
+		}
+	}
+	return false
+}
+
 func FindProxyByID(c config.Config, proxyID string) (config.Proxy, bool) {
 	return findProxyByID(c, proxyID)
+}
+
+// ProxyView is the redacted admin representation of one proxy entry. Secrets
+// (password, rotating key) are never returned, only presence markers and a
+// masked preview. A rotating entry reports its live lease so the UI can show the
+// current exit node and how long it stays usable.
+func ProxyView(proxy config.Proxy) map[string]any {
+	proxy = config.NormalizeProxy(proxy)
+	view := map[string]any{
+		"id":           proxy.ID,
+		"name":         proxy.Name,
+		"type":         proxy.Type,
+		"host":         proxy.Host,
+		"port":         proxy.Port,
+		"username":     proxy.Username,
+		"has_password": strings.TrimSpace(proxy.Password) != "",
+		"mode":         "static",
+	}
+	if proxy.Rotate == nil {
+		return view
+	}
+
+	// The stored host/port of a rotating entry are placeholders; the address
+	// in use comes from the lease, so hide the static fields entirely.
+	view["mode"] = "rotate"
+	view["host"] = ""
+	view["port"] = 0
+	view["username"] = ""
+	view["has_password"] = false
+
+	rotate := proxy.Rotate
+	block := map[string]any{
+		"provider":              rotate.Provider,
+		"endpoint":              sanitizeEndpointPreview(rotate.Endpoint),
+		"endpoint_host":         config.RotateEndpointHost(rotate.Endpoint),
+		"has_key":               strings.TrimSpace(rotate.Key) != "",
+		"key_preview":           MaskSecretPreview(rotate.Key),
+		"network":               rotate.Network,
+		"province":              rotate.Province,
+		"protocol":              rotate.Protocol,
+		"whitelist":             rotate.Whitelist,
+		"ttl_seconds":           rotate.TTLSeconds,
+		"min_remaining_seconds": rotate.MinRemainingSeconds,
+	}
+	if lease, ok := proxyrotate.Global().Status(proxy.ID); ok {
+		block["lease"] = lease
+	}
+	view["rotate"] = block
+	return view
+}
+
+// ProxyViews maps every configured proxy into its admin view.
+func ProxyViews(proxies []config.Proxy) []map[string]any {
+	items := make([]map[string]any, 0, len(proxies))
+	for _, proxy := range proxies {
+		items = append(items, ProxyView(proxy))
+	}
+	return items
+}
+
+// sanitizeEndpointPreview removes credentials and any embedded `key` query from
+// a custom endpoint so the admin view can show the URL without leaking a secret.
+func sanitizeEndpointPreview(endpoint string) string {
+	endpoint = strings.TrimSpace(endpoint)
+	if endpoint == "" {
+		return ""
+	}
+	parsed, err := url.Parse(endpoint)
+	if err != nil {
+		return endpoint
+	}
+	if parsed.User != nil {
+		parsed.User = url.User("***")
+	}
+	query := parsed.Query()
+	changed := false
+	for name := range query {
+		if strings.EqualFold(name, "key") || strings.EqualFold(name, "keyxoay") {
+			query.Set(name, "***")
+			changed = true
+		}
+	}
+	if changed {
+		parsed.RawQuery = query.Encode()
+	} else if parsed.User == nil {
+		return endpoint
+	}
+	return parsed.String()
 }
 func AccountDedupeKey(acc config.Account) string { return accountDedupeKey(acc) }
 func NormalizeAndDedupeAccounts(accounts []config.Account) []config.Account {
@@ -500,18 +694,6 @@ func normalizeAccountForStorage(acc config.Account) config.Account {
 	acc.PoolType = config.NormalizePoolType(acc.PoolType)
 	acc.Locale = strings.TrimSpace(acc.Locale)
 	return acc
-}
-
-func toProxy(m map[string]any) config.Proxy {
-	return config.NormalizeProxy(config.Proxy{
-		ID:       fieldString(m, "id"),
-		Name:     fieldString(m, "name"),
-		Type:     fieldString(m, "type"),
-		Host:     fieldString(m, "host"),
-		Port:     intFrom(m["port"]),
-		Username: fieldString(m, "username"),
-		Password: fieldString(m, "password"),
-	})
 }
 
 func findProxyByID(c config.Config, proxyID string) (config.Proxy, bool) {

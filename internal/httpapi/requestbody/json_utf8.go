@@ -80,6 +80,13 @@ func isKnownJSONRequestPath(method, path string) bool {
 		return true
 	case path == "/v1/embeddings" || path == "/embeddings":
 		return true
+	// Images generations and video create are JSON bodies. /v1/images/edits is
+	// deliberately absent: it is normally multipart, and validating binary
+	// upload bytes as UTF-8 text would reject valid PNG or JPEG payloads.
+	case path == "/v1/images/generations" || path == "/images/generations":
+		return true
+	case path == "/v1/videos" || path == "/videos":
+		return true
 	case path == "/anthropic/v1/messages" || path == "/v1/messages" || path == "/messages":
 		return true
 	case path == "/anthropic/v1/messages/count_tokens" || path == "/v1/messages/count_tokens" || path == "/messages/count_tokens":

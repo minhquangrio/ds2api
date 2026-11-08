@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"ds2api/internal/config"
+	adminshared "ds2api/internal/httpapi/admin/shared"
 )
 
 func (h *Handler) getConfig(w http.ResponseWriter, _ *http.Request) {
@@ -50,20 +50,7 @@ func (h *Handler) getConfig(w http.ResponseWriter, _ *http.Request) {
 		})
 	}
 	safe["accounts"] = accounts
-	proxies := make([]map[string]any, 0, len(snap.Proxies))
-	for _, proxy := range snap.Proxies {
-		proxy = config.NormalizeProxy(proxy)
-		proxies = append(proxies, map[string]any{
-			"id":           proxy.ID,
-			"name":         proxy.Name,
-			"type":         proxy.Type,
-			"host":         proxy.Host,
-			"port":         proxy.Port,
-			"username":     proxy.Username,
-			"has_password": strings.TrimSpace(proxy.Password) != "",
-		})
-	}
-	safe["proxies"] = proxies
+	safe["proxies"] = adminshared.ProxyViews(snap.Proxies)
 	writeJSON(w, http.StatusOK, safe)
 }
 

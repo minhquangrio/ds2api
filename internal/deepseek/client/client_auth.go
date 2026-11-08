@@ -28,7 +28,7 @@ func (c *Client) Login(ctx context.Context, acc config.Account) (string, error) 
 	// Start the new session with a clean jar: replaying cookies issued against
 	// the previous token alongside a freshly minted one is incoherent.
 	c.cookies.forget(acc.Identifier())
-	clients := c.requestClientsForAccount(acc)
+	clients := c.requestClientsForAccount(ctx, acc)
 	payload := map[string]any{
 		"email":     "",
 		"mobile":    "",

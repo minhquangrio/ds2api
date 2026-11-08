@@ -3,6 +3,7 @@ package muse
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -11,6 +12,7 @@ import (
 	"ds2api/internal/config"
 	"ds2api/internal/geminiweb"
 	"ds2api/internal/promptcompat"
+	"ds2api/internal/proxyrotate"
 )
 
 type StoreSnapshotter interface {
@@ -48,7 +50,7 @@ func (r *Runtime) EvictClient(accountID string) {
 	delete(r.clients, accountID)
 }
 
-func (r *Runtime) GetClient(_ context.Context, acc config.Account, store any) (*Client, error) {
+func (r *Runtime) GetClient(ctx context.Context, acc config.Account, store any) (*Client, error) {
 	id := acc.Identifier()
 	if id == "" {
 		id = acc.Name
@@ -87,11 +89,12 @@ func (r *Runtime) GetClient(_ context.Context, acc config.Account, store any) (*
 			secret = cfg.Muse.Secret
 		}
 		if proxyID := strings.TrimSpace(acc.ProxyID); proxyID != "" {
-			for _, p := range cfg.Proxies {
-				if p.ID == proxyID {
-					proxyURL = geminiweb.FormatProxyURL(p)
-					break
-				}
+			resolved, found, err := proxyrotate.ResolveProxyID(ctx, cfg, proxyID)
+			if err != nil {
+				return nil, fmt.Errorf("muse proxy unavailable: %w", err)
+			}
+			if found {
+				proxyURL = geminiweb.FormatProxyURL(resolved)
 			}
 		}
 	}

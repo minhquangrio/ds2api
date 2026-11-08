@@ -1,8 +1,14 @@
 import { useState } from 'react'
-import { Pencil, Play, Plus, Shield, Sparkles, Trash2, X } from 'lucide-react'
+import { Pencil, Play, Plus, RefreshCw, Shield, Sparkles, Trash2, X } from 'lucide-react'
 import clsx from 'clsx'
 
 import { useI18n } from '../../i18n'
+import ProxyRotateFields, {
+    buildRotatePayload,
+    createEmptyRotateForm,
+    rotateFormFromProxy,
+    rotateSummary,
+} from './ProxyRotateFields'
 
 async function readApiResponse(res, nonJsonMessage) {
     const contentType = String(res.headers.get('content-type') || '').toLowerCase()
@@ -31,7 +37,7 @@ async function readApiResponse(res, nonJsonMessage) {
     throw new Error(nonJsonMessage)
 }
 
-const EMPTY_FORM = {
+const EMPTY_STATIC_FORM = {
     name: '',
     type: 'socks5h',
     host: '',
@@ -41,7 +47,42 @@ const EMPTY_FORM = {
 }
 
 function createEmptyProxyForm() {
-    return { ...EMPTY_FORM }
+    return {
+        mode: 'static',
+        editingId: null,
+        rotate: createEmptyRotateForm(),
+        ...EMPTY_STATIC_FORM,
+    }
+}
+
+function proxyFormFromProxy(proxy) {
+    const mode = proxy.mode === 'rotate' || proxy.rotate ? 'rotate' : 'static'
+    return {
+        mode,
+        editingId: proxy.id || null,
+        name: proxy.name || '',
+        type: proxy.type || 'socks5h',
+        host: proxy.host || '',
+        port: proxy.port || 1080,
+        username: proxy.username || '',
+        password: '',
+        rotate: rotateFormFromProxy(proxy),
+    }
+}
+
+function isRotatingProxy(proxy) {
+    return proxy?.mode === 'rotate' || Boolean(proxy?.rotate)
+}
+
+function proxyLabel(proxy) {
+    if (proxy?.name) {
+        return proxy.name
+    }
+    if (isRotatingProxy(proxy)) {
+        const lease = proxy.rotate?.lease
+        return lease?.host ? `${lease.host}:${lease.port}` : 'rotate'
+    }
+    return `${proxy?.host}:${proxy?.port}`
 }
 
 function ProxyStatusBadge({ t, result, testing = false }) {
@@ -80,8 +121,10 @@ function ProxiesTable({
     proxies,
     testing,
     testResults,
+    rotating,
     onCreate,
     onTest,
+    onRotate,
     onEdit,
     onDelete,
 }) {
@@ -107,14 +150,37 @@ function ProxiesTable({
                 <div className="divide-y divide-border">
                     {proxies.map((proxy) => {
                         const result = testResults[proxy.id]
+                        const isRotating = proxy.mode === 'rotate' || Boolean(proxy.rotate)
+                        const lease = isRotating ? rotateSummary(t, proxy) : null
+                        const address = isRotating
+                            ? (proxy.rotate?.lease?.host
+                                ? `${proxy.rotate.lease.host}:${proxy.rotate.lease.port}`
+                                : t('proxyManager.leaseIdle'))
+                            : `${proxy.host}:${proxy.port}`
                         return (
                             <div key={proxy.id} className="p-4 md:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 hover:bg-muted/40 transition-colors">
                                 <div className="min-w-0">
                                     <div className="flex flex-wrap items-center gap-2">
-                                        <div className="font-medium text-foreground">{proxy.name || `${proxy.host}:${proxy.port}`}</div>
-                                        <span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-primary">
-                                            {proxy.type}
+                                        <div className="font-medium text-foreground">{proxy.name || address}</div>
+                                        <span className={clsx(
+                                            'inline-flex items-center rounded-full border px-2 py-1 text-[10px] font-medium uppercase tracking-wide',
+                                            isRotating
+                                                ? 'border-primary/20 bg-primary/10 text-primary'
+                                                : 'border-border bg-muted/20 text-muted-foreground'
+                                        )}>
+                                            {isRotating ? t('proxyManager.modeRotate') : proxy.type}
                                         </span>
+                                        {isRotating && (
+                                            <span className={clsx(
+                                                'inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-medium',
+                                                lease.tone === 'ok' && 'border-emerald-500/20 bg-emerald-500/10 text-emerald-500',
+                                                lease.tone === 'error' && 'border-destructive/20 bg-destructive/10 text-destructive',
+                                                lease.tone === 'muted' && 'border-border bg-muted/20 text-muted-foreground'
+                                            )}>
+                                                <RefreshCw className="w-3 h-3" />
+                                                {lease.label}
+                                            </span>
+                                        )}
                                         {proxy.username && (
                                             <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/20 px-2 py-1 text-[10px] font-medium text-muted-foreground">
                                                 <Shield className="w-3 h-3" />
@@ -125,8 +191,13 @@ function ProxiesTable({
                                     </div>
                                     <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                                         <span className="font-mono bg-muted/30 px-2 py-1 rounded border border-border">
-                                            {proxy.host}:{proxy.port}
+                                            {address}
                                         </span>
+                                        {lease?.detail && (
+                                            <span className="rounded-full border border-border bg-muted/20 px-2 py-1 text-[10px]">
+                                                {lease.detail}
+                                            </span>
+                                        )}
                                         {proxy.has_password && (
                                             <span className="rounded-full border border-border bg-muted/20 px-2 py-1 text-[10px]">
                                                 {t('proxyManager.authEnabled')}
@@ -139,6 +210,16 @@ function ProxiesTable({
                                 </div>
 
                                 <div className="flex items-center gap-2 self-start lg:self-auto">
+                                    {isRotating && (
+                                        <button
+                                            onClick={() => onRotate(proxy)}
+                                            disabled={rotating[proxy.id]}
+                                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-xs font-medium disabled:opacity-50"
+                                        >
+                                            <RefreshCw className={clsx('w-3.5 h-3.5', rotating[proxy.id] && 'animate-spin')} />
+                                            {t('proxyManager.rotateAction')}
+                                        </button>
+                                    )}
                                     <button
                                         onClick={() => onTest(proxy)}
                                         disabled={testing[proxy.id]}
@@ -260,103 +341,146 @@ function ProxyFormModal({
                     </button>
                 </div>
 
-                <div className="p-6 space-y-4">
-                    <div className="bg-muted/30 border border-border/80 rounded-lg p-3 space-y-1.5">
-                        <label className="flex items-center gap-1.5 text-xs font-semibold text-primary">
-                            <Sparkles className="w-3.5 h-3.5" />
-                            {t('proxyManager.quickPasteLabel')}
-                        </label>
-                        <input
-                            type="text"
-                            className="input-field text-xs font-mono"
-                            placeholder={t('proxyManager.quickPastePlaceholder')}
-                            value={quickInput}
-                            onChange={e => handleQuickInput(e.target.value)}
-                        />
-                        {quickFeedback && (
-                            <p className="text-[11px] text-emerald-500 font-medium">✓ {quickFeedback}</p>
-                        )}
-                    </div>
-
-                    <div className="grid md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium mb-1.5">{t('proxyManager.nameLabel')}</label>
-                            <input
-                                type="text"
-                                className="input-field"
-                                placeholder={t('proxyManager.namePlaceholder')}
-                                value={form.name}
-                                onChange={e => setForm({ ...form, name: e.target.value })}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-1.5">{t('proxyManager.typeLabel')}</label>
-                            <select
-                                className="input-field"
-                                value={form.type}
-                                onChange={e => setForm({ ...form, type: e.target.value })}
+                <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                    <div className="grid grid-cols-2 gap-2 rounded-lg border border-border bg-muted/20 p-1">
+                        {['static', 'rotate'].map(mode => (
+                            <button
+                                key={mode}
+                                type="button"
+                                onClick={() => setForm(prev => ({ ...prev, mode }))}
+                                className={clsx(
+                                    'px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2',
+                                    form.mode === mode
+                                        ? 'bg-primary text-primary-foreground shadow-sm'
+                                        : 'text-muted-foreground hover:text-foreground'
+                                )}
                             >
-                                <option value="http">http</option>
-                                <option value="https">https</option>
-                                <option value="socks5">socks5</option>
-                                <option value="socks5h">socks5h</option>
-                            </select>
-                        </div>
+                                {mode === 'rotate' && <RefreshCw className="w-3.5 h-3.5" />}
+                                {t(mode === 'rotate' ? 'proxyManager.modeRotate' : 'proxyManager.modeStatic')}
+                            </button>
+                        ))}
                     </div>
+                    <p className="text-xs text-muted-foreground">
+                        {t(form.mode === 'rotate' ? 'proxyManager.modeRotateHelp' : 'proxyManager.modeStaticHelp')}
+                    </p>
 
-                    <div className="grid md:grid-cols-[1fr_128px] gap-4">
-                        <div>
-                            <label className="block text-sm font-medium mb-1.5">{t('proxyManager.hostLabel')}</label>
-                            <input
-                                type="text"
-                                className="input-field"
-                                placeholder={t('proxyManager.hostPlaceholder')}
-                                value={form.host}
-                                onChange={e => setForm({ ...form, host: e.target.value })}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-1.5">{t('proxyManager.portLabel')}</label>
-                            <input
-                                type="number"
-                                min="1"
-                                max="65535"
-                                className="input-field"
-                                value={form.port}
-                                onChange={e => setForm({ ...form, port: Number(e.target.value) || '' })}
-                            />
-                        </div>
-                    </div>
+                    {form.mode === 'rotate' ? (
+                        <ProxyRotateFields t={t} form={form} setForm={setForm} />
+                    ) : (
+                        <>
+                            <div className="bg-muted/30 border border-border/80 rounded-lg p-3 space-y-1.5">
+                                <label className="flex items-center gap-1.5 text-xs font-semibold text-primary">
+                                    <Sparkles className="w-3.5 h-3.5" />
+                                    {t('proxyManager.quickPasteLabel')}
+                                </label>
+                                <input
+                                    type="text"
+                                    className="input-field text-xs font-mono"
+                                    placeholder={t('proxyManager.quickPastePlaceholder')}
+                                    value={quickInput}
+                                    onChange={e => handleQuickInput(e.target.value)}
+                                />
+                                {quickFeedback && (
+                                    <p className="text-[11px] text-emerald-500 font-medium">✓ {quickFeedback}</p>
+                                )}
+                            </div>
 
-                    <div className="grid md:grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium mb-1.5">{t('proxyManager.usernameLabel')}</label>
-                            <input
-                                type="text"
-                                className="input-field"
-                                placeholder={t('proxyManager.usernamePlaceholder')}
-                                value={form.username}
-                                onChange={e => setForm({ ...form, username: e.target.value })}
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium mb-1.5">{t('proxyManager.passwordLabel')}</label>
-                            <input
-                                type="password"
-                                className="input-field bg-background"
-                                placeholder={t('proxyManager.passwordPlaceholder')}
-                                value={form.password}
-                                onChange={e => setForm({ ...form, password: e.target.value })}
-                            />
-                            {isEditing && (
-                                <p className="mt-1 text-[11px] text-muted-foreground">{t('proxyManager.passwordKeepHint')}</p>
-                            )}
-                        </div>
-                    </div>
+                            <div className="grid md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1.5">{t('proxyManager.nameLabel')}</label>
+                                    <input
+                                        type="text"
+                                        className="input-field"
+                                        placeholder={t('proxyManager.namePlaceholder')}
+                                        value={form.name}
+                                        onChange={e => setForm({ ...form, name: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1.5">{t('proxyManager.typeLabel')}</label>
+                                    <select
+                                        className="input-field"
+                                        value={form.type}
+                                        onChange={e => setForm({ ...form, type: e.target.value })}
+                                    >
+                                        <option value="http">http</option>
+                                        <option value="https">https</option>
+                                        <option value="socks5">socks5</option>
+                                        <option value="socks5h">socks5h</option>
+                                    </select>
+                                </div>
+                            </div>
 
-                    <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-                        {t('proxyManager.typeHelp')}
-                    </div>
+                            <div className="grid md:grid-cols-[1fr_128px] gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1.5">{t('proxyManager.hostLabel')}</label>
+                                    <input
+                                        type="text"
+                                        className="input-field"
+                                        placeholder={t('proxyManager.hostPlaceholder')}
+                                        value={form.host}
+                                        onChange={e => setForm({ ...form, host: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1.5">{t('proxyManager.portLabel')}</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="65535"
+                                        className="input-field"
+                                        value={form.port}
+                                        onChange={e => setForm({ ...form, port: Number(e.target.value) || '' })}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium mb-1.5">{t('proxyManager.usernameLabel')}</label>
+                                    <input
+                                        type="text"
+                                        className="input-field"
+                                        placeholder={t('proxyManager.usernamePlaceholder')}
+                                        value={form.username}
+                                        onChange={e => setForm({ ...form, username: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium mb-1.5">{t('proxyManager.passwordLabel')}</label>
+                                    <input
+                                        type="password"
+                                        className="input-field bg-background"
+                                        placeholder={t('proxyManager.passwordPlaceholder')}
+                                        value={form.password}
+                                        onChange={e => setForm({ ...form, password: e.target.value })}
+                                    />
+                                    {isEditing && (
+                                        <p className="mt-1 text-[11px] text-muted-foreground">{t('proxyManager.passwordKeepHint')}</p>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                                {t('proxyManager.typeHelp')}
+                            </div>
+                        </>
+                    )}
+
+                    {form.mode === 'rotate' && (
+                        <div className="grid md:grid-cols-2 gap-4">
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-medium mb-1.5">{t('proxyManager.nameLabel')}</label>
+                                <input
+                                    type="text"
+                                    className="input-field"
+                                    placeholder={t('proxyManager.rotateNamePlaceholder')}
+                                    value={form.name}
+                                    onChange={e => setForm({ ...form, name: e.target.value })}
+                                />
+                            </div>
+                        </div>
+                    )}
 
                     <div className="flex justify-end gap-2 pt-2">
                         <button
@@ -391,6 +515,7 @@ export default function ProxyManagerContainer({ config, onRefresh, onMessage, au
     const [saving, setSaving] = useState(false)
     const [testing, setTesting] = useState({})
     const [testResults, setTestResults] = useState({})
+    const [rotating, setRotating] = useState({})
 
     const proxies = config?.proxies || []
 
@@ -402,14 +527,7 @@ export default function ProxyManagerContainer({ config, onRefresh, onMessage, au
 
     const openEdit = (proxy) => {
         setEditingProxy(proxy)
-        setForm({
-            name: proxy.name || '',
-            type: proxy.type || 'socks5h',
-            host: proxy.host || '',
-            port: proxy.port || 1080,
-            username: proxy.username || '',
-            password: '',
-        })
+        setForm(proxyFormFromProxy(proxy))
         setShowModal(true)
     }
 
@@ -419,9 +537,43 @@ export default function ProxyManagerContainer({ config, onRefresh, onMessage, au
         setForm(createEmptyProxyForm())
     }
 
-    const saveProxy = async () => {
+    const buildPayload = () => {
+        if (form.mode === 'rotate') {
+            return { name: form.name, rotate: buildRotatePayload(form) }
+        }
+        return {
+            name: form.name,
+            type: form.type,
+            host: form.host,
+            port: Number(form.port),
+            username: form.username,
+            password: form.password,
+            // An explicit null tells the API to leave rotate mode; omitting the
+            // field would keep the stored rotation settings instead.
+            rotate: null,
+        }
+    }
+
+    const validateForm = () => {
+        if (form.mode === 'rotate') {
+            if (!form.rotate.key && !editingProxy?.id) {
+                return t('proxyManager.rotateKeyRequired')
+            }
+            if (form.rotate.provider === 'custom' && !form.rotate.endpoint) {
+                return t('proxyManager.rotateEndpointRequired')
+            }
+            return ''
+        }
         if (!form.host || !form.port) {
-            onMessage('error', t('proxyManager.requiredFields'))
+            return t('proxyManager.requiredFields')
+        }
+        return ''
+    }
+
+    const saveProxy = async () => {
+        const problem = validateForm()
+        if (problem) {
+            onMessage('error', problem)
             return
         }
         setSaving(true)
@@ -433,14 +585,7 @@ export default function ProxyManagerContainer({ config, onRefresh, onMessage, au
             const res = await apiFetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name: form.name,
-                    type: form.type,
-                    host: form.host,
-                    port: Number(form.port),
-                    username: form.username,
-                    password: form.password,
-                }),
+                body: JSON.stringify(buildPayload()),
             })
             const data = await readApiResponse(res, t('settings.nonJsonResponse', { status: res.status }))
             if (!res.ok) {
@@ -458,7 +603,7 @@ export default function ProxyManagerContainer({ config, onRefresh, onMessage, au
     }
 
     const deleteProxy = async (proxy) => {
-        if (!confirm(t('proxyManager.deleteConfirm', { name: proxy.name || `${proxy.host}:${proxy.port}` }))) return
+        if (!confirm(t('proxyManager.deleteConfirm', { name: proxyLabel(proxy) }))) return
         try {
             const res = await apiFetch(`/admin/proxies/${encodeURIComponent(proxy.id)}`, { method: 'DELETE' })
             const data = await readApiResponse(res, t('settings.nonJsonResponse', { status: res.status }))
@@ -496,16 +641,39 @@ export default function ProxyManagerContainer({ config, onRefresh, onMessage, au
         }
     }
 
+    const rotateNode = async (proxy) => {
+        setRotating(prev => ({ ...prev, [proxy.id]: true }))
+        try {
+            const res = await apiFetch(`/admin/proxies/${encodeURIComponent(proxy.id)}/refresh`, { method: 'POST' })
+            const data = await readApiResponse(res, t('settings.nonJsonResponse', { status: res.status }))
+            if (!res.ok) {
+                onMessage('error', data.detail || t('messages.requestFailed'))
+                return
+            }
+            await onRefresh?.()
+            const endpoint = data.endpoint && data.port ? `${data.endpoint}:${data.port}` : ''
+            onMessage('success', t('proxyManager.rotateSuccess', { endpoint }))
+        } catch (err) {
+            onMessage('error', err?.message || t('messages.networkError'))
+        } finally {
+            setRotating(prev => ({ ...prev, [proxy.id]: false }))
+        }
+    }
+
     return (
         <div className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-4">
                 <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
                     <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">{t('proxyManager.totalProxies')}</div>
                     <div className="mt-2 text-2xl font-bold">{proxies.length}</div>
                 </div>
                 <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
+                    <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">{t('proxyManager.rotateCount')}</div>
+                    <div className="mt-2 text-2xl font-bold">{proxies.filter(isRotatingProxy).length}</div>
+                </div>
+                <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
                     <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">{t('proxyManager.socks5hCount')}</div>
-                    <div className="mt-2 text-2xl font-bold">{proxies.filter(proxy => proxy.type === 'socks5h').length}</div>
+                    <div className="mt-2 text-2xl font-bold">{proxies.filter(proxy => !isRotatingProxy(proxy) && proxy.type === 'socks5h').length}</div>
                 </div>
                 <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
                     <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">{t('proxyManager.authProxyCount')}</div>
@@ -518,8 +686,10 @@ export default function ProxyManagerContainer({ config, onRefresh, onMessage, au
                 proxies={proxies}
                 testing={testing}
                 testResults={testResults}
+                rotating={rotating}
                 onCreate={openCreate}
                 onTest={testProxy}
+                onRotate={rotateNode}
                 onEdit={openEdit}
                 onDelete={deleteProxy}
             />

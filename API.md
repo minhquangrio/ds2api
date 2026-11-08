@@ -115,6 +115,13 @@ Gemini 兼容客户端还可以使用 `x-goog-api-key`、`?key=` 或 `?api_key=`
 | POST | `/v1/embeddings` | 业务 | OpenAI Embeddings 接口 |
 | POST | `/v1/files` | 业务 | OpenAI Files 上传（multipart/form-data） |
 | GET | `/v1/files/{file_id}` | 业务 | 查询已上传文件状态 |
+| POST | `/v1/images/generations` | 业务 | Muse 文生图（OpenAI Images 兼容） |
+| POST | `/v1/images/edits` | 业务 | Muse 参考图编辑（multipart 或 JSON data URI） |
+| GET | `/v1/images/media/{media_id}` | 业务 | 取回本次生成的图片字节（按调用方隔离） |
+| POST | `/v1/videos` | 业务 | 提交 Muse 异步视频任务 |
+| GET | `/v1/videos` | 业务 | 列出本调用方的视频任务 |
+| GET | `/v1/videos/{video_id}` | 业务 | 轮询视频任务状态 |
+| GET | `/v1/videos/{video_id}/content` | 业务 | 下载已完成的视频字节 |
 | GET | `/anthropic/v1/models` | 无 | Claude 模型列表 |
 | POST | `/anthropic/v1/messages` | 业务 | Claude 消息接口 |
 | POST | `/anthropic/v1/messages/count_tokens` | 业务 | Claude token 计数 |
@@ -147,6 +154,7 @@ Gemini 兼容客户端还可以使用 `x-goog-api-key`、`?key=` 或 `?api_key=`
 | PUT | `/admin/proxies/{proxyID}` | Admin | 更新代理（留空 password 表示保留原密码） |
 | DELETE | `/admin/proxies/{proxyID}` | Admin | 删除代理（自动解绑引用该代理的账号） |
 | POST | `/admin/proxies/test` | Admin | 测试代理连通性 |
+| POST | `/admin/proxies/{proxyID}/refresh` | Admin | 强制轮换代理立即取新出口节点 |
 | GET | `/admin/accounts` | Admin | 分页账号列表 |
 | POST | `/admin/accounts` | Admin | 添加账号 |
 | PUT | `/admin/accounts/{identifier}` | Admin | 更新账号 name/remark |
@@ -444,6 +452,45 @@ data: [DONE]
 | `input` | string/array | ✅ | 支持字符串、字符串数组、token 数组 |
 
 > 需配置 `embeddings.provider`。当前支持：`mock` / `deterministic` / `builtin`（三者都走同一套本地确定性实现）。未配置或不支持时返回标准错误结构（HTTP 501）。
+
+### `POST /v1/images/generations` / `POST /v1/images/edits`
+
+需要业务鉴权。由 **muse** provider 提供（需配置 `muse` 与 worker，账号 `provider: "muse"` + `hatch_sess` cookie）。返回 OpenAI Images 兼容结构。
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `model` | string | ✅ | 必须是 `muse-image`（或 `muse/image`、`image`）；文本/视频模型返回 400 `unsupported_model` |
+| `prompt` | string | ✅ | 生成或编辑指令，空值返回 400 |
+| `n` | int | ❌ | 1–4（`DS2API_IMAGES_MAX_N` / worker `MUSE_IMAGE_MAX_N` 可下调），默认 1 |
+| `size` | string | ❌ | `1024x1024` 形式或 `auto`；其他格式返回 400 |
+| `response_format` | string | ❌ | `b64_json`（默认）或 `url` |
+| `image` / `file` | 文件或 data URI | edits 必填 | 参考图：multipart 字段 `image`/`image[]`/`file`/`file[]`，或 JSON `data:image/...;base64,` 字符串（数组亦可） |
+
+约束与行为：
+
+- 非 muse provider 调用这两个入口返回 400 `unsupported_provider`，不会静默落到 DeepSeek。
+- `/v1/images/edits` 也接受 JSON（用 `data:` URI 传参考图）；`/v1/images/generations` 只接受 JSON。
+- 参考图上限 16 MiB/张（`MUSE_REFERENCE_MAX_BYTES`），请求体上限 100 MiB。
+- 结果只包含本次生成：worker 打开全新 thread（非空即 `thread_isolation_error`），只读最后一个 agent 气泡内的图片，用户上传预览不会被当输出；参考图上传无可见回执时返回 502 `upload_unconfirmed`，且不会提交 prompt。
+- `response_format=url` 时 `data[i].url` 指向本网关 `GET /v1/images/media/{media_id}`，仅生成者可用（他人 404）；媒体归属表是进程内 TTL（默认 30 分钟），多实例/Vercel 部署请用 `b64_json`。
+- 媒体不套用文本的空输出重试：提交后超时只返回失败（上游可能已计费），只有提交前的 429 才轮换账号。
+- ⚠️ 媒体 DOM 选择器尚未用真实 Muse 账号验证，上线前请运行 `python scripts/muse_media_live_check.py`。
+
+### `POST /v1/videos` / `GET /v1/videos[/{id}][/content]`
+
+需要业务鉴权，同样只由 muse provider 服务（模型须为 `muse-video`）。视频是异步任务：提交立即返回 id，由 worker 在后台驱动浏览器完成并持久化状态。
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `model` | string | ✅ | `muse-video` |
+| `prompt` | string | ✅ | 视频指令 |
+| `seconds` | int | ❌ | 1–60，其他值返回 400 |
+| `size` | string | ❌ | 透传给上游 |
+| `input_reference` / `image` | file | ❌ | 参考帧（multipart） |
+
+- `POST` 返回 201 与 `{id, object:"video", status, progress, created_at, ...}`；状态为 `queued`/`processing`/`completed`/`failed`/`interrupted`。
+- `GET /v1/videos/{id}` 与 `GET /v1/videos/{id}/content` 按调用方隔离：worker 校验 `caller_id`，他人查询为 404；未完成取内容返回 409 `job_incomplete`。
+- worker 重启不会悄悄重跑：运行中的任务变成 `interrupted`（`error_code=job_interrupted`），结果字节保存在 `MUSE_MEDIA_DIR`（默认 24 小时 TTL）。
 
 ### `POST /v1/files`
 
@@ -875,23 +922,63 @@ data: {"type":"message_stop"}
 
 ### `GET /admin/proxies`
 
-列出代理配置（密码不回传，仅返回 `has_password` 标记）。
+列出代理配置（密码与轮换 key 不回传，仅返回 `has_password` / `rotate.has_key` 标记）。每个节点带 `mode`：`static` 或 `rotate`；轮换节点还会返回 `rotate.lease`（当前出口 IP、端口、协议、`expires_at`、`remaining_seconds`、`fetch_count`、`last_error`）。
 
 ### `POST /admin/proxies`
 
-新增代理。请求体支持 `id`（可选，未传则自动生成）、`name`、`type`（`http` / `socks5`）、`host`、`port`、`username`、`password`。
+新增代理。请求体支持 `id`（可选，未传则自动生成）、`name`、`type`（`http` / `https` / `socks5` / `socks5h`）、`host`、`port`、`username`、`password`。
+
+轮换代理（proxy xoay）改为提交嵌套对象 `rotate`，此时 `host` / `port` / `username` / `password` 会被忽略并清空：
+
+| 字段 | 说明 |
+| --- | --- |
+| `rotate.provider` | `proxyxoay`（默认）/ `bestproxy` / `custom` |
+| `rotate.endpoint` | 覆盖预设的取 IP 接口，必须是 http(s) 绝对地址；`custom` 时必填 |
+| `rotate.key` | `keyxoay`，购买轮换 key 后拿到的密钥（必填，只写不回读） |
+| `rotate.network` | 对应 `nhamang`，默认 `random` |
+| `rotate.province` | 对应 `tinhthanh`，默认 `0`（随机） |
+| `rotate.protocol` | 使用返回值中的 `http`（默认）还是 `socks5` |
+| `rotate.whitelist` | 对应 `whitelist`，逗号分隔的 IPv4 白名单 |
+| `rotate.ttl_seconds` | 接口未报存活时间时的兜底有效期，默认 300 |
+| `rotate.min_remaining_seconds` | 提前多少秒续期，默认 60 |
+
+也接受扁平写法：`rotate_provider`、`rotate_endpoint`、`rotate_key`、`rotate_network`、`rotate_province`、`rotate_protocol`、`rotate_whitelist`、`rotate_ttl_seconds`、`rotate_min_remaining_seconds`。
+
+示例：
+
+```json
+{
+  "name": "VN rotate",
+  "rotate": {
+    "provider": "proxyxoay",
+    "key": "keyxoay...",
+    "network": "random",
+    "province": "0",
+    "protocol": "http",
+    "whitelist": "1.2.3.4"
+  }
+}
+```
 
 ### `PUT /admin/proxies/{proxyID}`
 
-更新指定代理。若请求中 `password` 为空字符串，则保留原密码。
+更新指定代理。若请求中 `password` 为空字符串，则保留原密码；`rotate.key` 与 `rotate.endpoint` 同理（留空表示保留）。`rotate` 字段的三种语义：
+
+- 请求体不出现 `rotate`：保持原有模式（轮换或静态）不变；
+- `"rotate": null` 或空对象：切回静态模式，并丢弃 lease；
+- `"rotate": {...}`：切换到轮换模式。
+
+### `POST /admin/proxies/{proxyID}/refresh`
+
+强制该轮换节点立刻向服务商取一个新出口并返回结果；静态节点返回 400，取不到新节点返回 502（同时保留旧 lease 的判断在业务侧生效）。
 
 ### `DELETE /admin/proxies/{proxyID}`
 
-删除代理，并自动清空所有引用该代理账号的 `proxy_id`。
+删除代理，并自动清空所有引用该代理账号的 `proxy_id`，同时释放该代理的轮换 lease。
 
 ### `POST /admin/proxies/test`
 
-测试代理连通性：传 `proxy_id` 时测试已保存代理；不传时按请求体代理字段做临时连通性测试。
+测试代理连通性：传 `proxy_id` 时测试已保存代理；不传时按请求体代理字段做临时连通性测试。轮换代理会先解析当前 lease（必要时取新节点）再发起连通性测试，响应中的 `rotated_endpoint` 即实际测试的出口。
 
 ### `GET /admin/accounts`
 

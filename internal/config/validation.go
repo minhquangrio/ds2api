@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"net"
+	"net/url"
 	"strings"
 )
 
@@ -49,21 +51,86 @@ func ValidateProxyConfig(proxies []Proxy) error {
 		if err := ValidateTrimmedString("proxies.id", proxy.ID, true); err != nil {
 			return err
 		}
-		switch proxy.Type {
-		case "socks5", "socks5h", "http", "https":
-		default:
-			return fmt.Errorf("proxies.type must be one of socks5, socks5h, http, https")
-		}
-		if err := ValidateTrimmedString("proxies.host", proxy.Host, true); err != nil {
-			return err
-		}
-		if err := ValidateIntRange("proxies.port", proxy.Port, 1, 65535, true); err != nil {
-			return err
+		if proxy.Rotate != nil {
+			if err := ValidateRotateProxyConfig(proxy); err != nil {
+				return err
+			}
+		} else {
+			switch proxy.Type {
+			case "socks5", "socks5h", "http", "https":
+			default:
+				return fmt.Errorf("proxies.type must be one of socks5, socks5h, http, https")
+			}
+			if err := ValidateTrimmedString("proxies.host", proxy.Host, true); err != nil {
+				return err
+			}
+			if err := ValidateIntRange("proxies.port", proxy.Port, 1, 65535, true); err != nil {
+				return err
+			}
 		}
 		if _, ok := seen[proxy.ID]; ok {
 			return fmt.Errorf("duplicate proxy id: %s", proxy.ID)
 		}
 		seen[proxy.ID] = struct{}{}
+	}
+	return nil
+}
+
+// ValidateRotateProxyConfig checks a rotating proxy entry. Host/Port are not
+// part of the contract: the endpoint comes from the provider API at runtime.
+func ValidateRotateProxyConfig(proxy Proxy) error {
+	rotate := NormalizeRotateProxy(proxy.Rotate)
+	if rotate == nil {
+		return fmt.Errorf("proxies.rotate cannot be empty")
+	}
+	if err := ValidateTrimmedString("proxies.rotate.key", rotate.Key, true); err != nil {
+		return err
+	}
+	switch rotate.Provider {
+	case ProxyRotateProviderProxyXoay, ProxyRotateProviderBestProxy, ProxyRotateProviderCustom:
+	default:
+		return fmt.Errorf("proxies.rotate.provider must be one of %s, %s, %s",
+			ProxyRotateProviderProxyXoay, ProxyRotateProviderBestProxy, ProxyRotateProviderCustom)
+	}
+	if rotate.Provider == ProxyRotateProviderCustom && strings.TrimSpace(rotate.Endpoint) == "" {
+		return fmt.Errorf("proxies.rotate.endpoint is required when provider is custom")
+	}
+	if rotate.Endpoint != "" {
+		parsed, err := url.Parse(rotate.Endpoint)
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+			return fmt.Errorf("proxies.rotate.endpoint must be an absolute http(s) URL")
+		}
+	}
+	switch rotate.Protocol {
+	case "http", "socks5":
+	default:
+		return fmt.Errorf("proxies.rotate.protocol must be one of http, socks5")
+	}
+	if err := ValidateIntRange("proxies.rotate.ttl_seconds", rotate.TTLSeconds, 1, DefaultRotateMaxTTLSeconds, false); err != nil {
+		return err
+	}
+	if err := ValidateIntRange("proxies.rotate.min_remaining_seconds", rotate.MinRemainingSeconds, 1, DefaultRotateMaxTTLSeconds, false); err != nil {
+		return err
+	}
+	return ValidateWhitelistIPv4(rotate.Whitelist)
+}
+
+// ValidateWhitelistIPv4 accepts a comma separated list of IPv4 addresses, which
+// is what the rotating proxy providers expect in `whitelist`.
+func ValidateWhitelistIPv4(list string) error {
+	list = strings.TrimSpace(list)
+	if list == "" {
+		return nil
+	}
+	for _, item := range strings.Split(list, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			return fmt.Errorf("proxies.rotate.whitelist contains an empty entry")
+		}
+		parsed := net.ParseIP(item)
+		if parsed == nil || parsed.To4() == nil {
+			return fmt.Errorf("proxies.rotate.whitelist must be IPv4 address(es): %s", item)
+		}
 	}
 	return nil
 }

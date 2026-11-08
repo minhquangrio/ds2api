@@ -66,6 +66,7 @@ ds2api/
 │   ├── netdiag/                          # 网络出口 IPv4/IPv6、DNS 与各平台上游链路诊断
 │   ├── prompt/                           # Prompt 组装
 │   ├── promptcompat/                     # API 请求到 DeepSeek 网页纯文本上下文兼容层
+│   ├── proxyrotate/                      # 轮换代理（proxy xoay）取号与 lease 缓存，解析成具体 endpoint
 │   ├── rawsample/                        # raw sample 读写与管理
 │   ├── responsehistory/                  # DeepSeek 上游响应归档与会话快照
 │   ├── server/                           # 路由与中间件装配

@@ -27,8 +27,10 @@ import (
 	"ds2api/internal/httpapi/openai/chat"
 	"ds2api/internal/httpapi/openai/embeddings"
 	"ds2api/internal/httpapi/openai/files"
+	"ds2api/internal/httpapi/openai/images"
 	"ds2api/internal/httpapi/openai/responses"
 	"ds2api/internal/httpapi/openai/shared"
+	"ds2api/internal/httpapi/openai/videos"
 	"ds2api/internal/httpapi/requestbody"
 	"ds2api/internal/usageledger"
 	"ds2api/internal/webui"
@@ -78,6 +80,8 @@ func NewApp() (*App, error) {
 	responsesHandler := &responses.Handler{Store: store, Auth: resolver, DS: dsClient, ChatHistory: chatHistoryStore, UsageLedger: usageLedger, ContentStore: contentStore}
 	filesHandler := &files.Handler{Store: store, Auth: resolver, DS: dsClient, ChatHistory: chatHistoryStore, ContentStore: contentStore}
 	embeddingsHandler := &embeddings.Handler{Store: store, Auth: resolver, DS: dsClient, ChatHistory: chatHistoryStore, UsageLedger: usageLedger}
+	imagesHandler := &images.Handler{Store: store, Auth: resolver, ChatHistory: chatHistoryStore, UsageLedger: usageLedger, Ownership: images.NewMediaOwnership(0)}
+	videosHandler := &videos.Handler{Store: store, Auth: resolver, ChatHistory: chatHistoryStore, UsageLedger: usageLedger}
 	claudeHandler := &claude.Handler{Store: store, Auth: resolver, DS: dsClient, OpenAI: chatHandler, ChatHistory: chatHistoryStore, UsageLedger: usageLedger}
 	geminiHandler := &gemini.Handler{Store: store, Auth: resolver, DS: dsClient, OpenAI: chatHandler, ChatHistory: chatHistoryStore, UsageLedger: usageLedger}
 	ollamaHandler := &ollama.Handler{Store: store}
@@ -128,6 +132,8 @@ func NewApp() (*App, error) {
 	claude.RegisterRoutes(r, claudeHandler)
 	gemini.RegisterRoutes(r, geminiHandler)
 	ollama.RegisterRoutes(r, ollamaHandler)
+	images.RegisterRoutes(r, imagesHandler)
+	videos.RegisterRoutes(r, videosHandler)
 	r.Route("/admin", func(ar chi.Router) {
 		admin.RegisterRoutes(ar, adminHandler)
 	})

@@ -136,7 +136,7 @@ flowchart LR
 | 并发队列控制 | 每账号 in-flight 上限 + 等待队列，动态计算建议并发值 |
 | DeepSeek PoW | 纯 Go 高性能实现（DeepSeekHashV1），毫秒级响应 |
 | Tool Calling | 防泄漏处理：非代码块高置信特征识别、`delta.tool_calls` 早发、结构化增量输出 |
-| Admin API | 配置管理、运行时设置热更新、代理管理、账号测试 / 批量测试、会话清理、导入导出、Vercel 同步、版本检查、网络诊断、外部服务商管理、GitHub 图床 |
+| Admin API | 配置管理、运行时设置热更新、代理管理（固定节点与轮换代理自动取号/续期）、账号测试 / 批量测试、会话清理、导入导出、Vercel 同步、版本检查、网络诊断、外部服务商管理、GitHub 图床 |
 | WebUI 管理台 | `/admin` 单页应用（中/英/越三语、深色模式，支持查看服务器端对话记录） |
 | 运维探针 | `GET /healthz`（存活）、`GET /readyz`（就绪） |
 

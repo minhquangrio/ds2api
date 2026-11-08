@@ -17,51 +17,50 @@ except ImportError:
     from async_timeout import timeout as async_timeout
 
 from .browser_session import BrowserSessions, DriverFailure
-from .driver_base import MuseDriver, DriverEvent
-from .protocol import AccountInfo, ChatCompletedEvent, ChatDeltaEvent, ChatErrorEvent, ChatRequest, ProbeResult
+from .chat_js import CHAT_MODELS, IMAGE_MODELS, POLL_CHAT_JS, READY_JS, SEND_JS, SET_PROMPT_JS, VIDEO_MODELS
+from .driver_base import DriverEvent, ImageDriverEvent, MuseDriver, VideoDriverEvent
+from .image_flow import DEFAULT_IMAGE_TIMEOUT, run_image_flow
+from .job_store import shared_store
+from .media_protocol import (
+    ImageProgressEvent,
+    ImageRequest,
+    VideoRequest,
+    VideoTask,
+)
+from .protocol import (
+    AccountInfo,
+    ChatCompletedEvent,
+    ChatDeltaEvent,
+    ChatErrorEvent,
+    ChatRequest,
+    ProbeResult,
+)
+from .video_flow import run_video_job
 
 logger = logging.getLogger("muse_worker.engine")
 
-READY_JS = """() => {
-    const ta = document.querySelector('textarea');
-    const shell = document.querySelector('[data-hatch-shell-hydration-state]');
-    return document.readyState === 'complete' && ta && !ta.disabled &&
-        (!shell || shell.getAttribute('data-hatch-shell-hydration-state') === 'hydrated') &&
-        !document.body.innerText.includes('Connecting...');
-}"""
-
-SET_PROMPT_JS = """text => {
-    const ta = document.querySelector('textarea');
-    ta.focus();
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(ta, text);
-    ta.dispatchEvent(new Event('input', {bubbles:true}));
-    ta.dispatchEvent(new Event('change', {bubbles:true}));
-    return ta.value === text;
-}"""
-
-SEND_JS = """() => {
-    const button = [...document.querySelectorAll('button,[role=button]')]
-        .filter(b => b.offsetParent !== null)
-        .find(b => /发送|send/i.test(b.getAttribute('aria-label') || '') ||
-            /发送|send/i.test(b.getAttribute('data-testid') || '') || /send/i.test(b.innerText || ''));
-    if (!button || button.disabled) return false;
-    button.click(); return true;
-}"""
-
-POLL_CHAT_JS = """() => {
-    const scope = document.querySelector('main,[class*="chat-scroll"],[class*="hatch-chat-scroll"]') || document.body;
-    const bubbles = [...scope.querySelectorAll('div[class*="hatch-chat-groupable-bubble"]')]
-        .filter(b => /hatch-agent-bubble-bg/.test(b.className || ''));
-    const last = bubbles.length ? bubbles[bubbles.length-1] : null;
-    if (last) last.scrollIntoView({block:'end'});
-    const stop = !!document.querySelector('[data-testid="hatch-composer-stop-button"],button[aria-label*="Stop" i],button[aria-label*="停止"]');
-    return {count:bubbles.length, text:last ? (last.innerText || '').trim() : '', stop};
-}"""
-
+__all__ = [
+    "EngineMuseDriver", "READY_JS", "SET_PROMPT_JS", "SEND_JS", "POLL_CHAT_JS",
+]
 
 class EngineMuseDriver(BrowserSessions, MuseDriver):
+    """Chat, image and video driver backed by an isolated browser thread per call."""
+
+    def __init__(self, headless: bool = True, browser_executable_path: str | None = None,
+                 blobs=None) -> None:
+        BrowserSessions.__init__(self, headless=headless, browser_executable_path=browser_executable_path)
+        self._blobs = blobs
+
+    def blobs(self):
+        """Media blob store shared with the job registry."""
+        current = getattr(self, "_blobs", None)
+        if current is None:
+            current = shared_store().blobs
+            self._blobs = current
+        return current
+
     async def chat_completion(self, request: ChatRequest) -> AsyncIterator[DriverEvent]:
-        if request.model not in {"muse-spark", "muse-chat", "spark", "chat"}:
+        if request.model not in CHAT_MODELS:
             yield ChatErrorEvent("Muse worker only supports chat models", "unsupported_model", 400)
             return
         async with self.account_lock(request.account):
@@ -116,6 +115,48 @@ class EngineMuseDriver(BrowserSessions, MuseDriver):
             except Exception as exc:
                 logger.warning("Muse browser operation failed (%s)", type(exc).__name__, exc_info=True)
                 yield ChatErrorEvent("Muse browser operation failed", "browser_error", 502)
+
+    async def image_generation(self, request: ImageRequest) -> AsyncIterator[ImageDriverEvent]:
+        async for event in self._run_image(request):
+            yield event
+
+    async def image_edit(self, request: ImageRequest) -> AsyncIterator[ImageDriverEvent]:
+        if not request.references:
+            yield ChatErrorEvent("an image edit needs at least one reference image", "missing_reference", 400)
+            return
+        async for event in self._run_image(request):
+            yield event
+
+    async def _run_image(self, request: ImageRequest) -> AsyncIterator[ImageDriverEvent]:
+        if request.model not in IMAGE_MODELS:
+            yield ChatErrorEvent("Muse image transport accepts muse-image only", "unsupported_model", 400)
+            return
+        async with self.account_lock(request.account):
+            try:
+                async with async_timeout(DEFAULT_IMAGE_TIMEOUT):
+                    async with self.session(request.account, wake=True) as (context, _):
+                        page = await context.new_page()
+                        yield ImageProgressEvent(stage="submitted", detail=request.mode)
+                        yield await run_image_flow(page, context, request, READY_JS, SET_PROMPT_JS, SEND_JS, self.blobs())
+                        return
+            except DriverFailure as exc:
+                yield ChatErrorEvent(str(exc), exc.code, exc.status)
+            except TimeoutError:
+                yield ChatErrorEvent("Muse image generation timed out", "upstream_timeout", 504)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.warning("Muse image operation failed (%s)", type(exc).__name__, exc_info=True)
+                yield ChatErrorEvent("Muse browser operation failed", "browser_error", 502)
+
+    async def video_generation(self, request: VideoRequest) -> AsyncIterator[VideoDriverEvent]:
+        if request.model not in VIDEO_MODELS:
+            yield ChatErrorEvent("Muse video transport accepts muse-video only", "unsupported_model", 400)
+            return
+        task = VideoTask(caller_id=request.caller_id, request_id=request.request_id,
+                         model=request.model, prompt=request.prompt, duration=request.duration)
+        async for update in run_video_job(self, request, task, self.blobs()):
+            yield update
 
     async def probe_account(self, account: AccountInfo) -> ProbeResult:
         async with self.account_lock(account):

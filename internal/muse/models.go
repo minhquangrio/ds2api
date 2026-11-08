@@ -60,3 +60,43 @@ func validateChatModel(reqModel string) error {
 		return fmt.Errorf("%w: %s", ErrMuseInvalidModel, reqModel)
 	}
 }
+
+// ModelKind reports which transport a Muse model belongs to so a wrong pairing
+// fails at the API boundary instead of reaching the worker.
+func ModelKind(model string) string {
+	base := cleanModelName(model)
+	switch base {
+	case ModelMuseImage, "image", "muse/image":
+		return "image"
+	case ModelMuseVideo, "video", "muse/video":
+		return "video"
+	default:
+		return "chat"
+	}
+}
+
+func validateImageModel(reqModel string) error {
+	if ModelKind(reqModel) != "image" {
+		return fmt.Errorf("%w: %s is not an image model", ErrMuseInvalidModel, reqModel)
+	}
+	return nil
+}
+
+func validateVideoModel(reqModel string) error {
+	if ModelKind(reqModel) != "video" {
+		return fmt.Errorf("%w: %s is not a video model", ErrMuseInvalidModel, reqModel)
+	}
+	return nil
+}
+
+// workerMediaModel resolves the model name handed to the worker media routes.
+func workerMediaModel(resolved, requested string) string {
+	model := strings.TrimSpace(resolved)
+	if model == "" {
+		model = strings.TrimSpace(requested)
+	}
+	if model == "" {
+		return ModelMuseImage
+	}
+	return strings.TrimPrefix(cleanModelName(model), "muse/")
+}

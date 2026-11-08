@@ -140,6 +140,32 @@ Mở trình duyệt và truy cập `http://localhost:5001/admin`.
 - Nếu các tài khoản DeepSeek của bạn cần chạy qua các địa chỉ IP đầu ra khác nhau để tránh bị trùng IP, bạn có thể thêm các nút **HTTP**, **HTTPS**, **SOCKS5** hoặc **SOCKS5H** trong tab **Proxy IP**.
 - Nhấp **Kiểm tra proxy** để đo độ trễ kết nối từ máy chủ tới máy chủ DeepSeek.
 
+#### 4.6.1 Proxy xoay (rotating proxy)
+
+Thay vì dán thủ công IP mới mỗi khi node chết, bạn có thể khai báo **nguồn proxy xoay** để DS2API tự lấy và tự gia hạn.
+
+1. Trong tab **Proxy IP** → **Thêm proxy** → chọn chế độ **Proxy xoay**.
+2. Điền thông tin:
+   - **Nhà cung cấp**: `proxyxoay.shop` (mặc định) hoặc `bestproxy.vn`; chọn **Endpoint tuỳ chỉnh** nếu nhà cung cấp dùng URL `get.php` khác.
+   - **Key xoay (keyxoay)**: dãy key bạn nhận được khi mua key xoay trên trang bán. Key chỉ được gửi một lần và không hiển thị lại.
+   - **Mạng (nhamang)**: `random` hoặc tên mạng liệt kê bởi nhà cung cấp (`fpt`, `viettel`, `vnpt`, ...).
+   - **Tỉnh (tinhthanh)**: `0` để ngẫu nhiên, hoặc mã tỉnh theo bảng của nhà cung cấp.
+   - **IPv4 whitelist**: IP công khai của máy chủ chạy DS2API, nếu nhà cung cấp yêu cầu khai báo.
+   - **Giao thức nhận được**: `http` (mặc định, dùng trường `proxyhttp`) hoặc `socks5` (dùng `proxysocks5`).
+   - **TTL dự phòng**: số giây dùng khi API không báo thời gian sống của node (mặc định 300).
+   - **Gia hạn trước hạn**: lấy node mới sớm hơn `min_remaining_seconds` giây (mặc định 60) để không request nào chạy trên IP sắp chết.
+3. Lưu lại rồi gán nút này cho tài khoản trong tab **Tài khoản** (như proxy tĩnh).
+
+Hành vi runtime:
+
+- Node đang dùng hiển thị ngay trên danh sách kèm thời gian còn lại; nút **Lấy IP mới** ép gọi API lấy node khác.
+- Hệ thống giữ **một node cho mỗi proxy xoay** và tái sử dụng cho tới khi gần hết hạn, nên mỗi `min_remaining_seconds` chỉ tốn **một lượt gọi API** dù bạn chạy hàng nghìn request (kể cả khi 8 request đồng thời cùng cần node mới, chỉ 1 request được gửi đi).
+- Nếu API trả `status=101` / `status=102` (key không tồn tại) hoặc lỗi mạng, request **thất bại ngay lập tức với thông báo ghi rõ proxy nào** — DS2API không âm thầm chuyển về IP máy chủ, vì làm vậy sẽ lộ IP gốc của tài khoản.
+- Khi việc gia hạn lỗi nhưng node cũ chưa chết thật, node cũ vẫn được dùng tiếp cho tới hết hạn.
+- Mọi provider dùng chung một cấu hình proxy: DeepSeek, Codex, Gemini Web và Muse worker đều nhận node đang sống.
+
+Ghi chú: một session/stream đang chạy vẫn giữ nguyên IP của nó cho tới khi kết thúc; node cũ chỉ bị đóng sau khi các request khởi chạy trên nó đã xong (hoặc sau 30 phút).
+
 ### 4.7 Nhật ký & Chi tiết Token (Logs & Token Ledger)
 - Xem chi tiết từng lượt gọi API qua Gateway kèm mã trạng thái HTTP, thời gian xử lý (`elapsed_ms`), model gọi và số lượng prompt/completion tokens chính xác.
 - Nhấp vào từng dòng để xem payload hội thoại và phản hồi hoàn chỉnh.

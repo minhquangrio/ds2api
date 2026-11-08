@@ -1,4 +1,9 @@
-"""Protocol dataclasses and serialization for Muse worker."""
+"""Protocol dataclasses and serialization for Muse worker chat and probing.
+
+Media request and event records live in ``media_protocol.py``; keeping the two
+groups separate means the chat ``isinstance`` checks never have to consider
+media events.
+"""
 
 from __future__ import annotations
 

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"ds2api/internal/config"
+	"ds2api/internal/proxyrotate"
 )
 
 // CodexTokenRefresher performs the refresh. The account's proxy (when set) is
@@ -133,7 +134,13 @@ func ensureCodexToken(ctx context.Context, a *RequestAuth, store *config.Store) 
 		return call.err
 	}
 
-	accessToken, newRefreshToken, idToken, expiresIn, email, accID, planType, err := refresher(ctx, refreshToken, codexAccountProxy(store, a.Account))
+	proxyCfg, proxyErr := codexAccountProxy(ctx, store, a.Account)
+	if proxyErr != nil {
+		call.err = proxyErr
+		return proxyErr
+	}
+
+	accessToken, newRefreshToken, idToken, expiresIn, email, accID, planType, err := refresher(ctx, refreshToken, proxyCfg)
 	if err != nil {
 		call.err = err
 		if isCodexRefreshInvalidGrant(err) {
@@ -187,22 +194,24 @@ func ensureCodexToken(ctx context.Context, a *RequestAuth, store *config.Store) 
 }
 
 // codexAccountProxy resolves the proxy configured for this account, if any, so
-// the OAuth refresh uses the same egress as the model requests.
-func codexAccountProxy(store *config.Store, acc config.Account) *config.Proxy {
+// the OAuth refresh uses the same egress as the model requests. Rotating
+// entries are resolved here, which means a failed fetch surfaces as a refresh
+// error instead of sending the account over the host IP.
+func codexAccountProxy(ctx context.Context, store *config.Store, acc config.Account) (*config.Proxy, error) {
 	if store == nil {
-		return nil
+		return nil, nil
 	}
-	proxyID := strings.TrimSpace(acc.ProxyID)
-	if proxyID == "" {
-		return nil
+	if strings.TrimSpace(acc.ProxyID) == "" {
+		return nil, nil
 	}
-	for _, p := range store.Snapshot().Proxies {
-		if p.ID == proxyID {
-			cp := config.NormalizeProxy(p)
-			return &cp
-		}
+	resolved, found, err := proxyrotate.ResolveAccount(ctx, store, acc)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	if !found {
+		return nil, nil
+	}
+	return &resolved, nil
 }
 
 func isCodexRefreshInvalidGrant(err error) bool {

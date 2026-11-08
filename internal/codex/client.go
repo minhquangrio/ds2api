@@ -44,6 +44,30 @@ func (c *Client) SetDefaultModel(model string) {
 	c.defaultModel = model
 }
 
+// SetProxyURL swaps the upstream proxy. A rotating proxy entry hands out a new
+// exit node over time, so the cached client has to follow it. Idle connections
+// of the previous endpoint are released; in-flight requests keep working on the
+// transport they already started.
+func (c *Client) SetProxyURL(proxyURL string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.proxyURL == proxyURL {
+		return
+	}
+	previous := c.httpClient
+	c.proxyURL = proxyURL
+	c.initHTTPClient()
+	if previous != nil {
+		previous.CloseIdleConnections()
+	}
+}
+
+func (c *Client) currentHTTPClient() *http.Client {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.httpClient
+}
+
 // DefaultModel is used when a request resolves to no model at all, so an empty
 // `model` field is never forwarded upstream.
 func (c *Client) DefaultModel() string {
@@ -128,11 +152,11 @@ func (c *Client) prepareRequest(req *http.Request) {
 
 func (c *Client) Do(req *http.Request) (*http.Response, error) {
 	c.prepareRequest(req)
-	return c.httpClient.Do(req)
+	return c.currentHTTPClient().Do(req)
 }
 
 func (c *Client) DoStream(req *http.Request) (*http.Response, error) {
 	c.prepareRequest(req)
 	req.Header.Set("Accept", "text/event-stream")
-	return c.httpClient.Do(req)
+	return c.currentHTTPClient().Do(req)
 }

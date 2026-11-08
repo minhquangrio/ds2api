@@ -95,7 +95,14 @@ type Proxy struct {
 	Port     int    `json:"port,omitempty"`
 	Username string `json:"username,omitempty"`
 	Password string `json:"password,omitempty"`
+	// Rotate makes the entry a rotating proxy source ("proxy xoay"). When set,
+	// Host/Port/Username/Password are ignored and the runtime fetches a fresh
+	// exit node from the provider API through internal/proxyrotate.
+	Rotate *RotateProxyConfig `json:"rotate,omitempty"`
 }
+
+// IsRotating reports whether this entry resolves its endpoint at runtime.
+func (p Proxy) IsRotating() bool { return p.Rotate != nil }
 
 func NormalizeProxy(p Proxy) Proxy {
 	p.ID = strings.TrimSpace(p.ID)
@@ -104,16 +111,35 @@ func NormalizeProxy(p Proxy) Proxy {
 	p.Host = strings.TrimSpace(p.Host)
 	p.Username = strings.TrimSpace(p.Username)
 	p.Password = strings.TrimSpace(p.Password)
+	if p.Rotate != nil {
+		rotate := NormalizeRotateProxy(p.Rotate)
+		p.Rotate = rotate
+		if p.Type == "" {
+			p.Type = rotate.Protocol
+		}
+		// A rotating entry has no fixed address: keeping a stale host/port
+		// around would make the admin view ambiguous.
+		p.Host = ""
+		p.Port = 0
+		p.Username = ""
+		p.Password = ""
+	}
 	if p.ID == "" {
 		p.ID = StableProxyID(p)
 	}
 	if p.Name == "" && p.Host != "" && p.Port > 0 {
 		p.Name = fmt.Sprintf("%s:%d", p.Host, p.Port)
 	}
+	if p.Name == "" && p.Rotate != nil {
+		p.Name = "rotate:" + p.Rotate.Provider + "/" + p.Rotate.Network
+	}
 	return p
 }
 
 func StableProxyID(p Proxy) string {
+	if p.Rotate != nil {
+		return rotateStableProxyID(*NormalizeRotateProxy(p.Rotate))
+	}
 	sum := sha1.Sum([]byte(strings.ToLower(strings.TrimSpace(p.Type)) + "|" + strings.ToLower(strings.TrimSpace(p.Host)) + "|" + fmt.Sprintf("%d", p.Port) + "|" + strings.TrimSpace(p.Username)))
 	return "proxy_" + hex.EncodeToString(sum[:6])
 }

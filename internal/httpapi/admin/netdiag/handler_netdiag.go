@@ -7,6 +7,7 @@ import (
 	"ds2api/internal/config"
 	adminshared "ds2api/internal/httpapi/admin/shared"
 	"ds2api/internal/netdiag"
+	"ds2api/internal/proxyrotate"
 )
 
 type Handler struct {
@@ -19,13 +20,16 @@ func (h *Handler) detectNetwork(w http.ResponseWriter, r *http.Request) {
 	if h.Store != nil {
 		proxyID := strings.TrimSpace(r.URL.Query().Get("proxy_id"))
 		if proxyID != "" {
-			cfg := h.Store.Snapshot()
-			for _, p := range cfg.Proxies {
-				if p.ID == proxyID {
-					cp := config.NormalizeProxy(p)
-					targetProxy = &cp
-					break
-				}
+			// Rotating entries are resolved first so the report describes the
+			// exit node the runtime would actually use.
+			resolved, found, err := proxyrotate.ResolveProxyID(r.Context(), h.Store.Snapshot(), proxyID)
+			if err != nil {
+				adminshared.WriteJSON(w, http.StatusBadGateway, map[string]any{"detail": err.Error()})
+				return
+			}
+			if found {
+				cp := config.NormalizeProxy(resolved)
+				targetProxy = &cp
 			}
 		}
 	}

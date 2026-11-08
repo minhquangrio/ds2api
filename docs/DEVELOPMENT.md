@@ -46,6 +46,7 @@ gofmt -w <changed-go-files>
 | API 请求归一到网页纯文本上下文 | `internal/promptcompat`、`docs/prompt-compatibility.md` |
 | 工具调用解析与流式防泄漏 | `internal/toolcall`、`internal/toolstream`、`docs/toolcall-semantics.md` |
 | DeepSeek 上游调用、登录、PoW、代理 | `internal/deepseek/client`、`internal/deepseek/transport` |
+| 轮换代理（proxy xoay）取号、续期、lease 缓存 | `internal/proxyrotate`、`internal/config/rotateproxy.go` |
 | 账号池、并发槽位、等待队列 | `internal/account` |
 | Admin API | `internal/httpapi/admin` |
 | WebUI 页面 | `webui/src/layout/DashboardShell.jsx`、`webui/src/features/*` |

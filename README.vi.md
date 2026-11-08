@@ -124,7 +124,7 @@ Xem chi tiết kiến trúc và trách nhiệm từng thư mục tại [docs/ARC
 
 | Khả năng | Mô tả |
 | --- | --- |
-| Tương thích OpenAI | `GET /v1/models`, `GET /v1/models/{id}`, `POST /v1/chat/completions`, `POST /v1/responses`, `GET /v1/responses/{response_id}`, `POST /v1/embeddings`, `POST /v1/files`, `GET /v1/files/{file_id}` |
+| Tương thích OpenAI | `GET /v1/models`, `GET /v1/models/{id}`, `POST /v1/chat/completions`, `POST /v1/responses`, `GET /v1/responses/{response_id}`, `POST /v1/embeddings`, `POST /v1/files`, `GET /v1/files/{file_id}`, `POST /v1/images/generations`, `POST /v1/images/edits`, `GET /v1/images/media/{media_id}`, `POST /v1/videos`, `GET /v1/videos`, `GET /v1/videos/{id}`, `GET /v1/videos/{id}/content` |
 | Upstream ChatGPT/Codex | Tài khoản `provider: "codex"` đăng nhập qua OAuth PKCE vào ChatGPT/Codex, tự động làm mới token; `POST /codex/v1/responses` cung cấp đường passthrough SSE Responses cho Codex CLI |
 | Tương thích Claude | `GET /anthropic/v1/models`, `POST /anthropic/v1/messages`, `POST /anthropic/v1/messages/count_tokens` (và đường dẫn tắt `/v1/messages`, `/messages`) |
 | Tương thích Gemini | `POST /v1beta/models/{model}:generateContent`, `POST /v1beta/models/{model}:streamGenerateContent` (và đường dẫn `/v1/models/{model}:*`) |
@@ -134,7 +134,7 @@ Xem chi tiết kiến trúc và trách nhiệm từng thư mục tại [docs/ARC
 | Kiểm soát hàng chờ đồng thời | Giới hạn in-flight trên mỗi tài khoản + hàng chờ, tính toán động giá trị đồng thời đề xuất |
 | DeepSeek PoW | Triển khai Go thuần hiệu năng cao (DeepSeekHashV1), phản hồi trong vài miligiây |
 | Tool Calling | Xử lý chống rò rỉ: Nhận diện đặc trưng độ tin cậy cao ngoài khối code, phát `delta.tool_calls` sớm, đầu ra tăng cường cấu trúc |
-| Admin API | Quản lý cấu hình, cập nhật hot cài đặt runtime, quản lý proxy, kiểm tra tài khoản / thử nghiệm hàng loạt, dọn dẹp phiên, nhập xuất, đồng bộ Vercel, kiểm tra phiên bản, chẩn đoán mạng, quản lý nhà cung cấp ngoài, GitHub image bed |
+| Admin API | Quản lý cấu hình, cập nhật hot cài đặt runtime, quản lý proxy tĩnh và proxy xoay (tự lấy / tự gia hạn node qua API), kiểm tra tài khoản / thử nghiệm hàng loạt, dọn dẹp phiên, nhập xuất, đồng bộ Vercel, kiểm tra phiên bản, chẩn đoán mạng, quản lý nhà cung cấp ngoài, GitHub image bed |
 | Bảng quản trị WebUI | Trực quan hóa tại `/admin` (Hỗ trợ ba ngôn ngữ Trung/Anh/Việt, chế độ tối, xem lịch sử phản hồi phía máy chủ) |
 | Đầu dò vận hành | `GET /healthz` (Liveness), `GET /readyz` (Readiness) |
 

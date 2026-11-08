@@ -16,6 +16,7 @@ import (
 	"ds2api/internal/auth"
 	"ds2api/internal/config"
 	trans "ds2api/internal/deepseek/transport"
+	"ds2api/internal/proxyrotate"
 )
 
 type requestClients struct {
@@ -26,8 +27,13 @@ type requestClients struct {
 }
 
 type cachedProxyClients struct {
-	proxy   config.Proxy
-	clients requestClients
+	proxy    config.Proxy
+	clients  requestClients
+	usage    *proxyUsage
+	retiring bool
+	// retiredAt starts the grace window during which requests that began
+	// before the rotation may still use this bundle.
+	retiredAt time.Time
 }
 
 type idleConnectionCloser interface {
@@ -164,65 +170,97 @@ func (c *Client) resolveProxyForAccount(acc config.Account) (config.Proxy, bool)
 
 func (c *Client) requestClientsFromContext(ctx context.Context) requestClients {
 	if a, ok := auth.FromContext(ctx); ok {
-		return c.requestClientsForAccount(a.Account)
+		return c.requestClientsForAccount(ctx, a.Account)
 	}
 	return c.defaultRequestClients()
 }
 
 func (c *Client) requestClientsForAuth(ctx context.Context, a *auth.RequestAuth) requestClients {
 	if a != nil {
-		return c.requestClientsForAccount(a.Account)
+		return c.requestClientsForAccount(ctx, a.Account)
 	}
 	return c.requestClientsFromContext(ctx)
 }
 
-func (c *Client) requestClientsForAccount(acc config.Account) requestClients {
+func (c *Client) requestClientsForAccount(ctx context.Context, acc config.Account) requestClients {
 	proxyCfg, ok := c.resolveProxyForAccount(acc)
 	if !ok {
 		return c.defaultRequestClients()
 	}
 
-	key := strings.TrimSpace(proxyCfg.ID)
-	if key == "" {
-		key = proxyCacheKey(proxyCfg)
+	// A rotating entry hands out a different exit node over time, so the
+	// concrete endpoint has to be resolved before the bundle lookup.
+	resolved, err := proxyrotate.Resolve(ctx, proxyCfg)
+	if err != nil {
+		config.Logger.Warn("[proxy] rotating endpoint unavailable", "proxy_id", proxyCfg.ID, "error", err)
+		return c.failedProxyClients(proxyCfg.ID, err)
 	}
+
+	bundle, err := c.proxyClientsFor(resolved)
+	if err != nil {
+		if proxyCfg.IsRotating() {
+			// The node was reported alive but cannot be dialled: fail rather
+			// than silently sending this account direct.
+			config.Logger.Warn("[proxy] rotating endpoint dialer failed", "proxy_id", proxyCfg.ID, "error", err)
+			return c.failedProxyClients(proxyCfg.ID, err)
+		}
+		config.Logger.Warn("[proxy] build dialer failed", "proxy_id", proxyCfg.ID, "error", err)
+		return c.defaultRequestClients()
+	}
+	return bundle
+}
+
+// proxyClientsFor returns the transport bundle for one concrete proxy endpoint,
+// building it on first use and retiring the previous endpoint of the same
+// configured entry when a rotation changed the address.
+func (c *Client) proxyClientsFor(proxyCfg config.Proxy) (requestClients, error) {
+	proxyCfg = config.NormalizeProxy(proxyCfg)
+	key := proxyCacheKey(proxyCfg)
+
 	c.proxyClientsMu.RLock()
 	cached, ok := c.proxyClients[key]
 	c.proxyClientsMu.RUnlock()
-	if ok && proxyCacheKey(cached.proxy) == proxyCacheKey(proxyCfg) {
-		return cached.clients
+	if ok && !cached.retiring && proxyCacheKey(cached.proxy) == key {
+		return cached.clients, nil
 	}
 
 	dialContext, err := proxyDialContext(proxyCfg)
 	if err != nil {
-		config.Logger.Warn("[proxy] build dialer failed", "proxy_id", proxyCfg.ID, "error", err)
-		return c.defaultRequestClients()
+		return requestClients{}, err
 	}
 
 	proxyURL := httpCloakProxyURL(proxyCfg)
-	bundle := c.decorate(requestClients{
+	usage := &proxyUsage{}
+	bundle := trackRequestClients(c.decorate(requestClients{
 		regular:   trans.NewWithProxy(60*time.Second, proxyURL),
 		stream:    trans.NewWithProxy(0, proxyURL),
 		fallback:  trans.NewFallbackClientWithProxy(60*time.Second, proxyURL, dialContext),
 		fallbackS: trans.NewFallbackClientWithProxy(0, proxyURL, dialContext),
-	})
+	}), usage)
 
 	c.proxyClientsMu.Lock()
 	if c.proxyClients == nil {
 		c.proxyClients = make(map[string]cachedProxyClients)
 	}
-	if current, exists := c.proxyClients[key]; exists {
-		if proxyCacheKey(current.proxy) == proxyCacheKey(proxyCfg) {
-			c.proxyClientsMu.Unlock()
-			closeRequestClients(bundle)
-			return current.clients
-		}
-		delete(c.proxyClients, key)
-		closeRequestClients(current.clients)
+	if current, exists := c.proxyClients[key]; exists && proxyCacheKey(current.proxy) == key {
+		// The same endpoint is requested again (for example a rotation moved
+		// back to it); bring it out of retirement instead of tracking two
+		// bundles for one address.
+		current.retiring = false
+		c.proxyClients[key] = current
+		c.proxyClientsMu.Unlock()
+		closeRequestClients(bundle)
+		return current.clients, nil
 	}
-	c.proxyClients[key] = cachedProxyClients{proxy: proxyCfg, clients: bundle}
+	c.proxyClients[key] = cachedProxyClients{proxy: proxyCfg, clients: bundle, usage: usage}
+	closeLater := c.retireProxyClients(proxyCfg.ID, key)
+	closeLater = append(closeLater, c.sweepRetiredProxyClients(now())...)
 	c.proxyClientsMu.Unlock()
-	return bundle
+
+	for _, retired := range closeLater {
+		closeRequestClients(retired)
+	}
+	return bundle, nil
 }
 
 func applyProxyConnectivityHeaders(req *http.Request) {
@@ -258,6 +296,20 @@ func TestProxyConnectivity(ctx context.Context, proxyCfg config.Proxy) map[strin
 		"proxy_id":      proxyCfg.ID,
 		"proxy_type":    proxyCfg.Type,
 		"response_time": 0,
+	}
+
+	if proxyCfg.IsRotating() {
+		// The connectivity check must exercise the node the runtime would
+		// actually use, so resolve the rotating entry first.
+		resolved, err := proxyrotate.Resolve(ctx, proxyCfg)
+		if err != nil {
+			result["message"] = "无法获取轮换代理节点: " + err.Error()
+			result["response_time"] = int(time.Since(start).Milliseconds())
+			return result
+		}
+		result["rotated_endpoint"] = net.JoinHostPort(resolved.Host, strconv.Itoa(resolved.Port))
+		result["proxy_type"] = resolved.Type
+		proxyCfg = config.NormalizeProxy(resolved)
 	}
 
 	if err := config.ValidateProxyConfig([]config.Proxy{proxyCfg}); err != nil {

@@ -57,6 +57,7 @@ ds2api/
 │   │   └── shared/                       # Shared semantics between Go/Node
 │   ├── prompt/                           # Prompt composition
 │   ├── promptcompat/                     # API request -> DeepSeek web-chat plain-text compatibility
+│   ├── proxyrotate/                      # Rotating proxy ("proxy xoay") fetch + lease cache, resolves to a concrete endpoint
 │   ├── rawsample/                        # Raw sample read/write and management
 │   ├── responsehistory/                  # DeepSeek upstream response archive and session snapshots
 │   ├── server/                           # Router and middleware assembly

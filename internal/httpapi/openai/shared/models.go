@@ -13,7 +13,17 @@ type ModelsHandler struct {
 	Store ConfigReader
 }
 
+// providerAvailability is asserted, not part of ConfigReader, so existing
+// handler stubs keep compiling.
+type providerAvailability interface {
+	MuseEnabled() bool
+}
+
 func (h *ModelsHandler) ListModels(w http.ResponseWriter, _ *http.Request) {
+	if reader, ok := h.Store.(providerAvailability); ok && !reader.MuseEnabled() {
+		WriteJSON(w, http.StatusOK, config.OpenAIModelsResponseExcludingOwners("muse"))
+		return
+	}
 	WriteJSON(w, http.StatusOK, config.OpenAIModelsResponse())
 }
 

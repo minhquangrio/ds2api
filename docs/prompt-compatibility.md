@@ -61,6 +61,7 @@ DS2API 当前的核心思路，不是把客户端传来的 `messages`、`tools`�
          -> internal/muse Go 客户端通过 HTTP/SSE 调用 Python worker (workers/muse)
          -> Python worker 维持 Chromium CDP 会话自动化与单账号并发锁 (1 operation per account lock)
          -> SSE 事件流归一为 assistantturn.Turn 结构
+         -> 媒体链路：mediacompat.ImageRequest / VideoRequest → workers/muse 的 /v1/images/*、/v1/videos（结果不是 Turn，见 §17.5）
   -> assistantturn 输出语义归一（Turn 结构）
   -> 各协议 renderer（OpenAI / Responses / Claude / Gemini）
 ```
@@ -93,8 +94,23 @@ DS2API 当前的核心思路，不是把客户端传来的 `messages`、`tools`�
   [internal/completionruntime/nonstream.go](../internal/completionruntime/nonstream.go)
 - Muse Go 客户端与运行时：
   [internal/muse/client.go](../internal/muse/client.go)
+- Muse 媒体请求归一化（图片/视频，独立于文本 StandardRequest）：
+  [internal/mediacompat/media_request.go](../internal/mediacompat/media_request.go),
+  [internal/mediacompat/media_normalize.go](../internal/mediacompat/media_normalize.go)
+- Muse 图片/视频 Go 客户端与轮换：
+  [internal/muse/image_client.go](../internal/muse/image_client.go),
+  [internal/muse/video_client.go](../internal/muse/video_client.go),
+  [internal/muse/media_runtime.go](../internal/muse/media_runtime.go)
+- OpenAI 图片/视频入口：
+  [internal/httpapi/openai/images/handler.go](../internal/httpapi/openai/images/handler.go),
+  [internal/httpapi/openai/videos/handler.go](../internal/httpapi/openai/videos/handler.go)
 - Muse Python automation worker：
   [workers/muse/server.py](../workers/muse/server.py)
+- Muse worker 媒体路由、任务与浏览器流程：
+  [workers/muse/server_media.py](../workers/muse/server_media.py),
+  [workers/muse/job_store.py](../workers/muse/job_store.py),
+  [workers/muse/image_flow.py](../workers/muse/image_flow.py),
+  [workers/muse/video_flow.py](../workers/muse/video_flow.py)
 
 ## 4. 下游真正收到的东西
 
@@ -665,13 +681,15 @@ expert（pro）模型本身不会收到任何 `ref_file_ids` 或 inline 文件�
 
 1. **协议入口分流 (Router & Protocol Boundary)**：
    - 目标判定：通过 `muse/` 前缀、Muse 系列原生模型（`muse-spark`, `muse-chat`, `muse-image`, `muse-video`）或 `X-Ds2-Target-Provider: muse` 标头识别。
-   - 统一转译与全局业务逻辑：请求依然经由 `promptcompat.Normalize*` 形成 `StandardRequest`，并在 Go 核心层统一执行 Key 额度校验、模型映射、历史记录与审计日志。
+   - 统一转译与全局业务逻辑：文本请求经由 `promptcompat.Normalize*` 形成 `StandardRequest`；图片/视频请求经由 `mediacompat.Normalize*` 形成同级的媒体请求。两者都在 Go 核心层统一执行 Key 额度校验、模型映射、历史记录与审计日志。
    - 工具与提示词策略：遵照 Project Standard Turn model，不进行重复 prompt 注入，直接将标准化后的 messages / prompt 传给 worker。
 
 2. **Python Worker 隔离与并发控制 (1 Operation Per Account Lock)**：
-   - Go 服务通过 HTTP/SSE 协议与内部 Python Worker (`workers/muse/server.py`) 通信，传递 `prompt`, `messages`, `cookies`, `proxy` 以及可选的 `X-Worker-Secret`。
-   - Worker 维持 Chromium CDP 实例，并对每个账号实施严格的单并发锁（Account Lock），避免多请求并发破坏同一浏览器 session 的状态。
-   - Chat / Responses / Claude / Gemini 统一调用 `internal/muse/retry.go`；429 只在尚未向客户端发送响应时轮换账号，且保留 caller account allowlist / 指定账号约束。已发送内容后保留 partial turn 并返回失败，不拼接另一账号的答案。
+   - Go 服务通过 HTTP/SSE 协议与内部 Python Worker (`workers/muse/server.py`) 通信，文本链路传递 `prompt`, `messages`, `cookies`, `proxy` 以及可选的 `X-Worker-Secret`。
+   - 媒体链路 (`/v1/images/generations`、`/v1/images/edits`、`/v1/videos`) 使用同一 worker 与同一密钥，请求体额外携带 `mode`、`n`、`size`、`response_format`、`caller_id` 与 `references[]`（`{filename, content_type, data_base64}`，参考图只以内存字节传递，绝不转成 DeepSeek file id/token）。图片为一次性 JSON 响应，视频为 create + 轮询。
+   - Worker 维持 Chromium CDP 实例，并对每个账号实施严格的单并发锁（Account Lock），避免多请求并发破坏同一浏览器 session 的状态。媒体任务与账号锁共用同一串行语义，因此同账号的排队时间会随媒体时长增加。
+   - Chat / Responses / Claude / Gemini 与非流式文本统一复用 `internal/muse/retry.go` 的 `executeWithAccountRotation`（文本、图片、视频同一条轮换规则）；429 只在尚未向客户端发送响应时轮换账号，且保留 caller account allowlist / 指定账号约束。已发送内容后保留 partial turn 并返回失败，不拼接另一账号的答案。
+   - 媒体生成不适用空输出重试：提交后的超时或断流只回报失败，绝不自动重跑（上游可能已计费）。只有提交前的 429 才轮换账号重试。
 
 3. **输出流归一 (Turn Model & Multi-Protocol Rendering)**：
    - Python Worker 产生标准 Server-Sent Events 流 (`delta`, `completed`, `error`)。
@@ -684,13 +702,23 @@ expert（pro）模型本身不会收到任何 `ref_file_ids` 或 inline 文件�
 4. **文件与上下文**：
    - Muse 不调用 DeepSeek uploader，不接收 DeepSeek ref_file_ids。current_input_file 不压缩 Muse 历史；完整历史和 tools context 保留在纯文本 prompt。
    - 本地可读取文本文件通过现有 text-file 解码/大小限制转为正文；不支持或不可读取的 attachment 返回错误，不静默丢弃。
+   - 例外只在媒体入口：`/v1/images/edits` 与 `/v1/videos` 的 `image` / `input_reference` 属于媒体输入，不进入上面那条“文本 attachment 白名单”判断，而是走 `internal/mediacompat.Reference`（multipart 文件或 JSON `data:` URI，字节上限 `mediacompat.MaxReferenceBytes`）。`/v1/chat/completions` 等文本入口仍拒绝图片附件，两者互不影响。
 
-5. **Vercel / Node 路径直通 (PoW Bypass)**：
+5. **媒体链路 (images / videos) 的边界规则**：
+   - 归一化位置：OpenAI 图片/视频 body（JSON 与 multipart 两种形态）先由 `internal/httpapi/openai/{images,videos}` 解码，再交给 `internal/mediacompat` 生成 `ImageRequest` / `VideoRequest`；provider 判定沿用 `config.ResolveModelTarget`，在任何账号获取、上传、session/PoW、lease 之前完成，因此不会走到 DeepSeek 登录。
+   - 媒体不使用 `promptcompat.StandardRequest` / `assistantturn.Turn` 承载结果：文本 turn 模型把“可见文本为空”判定为上游失败，对二进制产物是错的。历史与额度仍照常记录，方式为把媒体请求投影成 `responsehistory.StartParams.Standard`，Surface 分别为 `openai.images_generation`、`openai.images_edit`、`openai.videos_create`。
+   - 模型类型必须与入口匹配：图片入口只接受 `muse-image`（及 `muse/image`、`image`），视频入口只接受 `muse-video`，文本入口的 `validateChatModel` 继续拒绝它们；错误统一为 400 `unsupported_model`。非 muse provider 调 `/v1/images/*`、`/v1/videos` 直接 400 `unsupported_provider`，不静默落到 DeepSeek。
+   - Worker 的“只返回本次新生成媒体”由三道证据保证：打开的是全新 `/thread/new` 且基线气泡数为 0（`thread_isolation_error` 否则失败）、结果只取最后一个 agent 气泡内的 `img`/`video`（用户上传预览位于 user 气泡，永远不匹配）、参考图上传必须有可见回执（`upload_unconfirmed` 时绝不提交 prompt）。
+   - 产物校验：媒体字节在 session 关闭前取回；host 允许清单 `MUSE_MEDIA_ALLOWED_HOSTS`（默认 `muse.ai`）同时校验请求 URL 与重定向后的最终 URL；图片按 magic bytes 判定 MIME 且必须为 `image/*`；超过 `MUSE_IMAGE_MAX_BYTES` / `MUSE_VIDEO_MAX_BYTES` 直接失败，不返回截断内容。
+   - 输出形态：默认 `b64_json`（权威字节）。`response_format=url` 时 worker 存 blob 并返回 `media_id`，网关把 `url` 指向自身的 `GET /v1/images/media/{media_id}`，由网关按 `caller_id` 归属校验后再回源 worker；未配置可访问基址时退回 `b64_json`，绝不返回 localhost 或内部文件名。视频字节通过 `GET /v1/videos/{id}/content` 由 worker 直接校验 `caller_id`，他人查询为 404。
+   - 归属与持久化：worker 是任务与媒体的唯一所有者（`MUSE_MEDIA_DIR` 下的 `jobs/*.json` 与 `blobs/`，原子写、TTL 清理）。worker 重启后仍在跑的任务标记为 `interrupted` 而不是悄悄重跑。网关侧的图片 `media_id` 归属表是进程内 TTL（默认 30 分钟），多实例部署请使用 `b64_json`。
+
+6. **Vercel / Node 路径直通 (PoW Bypass)**：
    - 显式 Muse 请求可直通 Go；自定义 alias 在 Go prepare 入口先解析 provider，返回 proxy_to_go。此路由判定发生在账号获取、文件上传、session/PoW 和 lease 创建之前。最终 Go 请求完成 auth / quota 校验。
 
-6. **Browser driver 与当前范围**：
+7. **Browser driver 与当前范围**：
    - 默认 driver 为 engine；mock 必须显式选择。Engine 使用独立 browser context，检查 /api/session 的 assigned 状态，必要时唤醒 VM 并确认 RUNNING，打开 /thread/new 后发送完整 prompt、读取新的 assistant bubble。
    - Stop 按钮仍可见时不报告 completed；取消/断连关闭 producer 与 context、释放账号锁。probe 不根据 Cookie 字符串或首页未跳转推断账号有效，也不伪造 quota。
    - Worker completed 返回更新后的 cookies，由 Go store 写回。HTTP/HTTPS proxy 与无认证 SOCKS5 可用；认证 SOCKS5 必须先提供 relay，失败时不回退直连。
-   - 当前实现仅支持 muse-spark / muse-chat（及 spark / chat canonical names）的文本聊天。图片、视频及任意 muse/ 模型不由 chat 接口执行。
-   - Engine 的 DOM/session/cancellation 已覆盖 offline fixtures；尚未用真实 Muse 账号验证，不能把 offline pass 当作 live 可用性证明。
+   - 文本聊天只接受 muse-spark / muse-chat（及 spark / chat canonical names）；图片走 `muse-image`、视频走 `muse-video` 的专用传输，三条链路的模型类型互相拒绝，任意 `muse/` 前缀名不再被当作能力证明。
+   - Engine 的 DOM/session/cancellation 与图片、视频流程已覆盖 offline fixtures（fake page/context 按 JS 常量身份分派，不发网络请求）；媒体选择器（附件 input、上传回执、agent 气泡内 `img`/`video`、blob 取回）是本项目按既有 chat DOM 约定推断的，**尚未用真实 Muse 账号验证**。上线媒体能力前必须跑 `scripts/muse_media_live_check.py`，offline pass 不等于 live 可用。

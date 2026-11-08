@@ -508,6 +508,31 @@ func OpenAIModelsResponse() map[string]any {
 	return map[string]any{"object": "list", "data": all}
 }
 
+// OpenAIModelsResponseExcludingOwners builds the catalog without the named
+// providers, so a model is never advertised for a provider the operator has
+// switched off. Ownership strings are compared case-insensitively.
+func OpenAIModelsResponseExcludingOwners(owners ...string) map[string]any {
+	blocked := make(map[string]struct{}, len(owners))
+	for _, owner := range owners {
+		if normalized := strings.ToLower(strings.TrimSpace(owner)); normalized != "" {
+			blocked[normalized] = struct{}{}
+		}
+	}
+	if len(blocked) == 0 {
+		return OpenAIModelsResponse()
+	}
+	filtered := make([]ModelInfo, 0, len(DeepSeekModels)+len(GeminiModels)+len(CodexModels)+len(MuseModels))
+	for _, group := range [][]ModelInfo{DeepSeekModels, GeminiModels, CodexModels, MuseModels} {
+		for _, model := range group {
+			if _, skip := blocked[strings.ToLower(model.OwnedBy)]; skip {
+				continue
+			}
+			filtered = append(filtered, model)
+		}
+	}
+	return map[string]any{"object": "list", "data": filtered}
+}
+
 func OpenAIModelByID(store ModelAliasReader, id string) (ModelInfo, bool) {
 	target, ok := ResolveModelTarget(store, id)
 	if !ok {

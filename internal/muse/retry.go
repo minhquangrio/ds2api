@@ -52,7 +52,9 @@ func switchAfterThrottle(ctx context.Context, a *auth.RequestAuth, attempt int, 
 	return a.SwitchAccount(ctx)
 }
 
-// ExecuteTurnWithRetry executes a non-streaming turn with automatic account switching when throttled.
+// ExecuteTurnWithRetry executes a non-streaming turn with automatic account
+// switching when throttled. The rotation rule itself lives in
+// executeWithAccountRotation so text and media transports stay identical.
 func ExecuteTurnWithRetry(
 	ctx context.Context,
 	a *auth.RequestAuth,
@@ -60,33 +62,9 @@ func ExecuteTurnWithRetry(
 	stdReq promptcompat.StandardRequest,
 	onAccountSwitched func(newAccountID string),
 ) (assistantturn.Turn, error) {
-	maxAttempts := museRetryCeiling(store)
-
-	for attempt := 0; attempt < maxAttempts; attempt++ {
-		client, err := DefaultRuntime().GetClient(ctx, a.Account, store)
-		if err != nil {
-			return assistantturn.Turn{}, err
-		}
-
-		turn, execErr := ExecuteTurn(ctx, client, stdReq)
-		if execErr == nil {
-			return turn, nil
-		}
-		if !IsThrottledError(execErr) || !a.UseConfigToken || a.TargetAccount != "" {
-			return turn, execErr
-		}
-		if attempt+1 >= maxAttempts {
-			a.CoolDown(museCooldownDuration())
-			return turn, ErrAllMuseAccountsCoolingDown
-		}
-		if !switchAfterThrottle(ctx, a, attempt, "turn") {
-			return turn, ErrAllMuseAccountsCoolingDown
-		}
-		if onAccountSwitched != nil {
-			onAccountSwitched(a.AccountID)
-		}
-	}
-	return assistantturn.Turn{}, ErrAllMuseAccountsCoolingDown
+	return executeWithAccountRotation(ctx, a, store, "turn", func(client *Client) (assistantturn.Turn, error) {
+		return ExecuteTurn(ctx, client, stdReq)
+	}, onAccountSwitched)
 }
 
 type commitTrackingWriter struct {

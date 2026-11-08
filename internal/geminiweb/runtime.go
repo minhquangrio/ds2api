@@ -12,6 +12,7 @@ import (
 	"ds2api/internal/assistantturn"
 	"ds2api/internal/config"
 	"ds2api/internal/promptcompat"
+	"ds2api/internal/proxyrotate"
 )
 
 type StoreSnapshotter interface {
@@ -100,12 +101,14 @@ func (r *Runtime) GetClient(ctx context.Context, acc config.Account, store any) 
 	proxyURL := ""
 	if proxyID := strings.TrimSpace(acc.ProxyID); proxyID != "" && store != nil {
 		if snap, ok := store.(StoreSnapshotter); ok {
-			cfg := snap.Snapshot()
-			for _, p := range cfg.Proxies {
-				if p.ID == proxyID {
-					proxyURL = FormatProxyURL(p)
-					break
-				}
+			// Rotating entries resolve to a different exit node over time, so
+			// the URL has to come from the resolver rather than the raw entry.
+			resolved, found, err := proxyrotate.ResolveProxyID(ctx, snap.Snapshot(), proxyID)
+			if err != nil {
+				return nil, fmt.Errorf("gemini proxy unavailable: %w", err)
+			}
+			if found {
+				proxyURL = FormatProxyURL(resolved)
 			}
 		}
 	}

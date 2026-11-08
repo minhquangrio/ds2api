@@ -16,6 +16,7 @@ import (
 	"ds2api/internal/config"
 	"ds2api/internal/geminiweb"
 	"ds2api/internal/promptcompat"
+	"ds2api/internal/proxyrotate"
 	"ds2api/internal/toolcall"
 )
 
@@ -69,11 +70,12 @@ func (r *Runtime) GetClient(ctx context.Context, acc config.Account, store any) 
 		cfg := snap.Snapshot()
 		defaultModel = strings.TrimSpace(cfg.Codex.DefaultModel)
 		if proxyID := strings.TrimSpace(acc.ProxyID); proxyID != "" {
-			for _, p := range cfg.Proxies {
-				if p.ID == proxyID {
-					proxyURL = geminiweb.FormatProxyURL(p)
-					break
-				}
+			resolved, found, err := proxyrotate.ResolveProxyID(ctx, cfg, proxyID)
+			if err != nil {
+				return nil, fmt.Errorf("codex proxy unavailable: %w", err)
+			}
+			if found {
+				proxyURL = geminiweb.FormatProxyURL(resolved)
 			}
 		}
 	}
@@ -84,6 +86,9 @@ func (r *Runtime) GetClient(ctx context.Context, acc config.Account, store any) 
 	if found {
 		existing.SetToken(token)
 		existing.SetDefaultModel(defaultModel)
+		// A rotating entry hands out a new node over time; the cached client
+		// has to move with it instead of keeping the previous exit IP.
+		existing.SetProxyURL(proxyURL)
 		return existing, nil
 	}
 

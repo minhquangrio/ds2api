@@ -15,6 +15,13 @@ from aiohttp import web
 
 from .driver_base import MuseDriver
 from .driver_mock import MockMuseDriver
+from .http_common import (
+    DRIVER_KEY,
+    SECRET_KEY,
+    STORE_KEY,
+    check_auth,
+)
+from .job_store import JobRegistry
 from .protocol import (
     AccountInfo,
     ChatCompletedEvent,
@@ -22,38 +29,31 @@ from .protocol import (
     ChatErrorEvent,
     ChatRequest,
 )
+from .server_media import add_media_routes
 
 logger = logging.getLogger("muse_worker.server")
 
-
-def check_auth(request: web.Request, expected_secret: Optional[str]) -> bool:
-    if not expected_secret:
-        return True
-    header_secret = request.headers.get("X-Worker-Secret")
-    if header_secret == expected_secret:
-        return True
-    auth_header = request.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        token = auth_header[7:].strip()
-        if token == expected_secret:
-            return True
-    return False
-
-
-DRIVER_KEY: web.AppKey[MuseDriver] = web.AppKey("driver", MuseDriver)
-SECRET_KEY: web.AppKey[str] = web.AppKey("secret", str)
+__all__ = ["create_app", "main", "DRIVER_KEY", "SECRET_KEY", "STORE_KEY", "check_auth"]
 
 
 def create_app(
     driver: Optional[MuseDriver] = None,
     secret: Optional[str] = None,
+    store: Optional[JobRegistry] = None,
 ) -> web.Application:
     app = web.Application()
     if driver is None:
         from .driver_engine import EngineMuseDriver
         driver = EngineMuseDriver()
+    if store is None:
+        store = JobRegistry()
+        store.blobs.purge_expired()
+        store.purge_expired()
     app[DRIVER_KEY] = driver
     app[SECRET_KEY] = secret or os.getenv("MUSE_WORKER_SECRET", "")
+    app[STORE_KEY] = store
+    # Media jobs write their bytes through the same store the poll routes read.
+    driver.bind_blobs(store.blobs)
 
     async def handle_health(request: web.Request) -> web.Response:
         cur_driver = request.app[DRIVER_KEY]
@@ -201,6 +201,7 @@ def create_app(
     app.router.add_get("/v1/health", handle_health)
     app.router.add_post("/v1/chat/completions", handle_chat_completions)
     app.router.add_post("/v1/account/probe", handle_probe)
+    add_media_routes(app)
 
     async def on_cleanup(app_instance: web.Application) -> None:
         driver_to_close = app_instance.get(DRIVER_KEY)

@@ -115,6 +115,13 @@ Gemini-compatible clients can also send `x-goog-api-key`, `?key=`, or `?api_key=
 | POST | `/v1/embeddings` | Business | OpenAI Embeddings API |
 | POST | `/v1/files` | Business | OpenAI Files upload (multipart/form-data) |
 | GET | `/v1/files/{file_id}` | Business | Retrieve uploaded file status |
+| POST | `/v1/images/generations` | Business | Muse text-to-image (OpenAI Images compatible) |
+| POST | `/v1/images/edits` | Business | Muse reference-image edit (multipart or JSON data URI) |
+| GET | `/v1/images/media/{media_id}` | Business | Fetch bytes of an image generated for this caller |
+| POST | `/v1/videos` | Business | Submit an async Muse video job |
+| GET | `/v1/videos` | Business | List this caller's video jobs |
+| GET | `/v1/videos/{video_id}` | Business | Poll a video job |
+| GET | `/v1/videos/{video_id}/content` | Business | Download the finished video bytes |
 | GET | `/anthropic/v1/models` | None | Claude model list |
 | POST | `/anthropic/v1/messages` | Business | Claude messages |
 | POST | `/anthropic/v1/messages/count_tokens` | Business | Claude token counting |
@@ -147,6 +154,7 @@ Gemini-compatible clients can also send `x-goog-api-key`, `?key=`, or `?api_key=
 | PUT | `/admin/proxies/{proxyID}` | Admin | Update proxy (empty password keeps old secret) |
 | DELETE | `/admin/proxies/{proxyID}` | Admin | Delete proxy (auto-unbind referenced accounts) |
 | POST | `/admin/proxies/test` | Admin | Test proxy connectivity |
+| POST | `/admin/proxies/{proxyID}/refresh` | Admin | Force a rotating proxy to fetch a new exit node |
 | GET | `/admin/accounts` | Admin | Paginated account list |
 | POST | `/admin/accounts` | Admin | Add account |
 | PUT | `/admin/accounts/{identifier}` | Admin | Update account name/remark |
@@ -444,6 +452,45 @@ Business auth required. Returns OpenAI-compatible embeddings shape.
 | `input` | string/array | ✅ | Supports string, string array, token array |
 
 > Requires `embeddings.provider`. Current supported values: `mock` / `deterministic` / `builtin` (all three use the same local deterministic implementation). If missing/unsupported, returns standard error shape with HTTP 501.
+
+### `POST /v1/images/generations` / `POST /v1/images/edits`
+
+Requires business auth. Served by the **muse** provider (configure `muse` plus the worker and an account with `provider: "muse"` and its `hatch_sess` cookie). Returns an OpenAI Images compatible body.
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `model` | string | ✅ | Must be `muse-image` (or `muse/image`, `image`); chat/video models return 400 `unsupported_model` |
+| `prompt` | string | ✅ | Generation or edit instruction; empty is 400 |
+| `n` | int | ❌ | 1–4 (lowerable via `DS2API_IMAGES_MAX_N` / worker `MUSE_IMAGE_MAX_N`), default 1 |
+| `size` | string | ❌ | `1024x1024` style or `auto`; other values are 400 |
+| `response_format` | string | ❌ | `b64_json` (default) or `url` |
+| `image` / `file` | file or data URI | required for edits | Reference image as multipart fields `image`/`image[]`/`file`/`file[]`, or a JSON `data:image/...;base64,` string (array allowed) |
+
+Behaviour and limits:
+
+- Any other provider hitting these routes gets 400 `unsupported_provider`; requests never fall through to DeepSeek.
+- `/v1/images/edits` also accepts JSON with data-URI references; `/v1/images/generations` is JSON only.
+- References are capped at 16 MiB each (`MUSE_REFERENCE_MAX_BYTES`); the whole request body at 100 MiB.
+- Only media from this call is returned: the worker opens a fresh thread (a non-empty baseline fails as `thread_isolation_error`), reads images from the last agent bubble only, and refuses to submit when the reference upload gets no visible acknowledgement (502 `upload_unconfirmed`).
+- With `response_format=url`, `data[i].url` points at this gateway's `GET /v1/images/media/{media_id}`, readable only by the caller that generated it (others get 404). That ownership table is an in-process TTL (30 minutes by default), so use `b64_json` on multi-instance or Vercel deployments.
+- Media never inherits the text empty-output retry: a timeout after submission only reports failure (the upstream job may already be billed); a pre-submission 429 rotates account.
+- ⚠️ The media DOM selectors are not yet verified against a live Muse.ai account. Run `python scripts/muse_media_live_check.py` before publishing the capability.
+
+### `POST /v1/videos` / `GET /v1/videos[/{id}][/content]`
+
+Business auth, muse provider only (`model` must be `muse-video`). Video is an asynchronous job: submit returns an id immediately, the worker drives the browser in the background and persists the state.
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `model` | string | ✅ | `muse-video` |
+| `prompt` | string | ✅ | Video instruction |
+| `seconds` | int | ❌ | 1–60; anything else is 400 |
+| `size` | string | ❌ | Passed through to the upstream |
+| `input_reference` / `image` | file | ❌ | Reference frame (multipart) |
+
+- `POST` returns 201 with `{id, object:"video", status, progress, created_at, ...}`; status is `queued`/`processing`/`completed`/`failed`/`interrupted`.
+- `GET /v1/videos/{id}` and `.../content` are caller-scoped: the worker checks `caller_id`, a foreign caller gets 404, and unfinished jobs return 409 `job_incomplete`.
+- A worker restart never silently re-runs work: in-flight jobs become `interrupted` (`error_code=job_interrupted`), and result bytes live in `MUSE_MEDIA_DIR` (24-hour TTL by default).
 
 ### `POST /v1/files`
 
@@ -866,23 +913,63 @@ Updates the `name` / `remark` of the specified API key. The path `key` is read-o
 
 ### `GET /admin/proxies`
 
-Lists proxy configs (password is never returned; use `has_password` as a marker).
+Lists proxy configs. Secrets are never returned: passwords surface as `has_password`, rotating keys as `rotate.has_key` plus a masked `rotate.key_preview`. Every entry carries `mode` (`static` or `rotate`); rotating entries also expose `rotate.lease` with the live exit node (`host`, `port`, `type`, `expires_at`, `remaining_seconds`, `fetch_count`, `network`, `location`, `last_error`).
 
 ### `POST /admin/proxies`
 
-Adds a proxy. Request accepts `id` (optional; auto-generated when omitted), `name`, `type` (`http` / `socks5`), `host`, `port`, `username`, `password`.
+Adds a proxy. Request accepts `id` (optional; auto-generated when omitted), `name`, `type` (`http` / `https` / `socks5` / `socks5h`), `host`, `port`, `username`, `password`.
+
+For a rotating proxy, send the nested `rotate` object instead; `host` / `port` / `username` / `password` are then ignored and cleared:
+
+| Field | Meaning |
+| --- | --- |
+| `rotate.provider` | `proxyxoay` (default) / `bestproxy` / `custom` |
+| `rotate.endpoint` | Overrides the preset fetch URL; must be an absolute http(s) URL, required for `custom` |
+| `rotate.key` | The `keyxoay` secret issued on purchase (required, write-only) |
+| `rotate.network` | Maps to `nhamang`, default `random` |
+| `rotate.province` | Maps to `tinhthanh`, default `0` (random) |
+| `rotate.protocol` | Use the returned `http` (default) or `socks5` endpoint |
+| `rotate.whitelist` | Maps to `whitelist`: comma separated IPv4 allow list |
+| `rotate.ttl_seconds` | Fallback lease when the API reports no lifetime, default 300 |
+| `rotate.min_remaining_seconds` | Renew this many seconds before expiry, default 60 |
+
+Flat keys are also accepted: `rotate_provider`, `rotate_endpoint`, `rotate_key`, `rotate_network`, `rotate_province`, `rotate_protocol`, `rotate_whitelist`, `rotate_ttl_seconds`, `rotate_min_remaining_seconds`.
+
+Example:
+
+```json
+{
+  "name": "VN rotate",
+  "rotate": {
+    "provider": "proxyxoay",
+    "key": "keyxoay...",
+    "network": "random",
+    "province": "0",
+    "protocol": "http",
+    "whitelist": "1.2.3.4"
+  }
+}
+```
 
 ### `PUT /admin/proxies/{proxyID}`
 
-Updates a proxy. If `password` is an empty string, the existing secret is preserved.
+Updates a proxy. An empty `password` keeps the stored secret; the same rule applies to `rotate.key` and `rotate.endpoint`. The `rotate` field has three meanings:
+
+- absent from the body: the entry keeps its current mode;
+- `"rotate": null` (or an empty object): switch back to static and drop the lease;
+- `"rotate": {...}`: switch to rotating mode.
+
+### `POST /admin/proxies/{proxyID}/refresh`
+
+Forces a rotating entry to fetch a new exit node immediately. Returns 400 for a static entry and 502 when the provider cannot supply a node.
 
 ### `DELETE /admin/proxies/{proxyID}`
 
-Deletes a proxy and automatically clears `proxy_id` on all accounts that reference it.
+Deletes a proxy, automatically clears `proxy_id` on all accounts that reference it, and forgets its rotating lease.
 
 ### `POST /admin/proxies/test`
 
-Tests proxy connectivity: provide `proxy_id` to test a saved proxy; omit it to run a one-off test using proxy fields in the request body.
+Tests proxy connectivity: provide `proxy_id` to test a saved proxy; omit it to run a one-off test using proxy fields in the request body. A rotating proxy is resolved first (fetching a node if needed), and `rotated_endpoint` reports the node that was actually tested.
 
 ### `GET /admin/accounts`
 
